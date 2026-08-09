@@ -86,9 +86,9 @@ class AppState extends ChangeNotifier {
   /// Games with any recorded progress.
   int get startedCount => kGames.where((g) => completion(g) > 0).length;
 
-  /// Total species caught across every game.
-  int get totalCaught =>
-      _progress.values.fold(0, (a, p) => a + p.caughtSpecies.length);
+  /// Total base species caught across every game (excludes alternate forms).
+  int get totalCaught => _progress.values.fold(
+      0, (a, p) => a + p.caughtSpecies.where((id) => id < 10000).length);
 
   /// The set of national-dex ids caught in any game (for the global Pokedex).
   Set<int> get allCaughtSpecies {
@@ -425,8 +425,10 @@ class AppState extends ChangeNotifier {
         p.milestones.values.where((v) => v).length.clamp(0, milestoneTotal);
     final milestoneFrac =
         milestoneTotal == 0 ? 0.0 : milestoneDone / milestoneTotal;
-    // Prefer the real per-species caught set; fall back to the manual counter.
-    final caught = p.caughtSpecies.isNotEmpty ? p.caughtSpecies.length : p.dexCaught;
+    // Count base species only (form ids are >= 10000 and aren't in dexTotal);
+    // fall back to the manual counter when nothing is tracked per-species.
+    final baseCaught = p.caughtSpecies.where((id) => id < 10000).length;
+    final caught = baseCaught > 0 ? baseCaught : p.dexCaught;
     final dexFrac =
         game.dexTotal == 0 ? 0.0 : (caught / game.dexTotal).clamp(0, 1);
     return (milestoneFrac + dexFrac) / 2;

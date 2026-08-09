@@ -1,6 +1,6 @@
 {
-  "version": "1.0.13",
-  "notes": "Type matchup chips on the detail page are now colored by their type (fire orange, water blue, etc.), grouped under Weak to / Resists / Immune to.",
+  "version": "1.0.14",
+  "notes": "Forms, part 3: the per-game Pokedex has a Forms toggle that lists each species' alternate forms (by introduction generation) with their own caught checkbox. Forms are tracked separately and don't affect completion percent.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

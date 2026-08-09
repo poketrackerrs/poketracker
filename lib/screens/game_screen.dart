@@ -359,11 +359,54 @@ class _DexTab extends StatefulWidget {
 
 enum _DexFilter { all, caught, missing }
 
+/// A row in the per-game dex: a base species or one of its forms.
+class _DexRow {
+  final int id; // /pokemon id
+  final int baseDex;
+  final String name; // base species name
+  final int entryNumber;
+  final bool isForm;
+  final String? formLabel;
+  const _DexRow({
+    required this.id,
+    required this.baseDex,
+    required this.name,
+    required this.entryNumber,
+    this.isForm = false,
+    this.formLabel,
+  });
+
+  String get spriteUrl =>
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$id.png';
+}
+
+int _genForDex(int dex) {
+  const ends = [151, 251, 386, 493, 649, 721, 809, 905, 1025];
+  for (var i = 0; i < ends.length; i++) {
+    if (dex <= ends[i]) return i + 1;
+  }
+  return 9;
+}
+
+/// Best-effort introduction generation for a form, from its label.
+int _formIntroGen(String label, int baseDex) {
+  final l = label.toLowerCase();
+  if (l.contains('alolan')) return 7;
+  if (l.contains('galarian')) return 8;
+  if (l.contains('hisuian')) return 8;
+  if (l.contains('paldean')) return 9;
+  if (l.contains('mega') || l.contains('primal')) return 6;
+  if (l.contains('gigantamax')) return 8;
+  return _genForDex(baseDex);
+}
+
 class _DexTabState extends State<_DexTab> {
   final _service = PokedexService();
   GameDex? _dex;
+  final Map<int, List<_DexRow>> _formsByDex = {};
   bool _loading = true;
   String? _error;
+  bool _showForms = false;
   _DexFilter _filter = _DexFilter.all;
 
   // Memoized obtainability futures so rebuilds (checkbox taps) don't refetch.
@@ -382,9 +425,35 @@ class _DexTabState extends State<_DexTab> {
     });
     try {
       final dex = await _service.loadGameDex(widget.game.versionGroup);
+      final baseNameToDex = {for (final s in dex.species) s.name: s.id};
+      final dexToName = {for (final s in dex.species) s.id: s.name};
+      final varieties = await _service.loadAllVarieties();
+      final formsByDex = <int, List<_DexRow>>{};
+      for (final v in varieties) {
+        if (v.id < 10000) continue;
+        final baseDex = _baseDexForForm(v.name, baseNameToDex);
+        if (baseDex == null) continue;
+        final baseName = dexToName[baseDex]!;
+        final label = _service.labelForForm(v.name, baseName);
+        if (_formIntroGen(label, baseDex) > widget.game.generation) continue;
+        formsByDex.putIfAbsent(baseDex, () => []).add(_DexRow(
+              id: v.id,
+              baseDex: baseDex,
+              name: baseName,
+              entryNumber: 0,
+              isForm: true,
+              formLabel: label,
+            ));
+      }
+      for (final l in formsByDex.values) {
+        l.sort((a, b) => a.id.compareTo(b.id));
+      }
       if (!mounted) return;
       setState(() {
         _dex = dex;
+        _formsByDex
+          ..clear()
+          ..addAll(formsByDex);
         _loading = false;
       });
     } catch (e) {
@@ -394,6 +463,15 @@ class _DexTabState extends State<_DexTab> {
         _loading = false;
       });
     }
+  }
+
+  int? _baseDexForForm(String formName, Map<String, int> baseNameToDex) {
+    final parts = formName.split('-');
+    for (var take = parts.length - 1; take >= 1; take--) {
+      final dex = baseNameToDex[parts.take(take).join('-')];
+      if (dex != null) return dex;
+    }
+    return null;
   }
 
   Future<ObtainInfo> _obtainFor(int id, List<String> versions) =>
@@ -428,11 +506,20 @@ class _DexTabState extends State<_DexTab> {
     }
 
     final state = context.watch<AppState>();
-    final caught = state.caughtCount(widget.game.id);
+    final gameId = widget.game.id;
     final total = dex.species.length;
+    final caught =
+        dex.species.where((s) => state.isCaught(gameId, s.id)).length;
 
-    final visible = dex.species.where((s) {
-      final isCaught = state.isCaught(widget.game.id, s.id);
+    // Merge base species with their forms, then apply the caught filter.
+    final rows = <_DexRow>[];
+    for (final s in dex.species) {
+      rows.add(_DexRow(
+          id: s.id, baseDex: s.id, name: s.name, entryNumber: s.entryNumber));
+      if (_showForms) rows.addAll(_formsByDex[s.id] ?? const []);
+    }
+    final visible = rows.where((r) {
+      final isCaught = state.isCaught(gameId, r.id);
       switch (_filter) {
         case _DexFilter.all:
           return true;
@@ -468,6 +555,7 @@ class _DexTabState extends State<_DexTab> {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   for (final f in _DexFilter.values)
                     ChoiceChip(
@@ -483,6 +571,20 @@ class _DexTabState extends State<_DexTab> {
                       ),
                       onSelected: (_) => setState(() => _filter = f),
                     ),
+                  FilterChip(
+                    label: const Text('Forms'),
+                    selected: _showForms,
+                    showCheckmark: true,
+                    checkmarkColor: Colors.white,
+                    selectedColor: widget.tint,
+                    labelStyle: TextStyle(
+                      color: _showForms
+                          ? Colors.white
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onSelected: (v) => setState(() => _showForms = v),
+                  ),
                 ],
               ),
             ],
@@ -491,59 +593,84 @@ class _DexTabState extends State<_DexTab> {
         Expanded(
           child: ListView.builder(
             itemCount: visible.length,
-            itemBuilder: (context, i) {
-              final s = visible[i];
-              final isCaught = state.isCaught(widget.game.id, s.id);
-              return ListTile(
-                tileColor:
-                    isCaught ? widget.tint.withValues(alpha: 0.07) : null,
-                leading: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: CachedNetworkImage(
-                    imageUrl: s.spriteUrl,
-                    fit: BoxFit.contain,
-                    errorWidget: (_, _, _) =>
-                        const Icon(Icons.catching_pokemon, color: Colors.grey),
-                    placeholder: (_, _) => const SizedBox(),
-                  ),
-                ),
-                title: Text(prettifyName(s.name)),
-                subtitle: FutureBuilder<ObtainInfo>(
-                  future: _obtainFor(s.id, [widget.game.version]),
-                  builder: (context, snap) {
-                    return Row(
-                      children: [
-                        Text('#${s.entryNumber.toString().padLeft(3, '0')}'),
-                        const SizedBox(width: 8),
-                        if (snap.hasData)
-                          _ObtainChip(info: snap.data!)
-                        else
-                          const Text('…', style: TextStyle(color: Colors.grey)),
-                      ],
-                    );
-                  },
-                ),
-                trailing: Checkbox(
-                  value: isCaught,
-                  activeColor: widget.tint,
-                  onChanged: (v) =>
-                      state.setCaught(widget.game.id, s.id, v ?? false),
-                ),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => PokemonDetailScreen(
-                      id: s.id,
-                      name: s.name,
-                      generation: widget.game.generation,
-                    ),
-                  ),
-                ),
-              );
-            },
+            itemBuilder: (context, i) => _row(context, state, visible[i]),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _row(BuildContext context, AppState state, _DexRow r) {
+    final gameId = widget.game.id;
+    final isCaught = state.isCaught(gameId, r.id);
+    final scheme = Theme.of(context).colorScheme;
+    return ListTile(
+      tileColor: isCaught ? widget.tint.withValues(alpha: 0.07) : null,
+      contentPadding: EdgeInsets.only(left: r.isForm ? 32 : 16, right: 8),
+      leading: SizedBox(
+        width: 44,
+        height: 44,
+        child: CachedNetworkImage(
+          imageUrl: r.spriteUrl,
+          fit: BoxFit.contain,
+          errorWidget: (_, _, _) =>
+              const Icon(Icons.catching_pokemon, color: Colors.grey),
+          placeholder: (_, _) => const SizedBox(),
+        ),
+      ),
+      title: r.isForm
+          ? Row(
+              children: [
+                Flexible(child: Text(prettifyName(r.name))),
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: widget.tint,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(r.formLabel ?? 'Form',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
+            )
+          : Text(prettifyName(r.name)),
+      subtitle: r.isForm
+          ? Text('Alternate form', style: TextStyle(color: scheme.onSurfaceVariant))
+          : FutureBuilder<ObtainInfo>(
+              future: _obtainFor(r.id, [widget.game.version]),
+              builder: (context, snap) {
+                return Row(
+                  children: [
+                    Text('#${r.entryNumber.toString().padLeft(3, '0')}'),
+                    const SizedBox(width: 8),
+                    if (snap.hasData)
+                      _ObtainChip(info: snap.data!)
+                    else
+                      const Text('…', style: TextStyle(color: Colors.grey)),
+                  ],
+                );
+              },
+            ),
+      trailing: Checkbox(
+        value: isCaught,
+        activeColor: widget.tint,
+        onChanged: (v) => state.setCaught(gameId, r.id, v ?? false),
+      ),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PokemonDetailScreen(
+            id: r.baseDex,
+            name: r.name,
+            generation: widget.game.generation,
+            initialFormId: r.isForm ? r.id : null,
+          ),
+        ),
+      ),
     );
   }
 }
