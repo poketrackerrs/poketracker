@@ -80,6 +80,43 @@ class PokedexService {
   String labelForForm(String formName, String baseName) =>
       _formLabel(formName, baseName);
 
+  Map<String, List<({int id, String name, String label})>>? _formsByBaseCache;
+
+  /// Maps each base species name to its varieties (base + forms), each with an
+  /// id, variety name, and display label. Base form's label is "Normal".
+  Future<Map<String, List<({int id, String name, String label})>>>
+      loadFormsByBase() async {
+    if (_formsByBaseCache != null) return _formsByBaseCache!;
+    final base = await loadIndex();
+    final baseNameToDex = {for (final s in base) s.name: s.id};
+    final varieties = await loadAllVarieties();
+    final out = <String, List<({int id, String name, String label})>>{};
+    for (final s in base) {
+      out[s.name] = [(id: s.id, name: s.name, label: 'Normal')];
+    }
+    for (final v in varieties) {
+      if (v.id < 10000) continue;
+      final baseDex = _baseDexByPrefix(v.name, baseNameToDex);
+      if (baseDex == null) continue;
+      final baseName = base[baseDex - 1].name;
+      out[baseName]!.add((
+        id: v.id,
+        name: v.name,
+        label: _formLabel(v.name, baseName),
+      ));
+    }
+    return _formsByBaseCache = out;
+  }
+
+  int? _baseDexByPrefix(String formName, Map<String, int> baseNameToDex) {
+    final parts = formName.split('-');
+    for (var take = parts.length - 1; take >= 1; take--) {
+      final dex = baseNameToDex[parts.take(take).join('-')];
+      if (dex != null) return dex;
+    }
+    return null;
+  }
+
   int? _idFromUrl(String url) {
     final parts = url.split('/').where((p) => p.isNotEmpty).toList();
     return parts.isEmpty ? null : int.tryParse(parts.last);

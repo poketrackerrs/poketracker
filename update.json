@@ -1,6 +1,6 @@
 {
-  "version": "1.0.14",
-  "notes": "Forms, part 3: the per-game Pokedex has a Forms toggle that lists each species' alternate forms (by introduction generation) with their own caught checkbox. Forms are tracked separately and don't affect completion percent.",
+  "version": "1.0.15",
+  "notes": "Forms, part 4: assign a specific form to team members and shiny hunts (with the matching regular/shiny sprite). Plus device-specific emulator links — the emulator 'Get' buttons now point to Google Play on Android, the App Store on iOS, and official downloads on Windows.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

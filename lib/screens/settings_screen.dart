@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -6,25 +7,37 @@ import '../state/app_state.dart';
 import 'emulators_screen.dart';
 import 'updates_screen.dart';
 
-/// A recommended emulator for a given platform's app store.
-class _StoreEmu {
-  final String platform;
-  final IconData icon;
-  final String emulator;
-  final String covers;
+/// A recommended emulator link (store page or download page).
+class _EmuLink {
+  final String name;
+  final String systems;
   final String url;
-  const _StoreEmu(this.platform, this.icon, this.emulator, this.covers, this.url);
+  const _EmuLink(this.name, this.systems, this.url);
 }
 
-const _storeEmulators = [
-  _StoreEmu('Android — Google Play', Icons.android, 'RetroArch',
-      'GB · GBC · GBA · DS (via cores)',
+// Android → Google Play pages.
+const _androidEmus = [
+  _EmuLink('Lemuroid', 'GB · GBC · GBA · DS · more',
+      'https://play.google.com/store/apps/details?id=com.swordfish.lemuroid'),
+  _EmuLink('RetroArch', 'GB · GBC · GBA · DS (via cores)',
       'https://play.google.com/store/apps/details?id=com.retroarch'),
-  _StoreEmu('iOS / iPadOS — App Store', Icons.phone_iphone, 'Delta',
-      'GB · GBC · GBA · DS',
+];
+
+// iOS / iPadOS → App Store pages.
+const _iosEmus = [
+  _EmuLink('Delta', 'GB · GBC · GBA · DS · N64 · SNES',
       'https://apps.apple.com/us/app/delta-game-emulator/id1048524688'),
-  _StoreEmu('Windows', Icons.desktop_windows, 'RetroArch',
-      'GB · GBC · GBA · DS (via cores)',
+  _EmuLink('RetroArch', 'multi-system',
+      'https://apps.apple.com/us/app/retroarch/id1519875692'),
+];
+
+// Windows → official download pages.
+const _windowsEmus = [
+  _EmuLink('mGBA', 'GB · GBC · GBA', 'https://mgba.io/downloads.html'),
+  _EmuLink('melonDS', 'DS', 'https://melonds.kuribo64.net/downloads.php'),
+  _EmuLink('DeSmuME', 'DS', 'https://desmume.org/download/'),
+  _EmuLink('Azahar', '3DS', 'https://azahar-emu.org/'),
+  _EmuLink('RetroArch', 'multi-system',
       'https://www.retroarch.com/?page=platforms'),
 ];
 
@@ -101,7 +114,7 @@ class SettingsScreen extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.sports_esports),
           title: const Text('Detect installed emulators'),
-          subtitle: const Text('Scan this PC and launch or install emulators'),
+          subtitle: const Text('Scan this device, or get one below'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const EmulatorsScreen()),
@@ -110,32 +123,33 @@ class SettingsScreen extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
           child: Text(
-            'Get a recommended emulator for your device:',
+            _emuStoreBlurb(),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        for (final e in _storeEmulators)
+        for (final e in _emusForPlatform())
           Card(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: ListTile(
-              leading: Icon(e.icon),
-              title: Text('${e.platform}  •  ${e.emulator}'),
-              subtitle: Text(e.covers),
+              leading: Icon(_platformIcon()),
+              title: Text(e.name),
+              subtitle: Text(e.systems),
               trailing: FilledButton.icon(
-                icon: const Icon(Icons.open_in_new, size: 16),
-                label: const Text('Get'),
+                icon: Icon(_storeButtonIcon(), size: 16),
+                label: Text(_storeButtonLabel()),
                 onPressed: () => context.read<AppState>().openExternal(e.url),
               ),
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-          child: Text(
-            'Note: 3DS games (Gen 6–7) need a desktop emulator like Azahar — '
-            'see "Detect installed emulators".',
-            style: Theme.of(context).textTheme.bodySmall,
+        if (!Platform.isWindows)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: Text(
+              'Note: 3DS games (Gen 6–7) are best played on a desktop emulator '
+              'like Azahar.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
-        ),
 
         _header(context, 'Game downloads'),
         ListTile(
@@ -253,6 +267,33 @@ class SettingsScreen extends StatelessWidget {
           content: Text('$e'.replaceFirst('Exception: ', '')),
           duration: const Duration(seconds: 6)));
     }
+  }
+
+  List<_EmuLink> _emusForPlatform() {
+    if (Platform.isAndroid) return _androidEmus;
+    if (Platform.isIOS) return _iosEmus;
+    return _windowsEmus;
+  }
+
+  String _emuStoreBlurb() {
+    if (Platform.isAndroid) return 'Get an emulator from Google Play:';
+    if (Platform.isIOS) return 'Get an emulator from the App Store:';
+    return 'Download an emulator for Windows:';
+  }
+
+  IconData _platformIcon() {
+    if (Platform.isAndroid) return Icons.android;
+    if (Platform.isIOS) return Icons.phone_iphone;
+    return Icons.desktop_windows;
+  }
+
+  IconData _storeButtonIcon() =>
+      (Platform.isAndroid || Platform.isIOS) ? Icons.shop : Icons.download;
+
+  String _storeButtonLabel() {
+    if (Platform.isAndroid) return 'Play Store';
+    if (Platform.isIOS) return 'App Store';
+    return 'Download';
   }
 
   Widget _header(BuildContext context, String text) => Padding(

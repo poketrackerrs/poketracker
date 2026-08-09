@@ -715,6 +715,91 @@ class _ObtainChip extends StatelessWidget {
   }
 }
 
+// ----------------------------------------------- Form resolution (Team/Shiny)
+/// Resolves species text (base name or form variety like "raichu-alola") to a
+/// sprite id, a nice display name, and the list of a species' forms.
+class _FormIndex {
+  final Map<String, int> nameToId;
+  final Map<String, String> varietyToBase;
+  final Map<String, List<({int id, String name, String label})>> formsByBase;
+  _FormIndex(this.nameToId, this.varietyToBase, this.formsByBase);
+
+  static String norm(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+  static Future<_FormIndex> load() async {
+    final svc = PokedexService();
+    final varieties = await svc.loadAllVarieties();
+    final formsByBase = await svc.loadFormsByBase();
+    final nameToId = {for (final v in varieties) norm(v.name): v.id};
+    final varietyToBase = <String, String>{};
+    for (final e in formsByBase.entries) {
+      for (final f in e.value) {
+        varietyToBase[norm(f.name)] = e.key;
+      }
+    }
+    return _FormIndex(nameToId, varietyToBase, formsByBase);
+  }
+
+  int? idFor(String species) {
+    final s = species.trim();
+    if (s.isEmpty) return null;
+    if (s.startsWith('#')) return int.tryParse(s.substring(1));
+    return nameToId[norm(s)];
+  }
+
+  List<({int id, String name, String label})> formsFor(String species) {
+    final base = varietyToBase[norm(species)];
+    if (base == null) return const [];
+    return formsByBase[base] ?? const [];
+  }
+
+  String display(String species) {
+    final base = varietyToBase[norm(species)];
+    if (base != null && norm(base) != norm(species)) {
+      final f = (formsByBase[base] ?? const [])
+          .where((x) => norm(x.name) == norm(species));
+      if (f.isNotEmpty && f.first.label != 'Normal') {
+        return '${prettifyName(base)} · ${f.first.label}';
+      }
+    }
+    return prettifyName(species);
+  }
+}
+
+/// A chip row to pick a species' form; empty until a species with >1 form is
+/// entered. Shared by the Team and Shiny edit sheets.
+Widget _formPickerRow(BuildContext ctx, TextEditingController species,
+    StateSetter setSheet, _FormIndex? forms, Color tint) {
+  final list = forms?.formsFor(species.text) ?? const [];
+  if (list.length <= 1) return const SizedBox.shrink();
+  final scheme = Theme.of(ctx).colorScheme;
+  return Padding(
+    padding: const EdgeInsets.only(top: 10),
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        for (final f in list)
+          ChoiceChip(
+            label: Text(f.label),
+            selected: _FormIndex.norm(species.text) == _FormIndex.norm(f.name),
+            showCheckmark: false,
+            selectedColor: tint,
+            labelStyle: TextStyle(
+              color: _FormIndex.norm(species.text) == _FormIndex.norm(f.name)
+                  ? Colors.white
+                  : scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+            onSelected: (_) => setSheet(() => species.text = f.name),
+          ),
+      ],
+    ),
+  );
+}
+
 // --------------------------------------------------------------- Team
 class _TeamTab extends StatefulWidget {
   final Game game;
@@ -726,32 +811,22 @@ class _TeamTab extends StatefulWidget {
 }
 
 class _TeamTabState extends State<_TeamTab> {
-  final Map<String, int> _nameToId = {};
+  _FormIndex? _forms;
 
   @override
   void initState() {
     super.initState();
-    _loadIndex();
+    _FormIndex.load().then((f) {
+      if (mounted) setState(() => _forms = f);
+    });
   }
 
-  Future<void> _loadIndex() async {
-    try {
-      final index = await PokedexService().loadIndex();
-      if (!mounted) return;
-      setState(() {
-        for (final s in index) {
-          _nameToId[s.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')] =
-              s.id;
-        }
-      });
-    } catch (_) {}
-  }
+  int? _dexIdFor(String species) => _forms?.idFor(species) ?? _fallbackId(species);
 
-  int? _dexIdFor(String species) {
+  int? _fallbackId(String species) {
     final s = species.trim();
-    if (s.isEmpty) return null;
     if (s.startsWith('#')) return int.tryParse(s.substring(1));
-    return _nameToId[s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')];
+    return null;
   }
 
   @override
@@ -791,7 +866,7 @@ class _TeamTabState extends State<_TeamTab> {
     final scheme = Theme.of(context).colorScheme;
     final title = member.species.trim().isEmpty
         ? 'Tap to choose'
-        : prettifyName(member.species);
+        : (_forms?.display(member.species) ?? prettifyName(member.species));
     final sub = member.nickname.trim().isEmpty ? null : '"${member.nickname}"';
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 5),
@@ -860,65 +935,67 @@ class _TeamTabState extends State<_TeamTab> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            16, 4, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('Edit Pokémon',
-                style: Theme.of(ctx).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            TextField(
-              controller: species,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                  labelText: 'Species', border: OutlineInputBorder()),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: nickname,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                  labelText: 'Nickname (optional)',
-                  border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: level,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                  labelText: 'Level', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () {
-                    state.removeTeamMember(widget.game.id, index);
-                    Navigator.pop(ctx);
-                  },
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Remove'),
-                ),
-                const Spacer(),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: widget.tint),
-                  onPressed: () {
-                    member.species = species.text.trim();
-                    member.nickname = nickname.text.trim();
-                    member.level = int.tryParse(level.text) ?? member.level;
-                    state.updateTeamMember(widget.game.id, index, member);
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            ),
-          ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              16, 4, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Edit Pokémon', style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              TextField(
+                controller: species,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                    labelText: 'Species', border: OutlineInputBorder()),
+                onChanged: (_) => setSheet(() {}),
+              ),
+              _formPickerRow(ctx, species, setSheet, _forms, widget.tint),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nickname,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                    labelText: 'Nickname (optional)',
+                    border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: level,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                    labelText: 'Level', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      state.removeTeamMember(widget.game.id, index);
+                      Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Remove'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: widget.tint),
+                    onPressed: () {
+                      member.species = species.text.trim();
+                      member.nickname = nickname.text.trim();
+                      member.level = int.tryParse(level.text) ?? member.level;
+                      state.updateTeamMember(widget.game.id, index, member);
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -961,32 +1038,20 @@ class _ShinyTab extends StatefulWidget {
 }
 
 class _ShinyTabState extends State<_ShinyTab> {
-  final Map<String, int> _nameToId = {};
+  _FormIndex? _forms;
 
   @override
   void initState() {
     super.initState();
-    _loadIndex();
-  }
-
-  Future<void> _loadIndex() async {
-    try {
-      final index = await PokedexService().loadIndex();
-      if (!mounted) return;
-      setState(() {
-        for (final s in index) {
-          _nameToId[s.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')] =
-              s.id;
-        }
-      });
-    } catch (_) {}
+    _FormIndex.load().then((f) {
+      if (mounted) setState(() => _forms = f);
+    });
   }
 
   int? _dexIdFor(String species) {
     final s = species.trim();
-    if (s.isEmpty) return null;
     if (s.startsWith('#')) return int.tryParse(s.substring(1));
-    return _nameToId[s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')];
+    return _forms?.idFor(species);
   }
 
   @override
@@ -1035,7 +1100,7 @@ class _ShinyTabState extends State<_ShinyTab> {
         : '≈ ${(chance * 100).toStringAsFixed(chance < 0.1 ? 1 : 0)}% by now · 1/$rate';
     final title = hunt.species.trim().isEmpty
         ? 'Tap to set species'
-        : prettifyName(hunt.species);
+        : (_forms?.display(hunt.species) ?? prettifyName(hunt.species));
 
     void update() => state.updateShinyHunt(widget.game.id, i, hunt);
 
@@ -1208,7 +1273,9 @@ class _ShinyTabState extends State<_ShinyTab> {
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                     labelText: 'Species', border: OutlineInputBorder()),
+                onChanged: (_) => setSheet(() {}),
               ),
+              _formPickerRow(ctx, species, setSheet, _forms, widget.tint),
               const SizedBox(height: 12),
               TextField(
                 controller: method,
