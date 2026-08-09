@@ -81,7 +81,12 @@ class PastType {
 class EvoStage {
   final int id;
   final String name;
-  const EvoStage({required this.id, required this.name});
+
+  /// How you evolve *into* this stage from the previous one (e.g. "Lv. 16",
+  /// "Trade", "Use Water Stone"). Empty for the base stage.
+  final String condition;
+
+  const EvoStage({required this.id, required this.name, this.condition = ''});
 
   String get spriteUrl =>
       'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$id.png';
@@ -100,6 +105,16 @@ class PokemonDetail {
   final Map<String, double> matchups; // attacking type -> damage multiplier
   final List<PastType> pastTypes;
 
+  // ---- Species "infobox" fields (Bulbapedia-style header details) ----
+  final double height; // metres
+  final double weight; // kilograms
+  final String genus; // e.g. "Flame Pokemon"
+  final int captureRate; // 0-255
+  final int genderRate; // -1 genderless, else eighths that are female (0-8)
+  final List<String> eggGroups;
+  final int baseHappiness;
+  final String growthRate;
+
   const PokemonDetail({
     required this.id,
     required this.name,
@@ -111,7 +126,25 @@ class PokemonDetail {
     required this.evolution,
     required this.matchups,
     this.pastTypes = const [],
+    this.height = 0,
+    this.weight = 0,
+    this.genus = '',
+    this.captureRate = 0,
+    this.genderRate = -1,
+    this.eggGroups = const [],
+    this.baseHappiness = 0,
+    this.growthRate = '',
   });
+
+  /// Human-readable gender ratio, e.g. "87.5% ♂ · 12.5% ♀" or "Genderless".
+  String get genderText {
+    if (genderRate < 0) return 'Genderless';
+    final female = genderRate / 8 * 100;
+    final male = 100 - female;
+    String fmt(double v) =>
+        v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+    return '${fmt(male)}% ♂ · ${fmt(female)}% ♀';
+  }
 
   /// Types as they were in [gen] (applies historical type changes if known).
   List<String> typesForGeneration(int? gen) {

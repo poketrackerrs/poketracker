@@ -233,6 +233,11 @@ class PokedexService {
     // Evolution chain
     final evolution = await _evolutionChain(species);
 
+    // Species "infobox" fields
+    final eggGroups = (species['egg_groups'] as List? ?? [])
+        .map((g) => g['name'] as String)
+        .toList();
+
     final detail = PokemonDetail(
       id: id,
       name: pokemon['name'] as String,
@@ -244,9 +249,48 @@ class PokedexService {
       evolution: evolution,
       matchups: matchups,
       pastTypes: pastTypes,
+      height: ((pokemon['height'] as int?) ?? 0) / 10.0, // decimetres -> m
+      weight: ((pokemon['weight'] as int?) ?? 0) / 10.0, // hectograms -> kg
+      genus: _englishGenus(species),
+      captureRate: (species['capture_rate'] as int?) ?? 0,
+      genderRate: (species['gender_rate'] as int?) ?? -1,
+      eggGroups: eggGroups,
+      baseHappiness: (species['base_happiness'] as int?) ?? 0,
+      growthRate: (species['growth_rate']?['name'] as String?) ?? '',
     );
     _memCache[id] = detail;
     return detail;
+  }
+
+  static String _englishGenus(Map<String, dynamic> species) {
+    for (final g in (species['genera'] as List? ?? [])) {
+      if (g['language']?['name'] == 'en') return (g['genus'] as String?) ?? '';
+    }
+    return '';
+  }
+
+  /// A short, human-readable evolution condition from a node's details.
+  static String _evoCondition(List details) {
+    if (details.isEmpty) return '';
+    final d = details.first as Map<String, dynamic>;
+    final lvl = d['min_level'] as int?;
+    if (lvl != null) return 'Lv. $lvl';
+    final item = d['item']?['name'] as String?;
+    if (item != null) return 'Use ${prettifyName(item)}';
+    if ((d['min_happiness'] as int?) != null) return 'Happiness';
+    final trigger = d['trigger']?['name'] as String?;
+    if (trigger == 'trade') {
+      final held = d['held_item']?['name'] as String?;
+      return held != null ? 'Trade w/ ${prettifyName(held)}' : 'Trade';
+    }
+    final move = d['known_move']?['name'] as String?;
+    if (move != null) return 'Learn ${prettifyName(move)}';
+    final loc = d['location']?['name'] as String?;
+    if (loc != null) return 'At ${prettifyName(loc)}';
+    final time = d['time_of_day'] as String?;
+    if (time != null && time.isNotEmpty) return prettifyName(time);
+    if (trigger != null && trigger != 'level-up') return prettifyName(trigger);
+    return '';
   }
 
   static int? _romanGenToInt(String generationName) {
@@ -292,7 +336,11 @@ class PokedexService {
         final sp = node['species'] as Map<String, dynamic>;
         final id = _idFromUrl(sp['url'] as String);
         if (id != null && id <= nationalDexCount) {
-          stages.add(EvoStage(id: id, name: sp['name'] as String));
+          stages.add(EvoStage(
+            id: id,
+            name: sp['name'] as String,
+            condition: _evoCondition(node['evolution_details'] as List? ?? []),
+          ));
         }
         for (final next in (node['evolves_to'] as List)) {
           walk(next as Map<String, dynamic>);
