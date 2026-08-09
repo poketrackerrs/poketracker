@@ -79,6 +79,15 @@ class AppState extends ChangeNotifier {
     await refreshEmulators();
   }
 
+  /// Builds the game->Drive-folder map from a shared parent folder link, so the
+  /// download buttons appear. Returns how many games were linked.
+  Future<int> importDriveSources(String link) async {
+    final n = await _library.importDriveFolderTree(link);
+    _driveFolders = await _library.loadDriveFolders();
+    notifyListeners();
+    return n;
+  }
+
   /// The installed emulator that can run a game, or null. Switch-era games
   /// (Gen 8-9 and Let's Go) have no supported emulator in the catalog.
   DetectedEmulator? emulatorForGame(Game game) {

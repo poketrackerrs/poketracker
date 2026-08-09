@@ -100,6 +100,17 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
 
+        _header(context, 'Game downloads'),
+        ListTile(
+          leading: const Icon(Icons.cloud_download),
+          title: const Text('Link your Google Drive folder'),
+          subtitle: const Text(
+              'Paste your shared "Pokemon" folder link to turn on per-game '
+              'download buttons on this device'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => _importDrive(context),
+        ),
+
         _header(context, 'Library'),
         ListTile(
           leading: const Icon(Icons.folder),
@@ -148,6 +159,63 @@ class SettingsScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _importDrive(BuildContext context) async {
+    final controller = TextEditingController();
+    final link = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Link your Drive folder'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Paste the share link to your "Pokemon" Drive folder — the one '
+              'that has a subfolder for each game. It must be shared '
+              '"anyone with the link". This is stored only on this device.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'https://drive.google.com/drive/folders/…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Link')),
+        ],
+      ),
+    );
+    if (link == null || link.isEmpty || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final state = context.read<AppState>();
+    messenger.showSnackBar(
+        const SnackBar(content: Text('Linking your Drive folder…')));
+    try {
+      final n = await state.importDriveSources(link);
+      messenger.showSnackBar(SnackBar(
+          content: Text(
+              'Linked $n games — download buttons now appear on the Games tab.')));
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(
+          content: Text('$e'.replaceFirst('Exception: ', '')),
+          duration: const Duration(seconds: 6)));
+    }
   }
 
   Widget _header(BuildContext context, String text) => Padding(

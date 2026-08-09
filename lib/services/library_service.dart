@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/games_data.dart';
 
 /// Manages the on-device games library folder and downloads user-supplied files
 /// into it. The app ships with NO sources — every download URL is provided by
@@ -60,6 +61,67 @@ class LibraryService {
     } catch (_) {
       return _driveFolders = {};
     }
+  }
+
+  /// Extracts a Drive folder id from a share link (…/folders/ID), a ?id= URL,
+  /// or a raw id.
+  String? _driveFolderId(String input) {
+    final t = input.trim();
+    final uri = Uri.tryParse(t);
+    if (uri != null) {
+      final m = RegExp(r'/folders/([-\w]{20,})').firstMatch(uri.path);
+      if (m != null) return m.group(1);
+      final q = uri.queryParameters['id'];
+      if (q != null && q.isNotEmpty) return q;
+    }
+    if (RegExp(r'^[-\w]{20,}$').hasMatch(t)) return t;
+    return null;
+  }
+
+  /// Reads a shared parent "Pokemon" folder, matches each game subfolder to a
+  /// game id, and saves the game->folderId map. Returns how many matched.
+  Future<int> importDriveFolderTree(String linkOrId) async {
+    final parentId = _driveFolderId(linkOrId);
+    if (parentId == null) {
+      throw Exception('Could not read a Drive folder ID from that link.');
+    }
+    final r = await http
+        .get(Uri.parse('https://drive.google.com/embeddedfolderview?id=$parentId#list'))
+        .timeout(const Duration(seconds: 25));
+    if (r.statusCode != 200) {
+      throw Exception('Could not open that folder — make sure it is shared '
+          '"anyone with the link".');
+    }
+    final ids = RegExp(r'id="entry-([-\w]{20,})"')
+        .allMatches(r.body)
+        .map((m) => m.group(1)!)
+        .toList();
+    final names = RegExp(r'flip-entry-title">([^<]*)<')
+        .allMatches(r.body)
+        .map((m) => m.group(1)!)
+        .toList();
+    final valid = kGames.map((g) => g.id).toSet();
+    const alias = {'arceus': 'legends-arceus', 'z-a': 'legends-z-a'};
+    final map = <String, String>{};
+    for (var i = 0; i < ids.length && i < names.length; i++) {
+      var norm = names[i]
+          .toLowerCase()
+          .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+          .replaceAll(RegExp(r'^-+|-+$'), '');
+      final gid = alias[norm] ?? norm;
+      if (valid.contains(gid)) map[gid] = ids[i];
+    }
+    if (map.isEmpty) {
+      throw Exception('No game folders matched. Is this the "Pokemon" folder '
+          'with a subfolder per game?');
+    }
+    final docs = await getApplicationDocumentsDirectory();
+    final dir = Directory('${docs.path}${Platform.pathSeparator}PokeTracker');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final f = File('${dir.path}${Platform.pathSeparator}drive_folders.json');
+    await f.writeAsString(jsonEncode(map));
+    _driveFolders = map;
+    return map.length;
   }
 
   /// Finds the current file (id + name) inside a public Drive folder by reading

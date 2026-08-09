@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "notes": "Initial release of PokeTracker.",
+  "version": "1.0.1",
+  "notes": "Adds Settings → Game downloads: paste your shared Google Drive folder link to turn on per-game download buttons on any device.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
