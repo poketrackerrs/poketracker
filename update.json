@@ -1,6 +1,6 @@
 {
-  "version": "1.0.16",
-  "notes": "Android emulator detection now works — the app finds installed emulators (mGBA, melonDS, DraStic, Lemuroid, RetroArch, Azahar/Citra) via the package manager and can launch your ROM in them. Also: the app icon now has a transparent background.",
+  "version": "1.0.17",
+  "notes": "New Console mode on the Games page: pick a console (Game Boy → Switch), browse its games as cartridge spines on a shelf, then Play runs a box-open → cartridge-insert → power-on animation before launching the emulator. Toggle back to the classic list anytime.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

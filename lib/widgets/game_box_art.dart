@@ -6,6 +6,9 @@ import '../models/game.dart';
 /// Which console's retail box shape a game uses.
 enum BoxPlatform { gb, gbc, gba, ds, n3ds, nswitch }
 
+/// Public accessor for a game's console platform (used by console mode).
+BoxPlatform platformForGame(Game g) => _platformFor(g);
+
 BoxPlatform _platformFor(Game g) {
   if (g.id == 'lets-go-pikachu' || g.id == 'lets-go-eevee') {
     return BoxPlatform.nswitch;

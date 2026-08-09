@@ -44,6 +44,9 @@ class AppState extends ChangeNotifier {
   bool _regionTint = true;
   bool get regionTint => _regionTint;
 
+  bool _consoleMode = true; // Games page: console shelf (true) vs classic list
+  bool get consoleMode => _consoleMode;
+
   bool _loaded = false;
   bool get isLoaded => _loaded;
 
@@ -56,6 +59,7 @@ class AppState extends ChangeNotifier {
             .clamp(0, ThemeMode.values.length - 1)];
     _accent = Color(prefs.getInt('accent') ?? defaultAccent.toARGB32());
     _regionTint = prefs.getBool('regiontint') ?? true;
+    _consoleMode = prefs.getBool('consolemode') ?? true;
     await _loadLibrary();
     _loaded = true;
     notifyListeners();
@@ -80,6 +84,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('regiontint', value);
+  }
+
+  Future<void> setConsoleMode(bool value) async {
+    _consoleMode = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('consolemode', value);
   }
 
   // ---- Home dashboard stats -------------------------------------------
