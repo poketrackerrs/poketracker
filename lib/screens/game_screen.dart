@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../data/pokeapi_maps.dart';
 import '../models/game.dart';
 import '../models/pokedex_models.dart';
+import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../state/app_state.dart';
 import '../widgets/game_box_art.dart';
@@ -18,7 +19,16 @@ class GameScreen extends StatelessWidget {
     return DefaultTabController(
       length: 4,
       child: Scaffold(
-        appBar: AppBar(title: Text(game.title)),
+        appBar: AppBar(
+          title: Text(game.title),
+          actions: [
+            IconButton(
+              tooltip: 'Sync from save file',
+              icon: const Icon(Icons.sync),
+              onPressed: () => _startSaveSync(context, game),
+            ),
+          ],
+        ),
         body: Column(
           children: [
             _GameHeader(game: game),
@@ -557,6 +567,195 @@ class _ShinyTab extends StatelessWidget {
         icon: const Icon(Icons.add),
         label: const Text('New hunt'),
       ),
+    );
+  }
+}
+
+// -------------------------------------------------- Save-file auto-tracker
+
+Future<void> _startSaveSync(BuildContext context, Game game) async {
+  final state = context.read<AppState>();
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(const SnackBar(content: Text('Reading save file…')));
+  SaveData? data;
+  try {
+    data = await state.scanSave(game);
+  } on SaveParseException catch (e) {
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    return;
+  } catch (e) {
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text('Could not read save: $e')));
+    return;
+  }
+  messenger.hideCurrentSnackBar();
+  if (!context.mounted) return;
+
+  if (data == null) {
+    final locate = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('No save file found'),
+        content: Text(
+            'I looked next to ${game.title}\'s ROM but found no save (.sav). '
+            'Play the game once so the emulator writes a save, or point me to '
+            'the save file.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Close')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Locate save…')),
+        ],
+      ),
+    );
+    if (locate == true && context.mounted) await _locateSave(context, game);
+    return;
+  }
+
+  await showDialog(
+    context: context,
+    builder: (_) => _SaveSyncDialog(game: game, data: data!),
+  );
+}
+
+Future<void> _locateSave(BuildContext context, Game game) async {
+  final controller = TextEditingController();
+  final path = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Locate save file'),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: r'C:\...\game.sav',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Use file')),
+      ],
+    ),
+  );
+  if (path == null || path.isEmpty || !context.mounted) return;
+  await context.read<AppState>().setSavePath(game.id, path);
+  if (context.mounted) await _startSaveSync(context, game);
+}
+
+class _SaveSyncDialog extends StatefulWidget {
+  final Game game;
+  final SaveData data;
+  const _SaveSyncDialog({required this.game, required this.data});
+
+  @override
+  State<_SaveSyncDialog> createState() => _SaveSyncDialogState();
+}
+
+class _SaveSyncDialogState extends State<_SaveSyncDialog> {
+  late bool _dex = widget.data.caughtCount > 0;
+  late bool _badges = widget.data.badgeCount != null;
+  late bool _team = widget.data.team.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.data;
+    final muted = Theme.of(context).textTheme.bodySmall;
+    return AlertDialog(
+      title: const Text('Sync from save'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (d.trainerName != null && d.trainerName!.isNotEmpty)
+              Text(
+                  'Trainer: ${d.trainerName}'
+                  '${d.trainerId != null ? '  (ID ${d.trainerId})' : ''}',
+                  style: muted),
+            if (d.playTime != null)
+              Text('Play time: ${d.playTimeText}', style: muted),
+            const SizedBox(height: 8),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: _dex,
+              onChanged: d.caughtCount == 0
+                  ? null
+                  : (v) => setState(() => _dex = v ?? false),
+              title: Text('Caught Pokedex — ${d.caughtCount} species'),
+              subtitle: d.seenCount > 0
+                  ? Text('${d.seenCount} seen', style: muted)
+                  : null,
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: _badges,
+              onChanged: d.badgeCount == null
+                  ? null
+                  : (v) => setState(() => _badges = v ?? false),
+              title: Text(d.badgeCount == null
+                  ? 'Badges — not available for this save'
+                  : 'Badges — ${d.badgeCount}'),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: _team,
+              onChanged: d.team.isEmpty
+                  ? null
+                  : (v) => setState(() => _team = v ?? false),
+              title: Text(d.team.isEmpty
+                  ? 'Team — not available for this save'
+                  : 'Team — ${d.team.length} Pokemon'),
+              subtitle: d.team.isEmpty
+                  ? null
+                  : Text(
+                      d.team
+                          .map((m) =>
+                              '${m.name ?? (m.dexId != null ? '#${m.dexId}' : '?')} Lv${m.level}')
+                          .join(', '),
+                      style: muted),
+            ),
+            for (final note in d.notes)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text('• $note', style: muted),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        FilledButton(
+          onPressed: (_dex || _badges || _team)
+              ? () async {
+                  await context.read<AppState>().applySaveData(
+                        widget.game,
+                        d,
+                        dex: _dex,
+                        badges: _badges,
+                        team: _team,
+                      );
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Progress synced from save.')),
+                  );
+                }
+              : null,
+          child: const Text('Apply'),
+        ),
+      ],
     );
   }
 }

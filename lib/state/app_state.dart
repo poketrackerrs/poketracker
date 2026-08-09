@@ -1,19 +1,25 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
 import '../models/game.dart';
 import '../models/progress.dart';
+import '../models/save_models.dart';
 import '../services/storage_service.dart';
 import '../services/library_service.dart';
 import '../services/emulator_service.dart';
+import '../services/save_service.dart';
+import '../services/pokedex_service.dart';
 
 /// Central app state: holds progress for every game and persists on change.
 class AppState extends ChangeNotifier {
   final StorageService _storage = StorageService();
   final LibraryService _library = LibraryService();
   final EmulatorService _emu = EmulatorService();
+  final SaveService _save = SaveService();
+  final PokedexService _pokedex = PokedexService();
   final Map<String, GameProgress> _progress = {};
   List<DetectedEmulator> _detectedEmulators = [];
 
@@ -85,6 +91,103 @@ class AppState extends ChangeNotifier {
     _driveFolders = await _library.loadDriveFolders();
     notifyListeners();
     return n;
+  }
+
+  // ---- Save-file auto-tracker -----------------------------------------
+
+  /// A manually-set save-file path for a game (overrides auto-discovery).
+  Future<String?> savePath(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('savepath:$gameId');
+  }
+
+  Future<void> setSavePath(String gameId, String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (path.trim().isEmpty) {
+      await prefs.remove('savepath:$gameId');
+    } else {
+      await prefs.setString('savepath:$gameId', path.trim());
+    }
+  }
+
+  /// Finds a game's save file: a user-set path, else a save alongside the ROM.
+  Future<File?> _findSaveFile(String gameId) async {
+    final manual = await savePath(gameId);
+    if (manual != null && manual.isNotEmpty && File(manual).existsSync()) {
+      return File(manual);
+    }
+    final rom = _installed[gameId];
+    if (rom == null) return null;
+    final dir = File(rom).parent;
+    if (!dir.existsSync()) return null;
+    const exts = ['.sav', '.srm', '.sav1', '.dsv', '.sa1', '.fla'];
+    final dot = rom.lastIndexOf('.');
+    final romBase = dot == -1 ? rom : rom.substring(0, dot);
+    for (final e in exts) {
+      final f = File('$romBase$e');
+      if (f.existsSync()) return f;
+    }
+    for (final f in dir.listSync().whereType<File>()) {
+      final lower = f.path.toLowerCase();
+      if (exts.any((e) => lower.endsWith(e))) return f;
+    }
+    return null;
+  }
+
+  /// Reads and parses a game's save into a preview [SaveData], resolving team
+  /// names. Returns null if no save file is found. Throws [SaveParseException]
+  /// with a friendly message on a bad/unsupported save.
+  Future<SaveData?> scanSave(Game game) async {
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    final bytes = await file.readAsBytes();
+    final data = _save.parse(
+      Uint8List.fromList(bytes),
+      generation: game.generation,
+      versionId: game.version,
+    );
+    if (data.team.any((m) => m.dexId != null && m.name == null)) {
+      try {
+        final index = await _pokedex.loadIndex();
+        final byId = {for (final s in index) s.id: s.name};
+        for (final m in data.team) {
+          if (m.dexId != null) m.name = byId[m.dexId!];
+        }
+      } catch (_) {}
+    }
+    return data;
+  }
+
+  /// Writes selected fields of a parsed save into a game's progress. Caught
+  /// species are merged (never removed); team replaces the current team.
+  Future<void> applySaveData(
+    Game game,
+    SaveData data, {
+    bool dex = true,
+    bool badges = true,
+    bool team = true,
+  }) async {
+    final p = progressFor(game.id);
+    if (dex) {
+      p.caughtSpecies.addAll(data.caughtDex);
+      if (data.seenCount > p.dexSeen) p.dexSeen = data.seenCount;
+    }
+    if (badges && data.badgeCount != null) {
+      final n = data.badgeCount!.clamp(0, game.milestones.length);
+      for (var i = 0; i < n; i++) {
+        p.milestones[game.milestones[i]] = true;
+      }
+    }
+    if (team && data.team.isNotEmpty) {
+      p.team
+        ..clear()
+        ..addAll(data.team.map((m) => TeamMember(
+              species: m.name ?? (m.dexId != null ? '#${m.dexId}' : ''),
+              nickname: m.nickname ?? '',
+              level: m.level,
+            )));
+    }
+    _persist();
   }
 
   /// The installed emulator that can run a game, or null. Switch-era games
