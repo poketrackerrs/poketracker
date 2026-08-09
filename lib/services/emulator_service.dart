@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/emulators.dart';
 
@@ -10,14 +11,40 @@ class DetectedEmulator {
   bool get installed => path != null;
 }
 
-/// Detects installed emulators (Windows-focused) and opens download pages.
+/// Detects installed emulators (Windows + Android) and opens download pages.
 class EmulatorService {
+  static const _channel = MethodChannel('poketracker/emulators');
+
   Future<List<DetectedEmulator>> detectAll() async {
+    if (Platform.isAndroid) return _detectAndroid();
     final prefs = await SharedPreferences.getInstance();
     final out = <DetectedEmulator>[];
     for (final e in kEmulators) {
+      if (e.exeNames.isEmpty) continue; // Android-only entry; skip on desktop
       final manual = prefs.getString('emupath:${e.name}');
       out.add(DetectedEmulator(e, await _find(e, manual)));
+    }
+    return out;
+  }
+
+  /// Detects emulators by querying Android's package manager (via the platform
+  /// channel). The stored "path" is the installed package id.
+  Future<List<DetectedEmulator>> _detectAndroid() async {
+    final all = <String>{for (final e in kEmulators) ...e.androidPackages};
+    var installed = <String>{};
+    try {
+      final res = await _channel.invokeMethod<List<dynamic>>(
+          'installedPackages', {'packages': all.toList()});
+      installed = (res ?? []).map((e) => e.toString()).toSet();
+    } catch (_) {}
+    final out = <DetectedEmulator>[];
+    for (final e in kEmulators) {
+      if (e.androidPackages.isEmpty) continue; // desktop-only entry
+      final pkg = e.androidPackages.firstWhere(
+        (p) => installed.contains(p),
+        orElse: () => '',
+      );
+      out.add(DetectedEmulator(e, pkg.isEmpty ? null : pkg));
     }
     return out;
   }
@@ -161,8 +188,18 @@ class EmulatorService {
     }
   }
 
-  /// Launches an installed emulator, optionally opening a ROM file.
+  /// Launches an installed emulator, optionally opening a ROM file. On Android
+  /// [emulatorPath] is the package id and launching goes through the channel.
   Future<void> launch(String emulatorPath, [String? romPath]) async {
+    if (Platform.isAndroid) {
+      try {
+        await _channel.invokeMethod('launchRom', {
+          'package': emulatorPath,
+          'path': romPath,
+        });
+      } catch (_) {}
+      return;
+    }
     await Process.start(
       emulatorPath,
       romPath != null ? [romPath] : const [],

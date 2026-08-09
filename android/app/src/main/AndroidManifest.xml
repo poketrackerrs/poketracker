@@ -56,5 +56,24 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Open the browser (url_launcher) and ROM files in emulators. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="*/*"/>
+        </intent>
+        <!-- Emulator apps we detect and launch. -->
+        <package android:name="io.mgba.android.emulator"/>
+        <package android:name="me.magnum.melonds"/>
+        <package android:name="com.dsemu.drastic"/>
+        <package android:name="org.azahar.azahar"/>
+        <package android:name="io.github.lime3ds.android"/>
+        <package android:name="org.citra.citra_emu"/>
+        <package android:name="com.swordfish.lemuroid"/>
+        <package android:name="com.retroarch"/>
+        <package android:name="com.retroarch.aarch64"/>
     </queries>
 </manifest>

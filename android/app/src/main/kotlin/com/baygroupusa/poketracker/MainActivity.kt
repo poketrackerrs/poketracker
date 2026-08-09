@@ -1,6 +1,7 @@
 package com.baygroupusa.poketracker
 
 import android.content.Intent
+import android.net.Uri
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -8,11 +9,13 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : FlutterActivity() {
-    private val channelName = "poketracker/installer"
+    private val installerChannel = "poketracker/installer"
+    private val emulatorChannel = "poketracker/emulators"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, installerChannel)
             .setMethodCallHandler { call, result ->
                 if (call.method == "installApk") {
                     val path = call.argument<String>("path")
@@ -39,5 +42,65 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, emulatorChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "installedPackages" -> {
+                        val candidates = call.argument<List<String>>("packages") ?: emptyList()
+                        val installed = candidates.filter { isInstalled(it) }
+                        result.success(installed)
+                    }
+                    "launchRom" -> {
+                        val pkg = call.argument<String>("package")
+                        val path = call.argument<String>("path")
+                        result.success(launchRom(pkg, path))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun isInstalled(pkg: String): Boolean {
+        return try {
+            packageManager.getPackageInfo(pkg, 0)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /// Opens a ROM in the given emulator app; falls back to just launching it.
+    private fun launchRom(pkg: String?, path: String?): Boolean {
+        if (pkg == null) return false
+        try {
+            if (path != null) {
+                val file = File(path)
+                if (file.exists()) {
+                    val uri = FileProvider.getUriForFile(
+                        this, "$packageName.fileprovider", file
+                    )
+                    val view = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/octet-stream")
+                        setPackage(pkg)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        startActivity(view)
+                        return true
+                    } catch (_: Exception) {
+                        // fall through to launching the app itself
+                    }
+                }
+            }
+            val launch = packageManager.getLaunchIntentForPackage(pkg)
+            if (launch != null) {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(launch)
+                return true
+            }
+        } catch (_: Exception) {}
+        return false
     }
 }
