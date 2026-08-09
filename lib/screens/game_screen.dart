@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -60,7 +61,7 @@ class GameScreen extends StatelessWidget {
                   _MilestonesTab(game: game, tint: tint),
                   _DexTab(game: game, tint: tint),
                   _TeamTab(game: game, tint: tint),
-                  _ShinyTab(game: game),
+                  _ShinyTab(game: game, tint: tint),
                 ],
               ),
             ),
@@ -799,99 +800,374 @@ class _TeamTabState extends State<_TeamTab> {
 }
 
 // --------------------------------------------------------------- Shiny
-class _ShinyTab extends StatelessWidget {
+/// Common shiny-hunting methods and their approximate base odds denominator.
+const List<({String name, int rate})> _shinyMethods = [
+  (name: 'Random encounter', rate: 4096),
+  (name: 'Full Odds', rate: 4096),
+  (name: 'Masuda Method', rate: 683),
+  (name: 'Masuda + Shiny Charm', rate: 512),
+  (name: 'SOS chain', rate: 683),
+  (name: 'Soft reset', rate: 4096),
+  (name: 'Shiny Charm', rate: 1365),
+  (name: 'Gen 2 (1/8192)', rate: 8192),
+];
+
+int _shinyRate(String method) {
+  final m = method.toLowerCase();
+  if (m.contains('masuda') && m.contains('charm')) return 512;
+  if (m.contains('masuda')) return 683;
+  if (m.contains('sos') || m.contains('chain') || m.contains('combo')) {
+    return 683;
+  }
+  if (m.contains('charm')) return 1365;
+  if (m.contains('8192') || m.contains('gen 2')) return 8192;
+  return 4096;
+}
+
+class _ShinyTab extends StatefulWidget {
   final Game game;
-  const _ShinyTab({required this.game});
+  final Color tint;
+  const _ShinyTab({required this.game, required this.tint});
+
+  @override
+  State<_ShinyTab> createState() => _ShinyTabState();
+}
+
+class _ShinyTabState extends State<_ShinyTab> {
+  final Map<String, int> _nameToId = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIndex();
+  }
+
+  Future<void> _loadIndex() async {
+    try {
+      final index = await PokedexService().loadIndex();
+      if (!mounted) return;
+      setState(() {
+        for (final s in index) {
+          _nameToId[s.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')] =
+              s.id;
+        }
+      });
+    } catch (_) {}
+  }
+
+  int? _dexIdFor(String species) {
+    final s = species.trim();
+    if (s.isEmpty) return null;
+    if (s.startsWith('#')) return int.tryParse(s.substring(1));
+    return _nameToId[s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')];
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final hunts = state.progressFor(game.id).shinyHunts;
+    final hunts = state.progressFor(widget.game.id).shinyHunts;
 
     return Scaffold(
       body: hunts.isEmpty
-          ? const Center(child: Text('No shiny hunts yet. Tap + to start one.'))
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('No shiny hunts yet. Tap + to start one.',
+                    textAlign: TextAlign.center),
+              ),
+            )
           : ListView.builder(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
               itemCount: hunts.length,
-              itemBuilder: (context, i) {
-                final hunt = hunts[i];
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
+              itemBuilder: (context, i) => _huntCard(context, state, i, hunts[i]),
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: widget.tint,
+        foregroundColor: Colors.white,
+        onPressed: () async {
+          final s = context.read<AppState>();
+          s.addShinyHunt(widget.game.id);
+          final list = s.progressFor(widget.game.id).shinyHunts;
+          await _editHunt(context, s, list.length - 1, list.last);
+        },
+        icon: const Icon(Icons.auto_awesome),
+        label: const Text('New hunt'),
+      ),
+    );
+  }
+
+  Widget _huntCard(
+      BuildContext context, AppState state, int i, ShinyHunt hunt) {
+    final scheme = Theme.of(context).colorScheme;
+    final tint = widget.tint;
+    final id = _dexIdFor(hunt.species);
+    final rate = _shinyRate(hunt.method);
+    final chance = 1 - math.pow(1 - 1 / rate, hunt.count).toDouble();
+    final chanceText = hunt.count == 0
+        ? '1/$rate base odds'
+        : '≈ ${(chance * 100).toStringAsFixed(chance < 0.1 ? 1 : 0)}% by now · 1/$rate';
+    final title = hunt.species.trim().isEmpty
+        ? 'Tap to set species'
+        : prettifyName(hunt.species);
+
+    void update() => state.updateShinyHunt(widget.game.id, i, hunt);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: hunt.caught
+            ? BorderSide(color: tint, width: 2)
+            : BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.7)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => _editHunt(context, state, i, hunt),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      shape: BoxShape.circle,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: id == null
+                        ? Icon(Icons.auto_awesome, color: tint)
+                        : CachedNetworkImage(
+                            imageUrl:
+                                'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/$id.png',
+                            errorWidget: (_, _, _) =>
+                                Icon(Icons.auto_awesome, color: tint),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _editHunt(context, state, i, hunt),
+                    behavior: HitTestBehavior.opaque,
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Expanded(
-                              child: TextFormField(
-                                initialValue: hunt.species,
-                                decoration:
-                                    const InputDecoration(labelText: 'Species'),
-                                onChanged: (v) {
-                                  hunt.species = v;
-                                  state.updateShinyHunt(game.id, i, hunt);
-                                },
-                              ),
+                            Flexible(
+                              child: Text(title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600)),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () =>
-                                  state.removeShinyHunt(game.id, i),
-                            ),
+                            if (hunt.caught) ...[
+                              const SizedBox(width: 6),
+                              Icon(Icons.check_circle, size: 18, color: tint),
+                            ],
                           ],
                         ),
-                        TextFormField(
-                          initialValue: hunt.method,
-                          decoration: const InputDecoration(labelText: 'Method'),
-                          onChanged: (v) {
-                            hunt.method = v;
-                            state.updateShinyHunt(game.id, i, hunt);
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text('Encounters: ${hunt.count}',
-                                style: Theme.of(context).textTheme.titleMedium),
-                            const Spacer(),
-                            IconButton.filledTonal(
-                              onPressed: hunt.count > 0
-                                  ? () {
-                                      hunt.count--;
-                                      state.updateShinyHunt(game.id, i, hunt);
-                                    }
-                                  : null,
-                              icon: const Icon(Icons.remove),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton.filled(
-                              onPressed: () {
-                                hunt.count++;
-                                state.updateShinyHunt(game.id, i, hunt);
-                              },
-                              icon: const Icon(Icons.add),
-                            ),
-                          ],
-                        ),
-                        SwitchListTile(
-                          title: const Text('Caught!'),
-                          value: hunt.caught,
-                          onChanged: (v) {
-                            hunt.caught = v;
-                            state.updateShinyHunt(game.id, i, hunt);
-                          },
-                        ),
+                        const SizedBox(height: 2),
+                        Text(hunt.method,
+                            style: TextStyle(
+                                fontSize: 12, color: scheme.onSurfaceVariant)),
                       ],
                     ),
                   ),
-                );
-              },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => state.removeShinyHunt(widget.game.id, i),
+                ),
+              ],
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => state.addShinyHunt(game.id),
-        icon: const Icon(Icons.add),
-        label: const Text('New hunt'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Encounters',
+                        style: TextStyle(
+                            fontSize: 11, color: scheme.onSurfaceVariant)),
+                    Text('${hunt.count}',
+                        style: const TextStyle(
+                            fontSize: 28, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+                const Spacer(),
+                _RoundBtn(
+                  icon: Icons.remove,
+                  color: tint,
+                  filled: false,
+                  onTap: hunt.count > 0
+                      ? () {
+                          hunt.count--;
+                          update();
+                        }
+                      : null,
+                ),
+                const SizedBox(width: 10),
+                _RoundBtn(
+                  icon: Icons.add,
+                  color: tint,
+                  filled: true,
+                  onTap: () {
+                    hunt.count++;
+                    update();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.percent, size: 14, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Text(chanceText,
+                    style: TextStyle(
+                        fontSize: 12, color: scheme.onSurfaceVariant)),
+                const Spacer(),
+                FilterChip(
+                  label: const Text('Caught!'),
+                  avatar: Icon(Icons.auto_awesome,
+                      size: 16,
+                      color: hunt.caught ? Colors.white : tint),
+                  selected: hunt.caught,
+                  showCheckmark: false,
+                  selectedColor: tint,
+                  labelStyle: TextStyle(
+                    color: hunt.caught ? Colors.white : scheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  onSelected: (v) {
+                    hunt.caught = v;
+                    update();
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editHunt(
+      BuildContext context, AppState state, int index, ShinyHunt hunt) async {
+    final species = TextEditingController(text: hunt.species);
+    final method = TextEditingController(text: hunt.method);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              16, 4, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Shiny hunt', style: Theme.of(ctx).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              TextField(
+                controller: species,
+                autofocus: true,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                    labelText: 'Species', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: method,
+                decoration: const InputDecoration(
+                    labelText: 'Method', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final m in _shinyMethods)
+                    ActionChip(
+                      label: Text(m.name),
+                      onPressed: () => setSheet(() => method.text = m.name),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      state.removeShinyHunt(widget.game.id, index);
+                      Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Remove'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: widget.tint),
+                    onPressed: () {
+                      hunt.species = species.text.trim();
+                      hunt.method = method.text.trim().isEmpty
+                          ? 'Random encounter'
+                          : method.text.trim();
+                      state.updateShinyHunt(widget.game.id, index, hunt);
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+}
+
+class _RoundBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final bool filled;
+  final VoidCallback? onTap;
+  const _RoundBtn({
+    required this.icon,
+    required this.color,
+    required this.filled,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final enabled = onTap != null;
+    final bg = filled
+        ? (enabled ? color : scheme.surfaceContainerHighest)
+        : scheme.surfaceContainerHighest;
+    final fg = filled
+        ? Colors.white
+        : (enabled ? color : scheme.onSurfaceVariant.withValues(alpha: 0.4));
+    return Material(
+      color: bg,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(icon, color: fg),
+        ),
       ),
     );
   }

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.9",
-  "notes": "Global Pokedex polish: a sprite grid with a generation filter, restyled search, and a caught badge on Pokemon you've caught in any game.",
+  "version": "1.0.10",
+  "notes": "Shiny hunt tab polish: shiny sprites, a big region-tinted encounter counter, live cumulative odds by method, a caught state that highlights the card, and a tap-to-edit sheet with quick method presets.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
