@@ -49,10 +49,7 @@ app.*.map.json
 *.aab
 *-Setup.exe
 
-# Copyrighted game box art — kept LOCAL only, never published to the public repo
-# or bundled in distributed builds. The app falls back to styled cards without them.
-assets/games/*.png
-assets/games/*.jpg
-assets/games/wraps/
+# Game box art IS committed — this repo is private-use (personal devices only),
+# never distributed. Only the intermediate dieline working files stay untracked.
 assets/games/dielines/*.png
 assets/games/dielines/*.jpg

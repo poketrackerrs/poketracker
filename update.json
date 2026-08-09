@@ -1,6 +1,6 @@
 {
-  "version": "1.0.1",
-  "notes": "Adds Settings → Game downloads: paste your shared Google Drive folder link to turn on per-game download buttons on any device.",
+  "version": "1.0.2",
+  "notes": "Bundles the game box-art covers and the built-in Google Drive links, so covers show and per-game download buttons work automatically on every device.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -54,12 +55,35 @@ class LibraryService {
     final docs = await getApplicationDocumentsDirectory();
     final f = File('${docs.path}${Platform.pathSeparator}'
         'PokeTracker${Platform.pathSeparator}drive_folders.json');
-    if (!await f.exists()) return _driveFolders = {};
+    if (await f.exists()) {
+      try {
+        final data = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+        return _driveFolders = data.map((k, v) => MapEntry(k, v.toString()));
+      } catch (_) {
+        // fall through to the bundled default
+      }
+    }
+    // No local map yet (fresh install): fall back to the mapping shipped with
+    // the app, and persist it so downloads work and the user can re-link later.
+    return _driveFolders = await _loadBundledDriveFolders(f);
+  }
+
+  /// Reads the mapping bundled at `assets/config/drive_folders.json`, writes it
+  /// to the user's data folder, and returns it. Returns {} if not present.
+  Future<Map<String, String>> _loadBundledDriveFolders(File target) async {
     try {
-      final data = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
-      return _driveFolders = data.map((k, v) => MapEntry(k, v.toString()));
+      final raw = await rootBundle.loadString('assets/config/drive_folders.json');
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final map = data.map((k, v) => MapEntry(k, v.toString()));
+      if (map.isNotEmpty) {
+        if (!await target.parent.exists()) {
+          await target.parent.create(recursive: true);
+        }
+        await target.writeAsString(jsonEncode(map));
+      }
+      return map;
     } catch (_) {
-      return _driveFolders = {};
+      return {};
     }
   }
 
