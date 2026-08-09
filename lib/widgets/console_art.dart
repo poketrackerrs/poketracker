@@ -162,49 +162,154 @@ class _ConsolePainter extends CustomPainter {
       old.platform != platform || old.glow != glow;
 }
 
-/// A small game cartridge/card, colored by [color] (e.g. the game's region).
+/// A game cartridge/card whose shape matches the console, colored by [color].
 class CartridgeArt extends StatelessWidget {
   final Color color;
+  final BoxPlatform platform;
   final double size;
-  const CartridgeArt({super.key, required this.color, this.size = 40});
+  const CartridgeArt({
+    super.key,
+    required this.color,
+    required this.platform,
+    this.size = 40,
+  });
+
+  /// Media aspect (w/h) by console: GB carts are tall, DS/3DS cards flat,
+  /// Switch carts small and squarish.
+  double get _aspect {
+    switch (platform) {
+      case BoxPlatform.gb:
+      case BoxPlatform.gbc:
+        return 0.80;
+      case BoxPlatform.gba:
+        return 0.92;
+      case BoxPlatform.ds:
+      case BoxPlatform.n3ds:
+        return 1.28; // flat wide card
+      case BoxPlatform.nswitch:
+        return 0.9;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: size * 0.82,
+      width: size * _aspect,
       height: size,
-      child: CustomPaint(painter: _CartPainter(color)),
+      child: CustomPaint(painter: _CartPainter(color, platform)),
     );
   }
 }
 
 class _CartPainter extends CustomPainter {
   final Color color;
-  _CartPainter(this.color);
+  final BoxPlatform platform;
+  _CartPainter(this.color, this.platform);
 
   @override
   void paint(Canvas canvas, Size s) {
+    switch (platform) {
+      case BoxPlatform.gb:
+      case BoxPlatform.gbc:
+        _gbCart(canvas, s);
+        break;
+      case BoxPlatform.gba:
+        _gbaCart(canvas, s);
+        break;
+      case BoxPlatform.ds:
+      case BoxPlatform.n3ds:
+        _dsCard(canvas, s);
+        break;
+      case BoxPlatform.nswitch:
+        _switchCart(canvas, s);
+        break;
+    }
+  }
+
+  Paint get _label => Paint()..color = Colors.white.withValues(alpha: 0.85);
+
+  // Classic Game Boy / Color cartridge: chunky, ridged top, notched corner.
+  void _gbCart(Canvas c, Size s) {
     final w = s.width, h = s.height;
     final body = Path()
-      ..moveTo(w * 0.1, h * 0.12)
-      ..lineTo(w * 0.9, h * 0.12)
-      ..lineTo(w * 0.9, h * 0.86)
-      ..lineTo(w * 0.7, h)
-      ..lineTo(w * 0.1, h)
+      ..moveTo(w * 0.08, h * 0.14)
+      ..lineTo(w * 0.92, h * 0.14)
+      ..lineTo(w * 0.92, h * 0.88)
+      ..lineTo(w * 0.66, h) // clipped bottom-right corner
+      ..lineTo(w * 0.08, h)
       ..close();
-    canvas.drawPath(body, Paint()..color = color);
-    // Label
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-          Rect.fromLTWH(w * 0.22, h * 0.24, w * 0.56, h * 0.34),
-          const Radius.circular(2)),
-      Paint()..color = Colors.white.withValues(alpha: 0.85),
-    );
-    // Contacts
-    canvas.drawRect(Rect.fromLTWH(w * 0.2, 0, w * 0.6, h * 0.1),
-        Paint()..color = const Color(0xFFB8952e));
+    c.drawPath(body, Paint()..color = color);
+    // Ridged grip at top
+    for (var i = 0; i < 4; i++) {
+      final x = w * (0.16 + i * 0.19);
+      c.drawRect(Rect.fromLTWH(x, 0, w * 0.1, h * 0.14),
+          Paint()..color = color);
+    }
+    c.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.2, h * 0.28, w * 0.6, h * 0.4),
+            const Radius.circular(2)),
+        _label);
+  }
+
+  void _gbaCart(Canvas c, Size s) {
+    final w = s.width, h = s.height;
+    c.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.06, h * 0.06, w * 0.88, h * 0.94),
+            Radius.circular(w * 0.12)),
+        Paint()..color = color);
+    c.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.2, h * 0.24, w * 0.6, h * 0.44),
+            const Radius.circular(2)),
+        _label);
+    // grip notches
+    c.drawRect(Rect.fromLTWH(w * 0.0, h * 0.2, w * 0.06, h * 0.2),
+        Paint()..color = color);
+    c.drawRect(Rect.fromLTWH(w * 0.94, h * 0.2, w * 0.06, h * 0.2),
+        Paint()..color = color);
+  }
+
+  // Flat DS / 3DS game card.
+  void _dsCard(Canvas c, Size s) {
+    final w = s.width, h = s.height;
+    final r = RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.04, h * 0.08, w * 0.92, h * 0.84),
+        Radius.circular(h * 0.14));
+    c.drawRRect(r, Paint()..color = color);
+    // notch (top-right)
+    c.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.8, h * 0.08, w * 0.16, h * 0.22),
+            const Radius.circular(2)),
+        Paint()..color = Colors.black.withValues(alpha: 0.35));
+    c.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.12, h * 0.34, w * 0.6, h * 0.4),
+            const Radius.circular(2)),
+        _label);
+  }
+
+  // Small Switch cartridge.
+  void _switchCart(Canvas c, Size s) {
+    final w = s.width, h = s.height;
+    final body = Path()
+      ..moveTo(w * 0.12, h * 0.06)
+      ..lineTo(w * 0.72, h * 0.06)
+      ..lineTo(w * 0.9, h * 0.24)
+      ..lineTo(w * 0.9, h * 0.94)
+      ..lineTo(w * 0.12, h * 0.94)
+      ..close();
+    c.drawPath(body, Paint()..color = color);
+    c.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.24, h * 0.34, w * 0.5, h * 0.4),
+            const Radius.circular(2)),
+        _label);
   }
 
   @override
-  bool shouldRepaint(_CartPainter old) => old.color != color;
+  bool shouldRepaint(_CartPainter old) =>
+      old.color != color || old.platform != platform;
 }

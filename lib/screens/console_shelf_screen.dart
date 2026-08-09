@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/region_theme.dart';
@@ -61,7 +62,10 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          GameBoxArt(game: game, height: 170),
+          Hero(
+            tag: 'boxhero_${game.id}',
+            child: GameBoxArt(game: game, height: 170),
+          ),
           const SizedBox(height: 12),
           Text(game.title, style: Theme.of(context).textTheme.titleMedium),
           Text('${game.region} • ${game.releaseYear}',
@@ -251,28 +255,56 @@ class _LaunchSequence extends StatefulWidget {
 class _LaunchSequenceState extends State<_LaunchSequence>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c;
+  final AudioPlayer _sfx = AudioPlayer();
+  bool _playedInsert = false;
+  bool _playedPower = false;
 
   @override
   void initState() {
     super.initState();
     _c = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 2400))
+        vsync: this, duration: const Duration(milliseconds: 2600))
       ..addStatusListener((s) async {
         if (s == AnimationStatus.completed) {
           await widget.onLaunch();
           if (mounted) Navigator.of(context).pop();
         }
-      });
-    _c.forward();
+      })
+      ..addListener(_maybePlaySounds);
+    // Let the Hero fly-in finish before the box hinges open.
+    Future.delayed(const Duration(milliseconds: 380), () {
+      if (mounted) _c.forward();
+    });
+  }
+
+  void _maybePlaySounds() {
+    final t = _c.value;
+    if (!_playedInsert && t >= 0.52) {
+      _playedInsert = true;
+      _play('sfx/insert.wav');
+    }
+    if (!_playedPower && t >= 0.82) {
+      _playedPower = true;
+      _play('sfx/poweron.wav');
+    }
+  }
+
+  Future<void> _play(String asset) async {
+    try {
+      await _sfx.stop();
+      await _sfx.play(AssetSource(asset));
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _c.dispose();
+    _sfx.dispose();
     super.dispose();
   }
 
-  double _seg(double t, double a, double b) => ((t - a) / (b - a)).clamp(0.0, 1.0);
+  double _seg(double t, double a, double b) =>
+      ((t - a) / (b - a)).clamp(0.0, 1.0);
 
   @override
   Widget build(BuildContext context) {
@@ -284,27 +316,40 @@ class _LaunchSequenceState extends State<_LaunchSequence>
         animation: _c,
         builder: (context, _) {
           final t = _c.value;
-          final glow = _seg(t, 0.8, 1.0);
-          // box visible then fades as it "opens"
-          final boxOpacity = 1 - _seg(t, 0.28, 0.42);
-          final cartFade = _seg(t, 0.34, 0.46);
-          final travel = Curves.easeInOut.transform(_seg(t, 0.46, 0.8));
-          final cartDy = -230.0 * travel; // rise into the console
-          final cartScale = 1.0 - 0.5 * travel;
-          final cartOpacity = cartFade * (1 - _seg(t, 0.78, 0.86));
+          final glow = _seg(t, 0.82, 1.0);
+          // Box hinges open from the top like a lid, then fades.
+          final open = Curves.easeIn.transform(_seg(t, 0.16, 0.44));
+          final boxOpacity = 1 - _seg(t, 0.46, 0.6);
+          final lid = Matrix4.identity()
+            ..setEntry(3, 2, 0.0018)
+            ..rotateX(-1.35 * open);
+          // Cartridge emerges from the box then rises into the console.
+          final cartFade = _seg(t, 0.42, 0.52);
+          final travel = Curves.easeInOut.transform(_seg(t, 0.52, 0.82));
+          final cartDy = 40.0 + (-250.0 - 40.0) * travel;
+          final cartScale = 1.0 - 0.45 * travel;
+          final cartOpacity = cartFade * (1 - _seg(t, 0.8, 0.9));
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               ConsoleArt(platform: widget.platform, size: 160, glow: glow),
               SizedBox(
-                height: 240,
+                height: 250,
                 child: Center(
                   child: Stack(
                     alignment: Alignment.center,
+                    clipBehavior: Clip.none,
                     children: [
                       Opacity(
                         opacity: boxOpacity.clamp(0.0, 1.0),
-                        child: GameBoxArt(game: widget.game, height: 180),
+                        child: Transform(
+                          alignment: Alignment.topCenter,
+                          transform: lid,
+                          child: Hero(
+                            tag: 'boxhero_${widget.game.id}',
+                            child: GameBoxArt(game: widget.game, height: 180),
+                          ),
+                        ),
                       ),
                       Transform.translate(
                         offset: Offset(0, cartDy),
@@ -312,7 +357,10 @@ class _LaunchSequenceState extends State<_LaunchSequence>
                           scale: cartScale,
                           child: Opacity(
                             opacity: cartOpacity.clamp(0.0, 1.0),
-                            child: CartridgeArt(color: widget.tint, size: 84),
+                            child: CartridgeArt(
+                                color: widget.tint,
+                                platform: widget.platform,
+                                size: 88),
                           ),
                         ),
                       ),
@@ -324,7 +372,7 @@ class _LaunchSequenceState extends State<_LaunchSequence>
               Text(
                 glow > 0.1
                     ? 'Now loading ${_shortTitle(widget.game)}…'
-                    : 'Inserting cartridge…',
+                    : (t > 0.5 ? 'Inserting cartridge…' : 'Opening case…'),
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
             ],

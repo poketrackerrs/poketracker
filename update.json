@@ -1,6 +1,6 @@
 {
-  "version": "1.0.17",
-  "notes": "New Console mode on the Games page: pick a console (Game Boy → Switch), browse its games as cartridge spines on a shelf, then Play runs a box-open → cartridge-insert → power-on animation before launching the emulator. Toggle back to the classic list anytime.",
+  "version": "1.0.18",
+  "notes": "Console mode polish: the box now hinges open, the cartridge is shaped to match the console (GB cart, DS/3DS card, Switch cart), the box flies in with a Hero animation, and there are insert + power-on sound effects.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
