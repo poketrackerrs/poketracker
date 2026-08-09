@@ -1,6 +1,6 @@
 {
-  "version": "1.0.6",
-  "notes": "Appearance overhaul: refreshed theme with rounded cards, a home dashboard with a completion ring and stats, region-tinted section headers and per-game completion rings, an accent-color picker plus region-tint toggle in Settings, and a new Poke Ball app icon and splash screen.",
+  "version": "1.0.7",
+  "notes": "Per-game page redesign: a region-tinted header with the box art and a completion ring, a visual badge grid on the Badges tab, and richer Team cards with sprites and a tap-to-edit sheet.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

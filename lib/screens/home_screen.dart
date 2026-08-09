@@ -1,10 +1,10 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/games_data.dart';
 import '../data/region_theme.dart';
 import '../models/game.dart';
 import '../state/app_state.dart';
+import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
 import 'game_screen.dart';
 import 'updates_screen.dart';
@@ -159,7 +159,7 @@ class _OverallCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            _CompletionRing(value: avg, color: state.accent, size: 78, stroke: 8),
+            CompletionRing(value: avg, color: state.accent, size: 78, stroke: 8),
             const SizedBox(width: 18),
             Expanded(
               child: Column(
@@ -257,7 +257,7 @@ class _GameTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              _CompletionRing(value: pct, color: tint, size: 46, stroke: 5),
+              CompletionRing(value: pct, color: tint, size: 46, stroke: 5),
               const SizedBox(width: 6),
               _DownloadControl(game: game),
             ],
@@ -287,82 +287,6 @@ class _MetaChip extends StatelessWidget {
   }
 }
 
-/// A circular completion ring with the percentage in the middle.
-class _CompletionRing extends StatelessWidget {
-  final double value; // 0..1
-  final Color color;
-  final double size;
-  final double stroke;
-  const _CompletionRing({
-    required this.value,
-    required this.color,
-    this.size = 46,
-    this.stroke = 5,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: Size(size, size),
-            painter: _RingPainter(
-              value: value.clamp(0.0, 1.0),
-              color: color,
-              track: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(alpha: 0.8),
-              stroke: stroke,
-            ),
-          ),
-          Text('${(value * 100).round()}%',
-              style: TextStyle(
-                  fontSize: size * 0.26, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-}
-
-class _RingPainter extends CustomPainter {
-  final double value;
-  final Color color;
-  final Color track;
-  final double stroke;
-  _RingPainter({
-    required this.value,
-    required this.color,
-    required this.track,
-    required this.stroke,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = (size.width - stroke) / 2;
-    final bg = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..color = track;
-    canvas.drawCircle(center, radius, bg);
-    final fg = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round
-      ..color = color;
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius),
-        -math.pi / 2, 2 * math.pi * value, false, fg);
-  }
-
-  @override
-  bool shouldRepaint(_RingPainter old) =>
-      old.value != value || old.color != color || old.track != track;
-}
 
 /// Clickable line showing the games library folder; opens it in Explorer.
 class _LibraryBar extends StatelessWidget {

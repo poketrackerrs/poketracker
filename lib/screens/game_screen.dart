@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../data/pokeapi_maps.dart';
+import '../data/region_theme.dart';
 import '../models/game.dart';
 import '../models/pokedex_models.dart';
+import '../models/progress.dart';
 import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../state/app_state.dart';
+import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
 import 'pokemon_detail_screen.dart';
 
@@ -16,10 +19,15 @@ class GameScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final tint =
+        state.regionTint ? regionColor(game.region, state.accent) : state.accent;
     return DefaultTabController(
       length: 4,
       child: Scaffold(
         appBar: AppBar(
+          backgroundColor: tint,
+          foregroundColor: Colors.white,
           title: Text(game.title),
           actions: [
             IconButton(
@@ -31,12 +39,14 @@ class GameScreen extends StatelessWidget {
         ),
         body: Column(
           children: [
-            _GameHeader(game: game),
+            _GameHeader(game: game, tint: tint),
             Material(
               color: Theme.of(context).colorScheme.surface,
-              child: const TabBar(
+              child: TabBar(
                 isScrollable: true,
-                tabs: [
+                indicatorColor: tint,
+                labelColor: tint,
+                tabs: const [
                   Tab(icon: Icon(Icons.emoji_events), text: 'Badges'),
                   Tab(icon: Icon(Icons.menu_book), text: 'Pokedex'),
                   Tab(icon: Icon(Icons.groups), text: 'Team'),
@@ -47,9 +57,9 @@ class GameScreen extends StatelessWidget {
             Expanded(
               child: TabBarView(
                 children: [
-                  _MilestonesTab(game: game),
+                  _MilestonesTab(game: game, tint: tint),
                   _DexTab(game: game),
-                  _TeamTab(game: game),
+                  _TeamTab(game: game, tint: tint),
                   _ShinyTab(game: game),
                 ],
               ),
@@ -63,30 +73,34 @@ class GameScreen extends StatelessWidget {
 
 class _GameHeader extends StatelessWidget {
   final Game game;
-  const _GameHeader({required this.game});
+  final Color tint;
+  const _GameHeader({required this.game, required this.tint});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
+    final state = context.watch<AppState>();
+    final pct = state.completion(game);
+    return Container(
+      width: double.infinity,
+      color: tint,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           GestureDetector(
             onTap: () => _showBoxPopout(context, game),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                GameBoxArt(game: game, height: 130),
-                const SizedBox(height: 2),
-                Row(
+                GameBoxArt(game: game, height: 118),
+                const SizedBox(height: 3),
+                const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.zoom_out_map,
-                        size: 12,
-                        color: Theme.of(context).textTheme.bodySmall?.color),
-                    const SizedBox(width: 3),
-                    Text('Tap to view',
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Icon(Icons.zoom_out_map, size: 11, color: Colors.white70),
+                    SizedBox(width: 3),
+                    Text('Tap to rotate',
+                        style: TextStyle(color: Colors.white70, fontSize: 11)),
                   ],
                 ),
               ],
@@ -97,16 +111,48 @@ class _GameHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(game.title,
-                    style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 4),
-                Text('${game.region} • ${game.releaseYear}'),
-                Text('${game.category.label} • Generation ${game.generation}'),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _HeaderChip(text: game.region),
+                    _HeaderChip(text: '${game.releaseYear}'),
+                    _HeaderChip(text: game.category.label),
+                    _HeaderChip(text: 'Gen ${game.generation}'),
+                  ],
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 12),
+          CompletionRing(
+            value: pct,
+            color: Colors.white,
+            size: 62,
+            stroke: 6,
+            trackColor: Colors.white.withValues(alpha: 0.3),
+            textColor: Colors.white,
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _HeaderChip extends StatelessWidget {
+  final String text;
+  const _HeaderChip({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(text,
+          style: const TextStyle(color: Colors.white, fontSize: 12)),
     );
   }
 }
@@ -138,28 +184,162 @@ void _showBoxPopout(BuildContext context, Game game) {
 // --------------------------------------------------------------- Badges
 class _MilestonesTab extends StatelessWidget {
   final Game game;
-  const _MilestonesTab({required this.game});
+  final Color tint;
+  const _MilestonesTab({required this.game, required this.tint});
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final p = state.progressFor(game.id);
-    final done = p.milestones.values.where((v) => v).length;
+    bool done(String m) => p.milestones[m] ?? false;
+    void toggle(String m) => state.setMilestone(game.id, m, !done(m));
+
+    final badges = game.milestones.where((m) => m.contains('Badge')).toList();
+    final others = game.milestones.where((m) => !m.contains('Badge')).toList();
+    final badgesDone = badges.where(done).length;
+    final allDone = game.milestones.where(done).length;
 
     return ListView(
+      padding: const EdgeInsets.all(16),
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('$done / ${game.milestones.length} completed',
-              style: Theme.of(context).textTheme.titleMedium),
-        ),
-        for (final m in game.milestones)
-          CheckboxListTile(
-            title: Text(m),
-            value: p.milestones[m] ?? false,
-            onChanged: (v) => state.setMilestone(game.id, m, v ?? false),
+        if (badges.isNotEmpty) ...[
+          Text('$badgesDone / ${badges.length} badges',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          _progressBar(badgesDone / badges.length),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 12,
+            runSpacing: 16,
+            children: [
+              for (final m in badges)
+                _BadgeDisc(
+                    name: m,
+                    earned: done(m),
+                    tint: tint,
+                    onTap: () => toggle(m)),
+            ],
           ),
+          if (others.isNotEmpty) const Divider(height: 34),
+        ] else ...[
+          Text('$allDone / ${game.milestones.length} completed',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          _progressBar(game.milestones.isEmpty
+              ? 0
+              : allDone / game.milestones.length),
+          const SizedBox(height: 8),
+        ],
+        for (final m in others)
+          _MilestoneRow(label: m, done: done(m), tint: tint, onTap: () => toggle(m)),
       ],
+    );
+  }
+
+  Widget _progressBar(double v) => ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: LinearProgressIndicator(
+          value: v.clamp(0.0, 1.0),
+          minHeight: 8,
+          color: tint,
+          backgroundColor: tint.withValues(alpha: 0.15),
+        ),
+      );
+}
+
+class _BadgeDisc extends StatelessWidget {
+  final String name;
+  final bool earned;
+  final Color tint;
+  final VoidCallback onTap;
+  const _BadgeDisc({
+    required this.name,
+    required this.earned,
+    required this.tint,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 66,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Column(
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: earned ? tint : scheme.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.workspace_premium,
+                  size: 26,
+                  color: earned ? Colors.white : scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              name.replaceAll(' Badge', ''),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(
+                  fontSize: 11,
+                  color: earned ? scheme.onSurface : scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MilestoneRow extends StatelessWidget {
+  final String label;
+  final bool done;
+  final Color tint;
+  final VoidCallback onTap;
+  const _MilestoneRow({
+    required this.label,
+    required this.done,
+    required this.tint,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: done ? tint : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: done ? null : Border.all(color: scheme.outline),
+              ),
+              child: done
+                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(label)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -391,84 +571,213 @@ class _ObtainChip extends StatelessWidget {
 }
 
 // --------------------------------------------------------------- Team
-class _TeamTab extends StatelessWidget {
+class _TeamTab extends StatefulWidget {
   final Game game;
-  const _TeamTab({required this.game});
+  final Color tint;
+  const _TeamTab({required this.game, required this.tint});
+
+  @override
+  State<_TeamTab> createState() => _TeamTabState();
+}
+
+class _TeamTabState extends State<_TeamTab> {
+  final Map<String, int> _nameToId = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIndex();
+  }
+
+  Future<void> _loadIndex() async {
+    try {
+      final index = await PokedexService().loadIndex();
+      if (!mounted) return;
+      setState(() {
+        for (final s in index) {
+          _nameToId[s.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')] =
+              s.id;
+        }
+      });
+    } catch (_) {}
+  }
+
+  int? _dexIdFor(String species) {
+    final s = species.trim();
+    if (s.isEmpty) return null;
+    if (s.startsWith('#')) return int.tryParse(s.substring(1));
+    return _nameToId[s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '')];
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final team = state.progressFor(game.id).team;
+    final team = state.progressFor(widget.game.id).team;
 
     return Scaffold(
       body: team.isEmpty
           ? const Center(child: Text('No team members yet. Tap + to add one.'))
           : ListView.builder(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
               itemCount: team.length,
-              itemBuilder: (context, i) {
-                final member = team[i];
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: TextFormField(
-                            initialValue: member.species,
-                            decoration:
-                                const InputDecoration(labelText: 'Species'),
-                            onChanged: (v) {
-                              member.species = v;
-                              state.updateTeamMember(game.id, i, member);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 3,
-                          child: TextFormField(
-                            initialValue: member.nickname,
-                            decoration:
-                                const InputDecoration(labelText: 'Nickname'),
-                            onChanged: (v) {
-                              member.nickname = v;
-                              state.updateTeamMember(game.id, i, member);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 64,
-                          child: TextFormField(
-                            initialValue: member.level.toString(),
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(labelText: 'Lv'),
-                            onChanged: (v) {
-                              member.level = int.tryParse(v) ?? member.level;
-                              state.updateTeamMember(game.id, i, member);
-                            },
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => state.removeTeamMember(game.id, i),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+              itemBuilder: (context, i) =>
+                  _memberCard(context, state, i, team[i]),
             ),
       floatingActionButton: team.length < 6
           ? FloatingActionButton.extended(
-              onPressed: () => state.addTeamMember(game.id),
+              backgroundColor: widget.tint,
+              foregroundColor: Colors.white,
+              onPressed: () async {
+                final s = context.read<AppState>();
+                s.addTeamMember(widget.game.id);
+                final list = s.progressFor(widget.game.id).team;
+                await _editMember(context, s, list.length - 1, list.last);
+              },
               icon: const Icon(Icons.add),
               label: const Text('Add'),
             )
           : null,
     );
+  }
+
+  Widget _memberCard(
+      BuildContext context, AppState state, int i, TeamMember member) {
+    final id = _dexIdFor(member.species);
+    final scheme = Theme.of(context).colorScheme;
+    final title = member.species.trim().isEmpty
+        ? 'Tap to choose'
+        : prettifyName(member.species);
+    final sub = member.nickname.trim().isEmpty ? null : '"${member.nickname}"';
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      child: InkWell(
+        onTap: () => _editMember(context, state, i, member),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  shape: BoxShape.circle,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: id == null
+                    ? Icon(Icons.catching_pokemon,
+                        color: scheme.onSurfaceVariant)
+                    : CachedNetworkImage(
+                        imageUrl:
+                            'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$id.png',
+                        errorWidget: (_, _, _) => Icon(Icons.catching_pokemon,
+                            color: scheme.onSurfaceVariant),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600)),
+                    if (sub != null)
+                      Text(sub,
+                          style: TextStyle(
+                              fontSize: 12, color: scheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text('Lv ${member.level}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editMember(
+      BuildContext context, AppState state, int index, TeamMember member) async {
+    final species = TextEditingController(text: member.species);
+    final nickname = TextEditingController(text: member.nickname);
+    final level = TextEditingController(text: member.level.toString());
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            16, 4, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Edit Pokémon',
+                style: Theme.of(ctx).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            TextField(
+              controller: species,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                  labelText: 'Species', border: OutlineInputBorder()),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nickname,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                  labelText: 'Nickname (optional)',
+                  border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: level,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: 'Level', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    state.removeTeamMember(widget.game.id, index);
+                    Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Remove'),
+                ),
+                const Spacer(),
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: widget.tint),
+                  onPressed: () {
+                    member.species = species.text.trim();
+                    member.nickname = nickname.text.trim();
+                    member.level = int.tryParse(level.text) ?? member.level;
+                    state.updateTeamMember(widget.game.id, index, member);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 }
 
