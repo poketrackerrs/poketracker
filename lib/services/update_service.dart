@@ -36,9 +36,17 @@ class UpdateService {
     final info = await PackageInfo.fromPlatform();
     final current = info.version;
     try {
-      final resp = await http
-          .get(Uri.parse(kUpdateManifestUrl))
-          .timeout(const Duration(seconds: 15));
+      // Append a cache-buster: GitHub's raw CDN caches the manifest for ~5 min,
+      // so a plain fetch can return a stale version right after a release.
+      final base = Uri.parse(kUpdateManifestUrl);
+      final uri = base.replace(queryParameters: {
+        ...base.queryParameters,
+        't': DateTime.now().millisecondsSinceEpoch.toString(),
+      });
+      final resp = await http.get(
+        uri,
+        headers: const {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
+      ).timeout(const Duration(seconds: 15));
       if (resp.statusCode != 200) {
         return UpdateCheckResult(
           currentVersion: current,
