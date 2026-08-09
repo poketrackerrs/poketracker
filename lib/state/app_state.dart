@@ -36,6 +36,14 @@ class AppState extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   ThemeMode get themeMode => _themeMode;
 
+  // ---- Appearance ------------------------------------------------------
+  static const Color defaultAccent = Color(0xFFEE1515); // Poke Ball red
+  Color _accent = defaultAccent;
+  Color get accent => _accent;
+
+  bool _regionTint = true;
+  bool get regionTint => _regionTint;
+
   bool _loaded = false;
   bool get isLoaded => _loaded;
 
@@ -46,6 +54,8 @@ class AppState extends ChangeNotifier {
     _themeMode = ThemeMode.values[
         (prefs.getInt('thememode') ?? ThemeMode.system.index)
             .clamp(0, ThemeMode.values.length - 1)];
+    _accent = Color(prefs.getInt('accent') ?? defaultAccent.toARGB32());
+    _regionTint = prefs.getBool('regiontint') ?? true;
     await _loadLibrary();
     _loaded = true;
     notifyListeners();
@@ -57,6 +67,37 @@ class AppState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('thememode', mode.index);
   }
+
+  Future<void> setAccent(Color color) async {
+    _accent = color;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('accent', color.toARGB32());
+  }
+
+  Future<void> setRegionTint(bool value) async {
+    _regionTint = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('regiontint', value);
+  }
+
+  // ---- Home dashboard stats -------------------------------------------
+  /// Games with any recorded progress.
+  int get startedCount => kGames.where((g) => completion(g) > 0).length;
+
+  /// Total species caught across every game.
+  int get totalCaught =>
+      _progress.values.fold(0, (a, p) => a + p.caughtSpecies.length);
+
+  /// Total gym badges earned across every game (milestones named "…Badge").
+  int get totalBadges => _progress.values.fold(
+      0,
+      (a, p) =>
+          a +
+          p.milestones.entries
+              .where((e) => e.value && e.key.contains('Badge'))
+              .length);
 
   /// Opens an external URL (store page, etc.) in the default browser/app.
   /// Uses url_launcher so it works on Android and iOS as well as desktop.

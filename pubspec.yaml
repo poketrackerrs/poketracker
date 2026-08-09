@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.5+6
+version: 1.0.6+7
 
 environment:
   sdk: ^3.12.2
@@ -62,6 +62,37 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+  # Generate launcher icons and the native splash from assets/icon/.
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.3
+
+# Launcher icon config (run: dart run flutter_launcher_icons).
+flutter_launcher_icons:
+  image_path: "assets/icon/icon.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  min_sdk_android: 21
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  windows:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    icon_size: 256
+  web:
+    generate: false
+
+# Native splash config (run: dart run flutter_native_splash:create).
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: "assets/icon/splash.png"
+  color_dark: "#0F1013"
+  image_dark: "assets/icon/splash.png"
+  android_12:
+    image: "assets/icon/splash.png"
+    color: "#FFFFFF"
+    color_dark: "#0F1013"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

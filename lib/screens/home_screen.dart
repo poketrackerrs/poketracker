@@ -1,6 +1,8 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/games_data.dart';
+import '../data/region_theme.dart';
 import '../models/game.dart';
 import '../state/app_state.dart';
 import '../widgets/game_box_art.dart';
@@ -93,19 +95,52 @@ class _GamesTab extends StatelessWidget {
         _OverallCard(),
         _LibraryBar(),
         for (final gen in gens) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-            child: Text(
-              'Generation $gen',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ),
+          _SectionHeader(gen: gen, games: byGen[gen]!),
           for (final game in byGen[gen]!) _GameTile(game: game),
         ],
       ],
+    );
+  }
+}
+
+/// A generation section header: region-colored dot, region name(s), and a
+/// summary of game count and average completion.
+class _SectionHeader extends StatelessWidget {
+  final int gen;
+  final List<Game> games;
+  const _SectionHeader({required this.gen, required this.games});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final regions = <String>[];
+    for (final g in games) {
+      if (!regions.contains(g.region)) regions.add(g.region);
+    }
+    final avg = games.map(state.completion).reduce((a, b) => a + b) / games.length;
+    final tint = state.regionTint
+        ? regionColor(regions.first, state.accent)
+        : state.accent;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Text(regions.join(' · '),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const Spacer(),
+          Text('Gen $gen · ${games.length} games · ${(avg * 100).round()}%',
+              style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
     );
   }
 }
@@ -117,27 +152,58 @@ class _OverallCard extends StatelessWidget {
     final avg = kGames.isEmpty
         ? 0.0
         : kGames.map(state.completion).reduce((a, b) => a + b) / kGames.length;
+    final muted = Theme.of(context).textTheme.bodySmall?.color;
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text('Overall completion',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: avg,
-                minHeight: 12,
+            _CompletionRing(value: avg, color: state.accent, size: 78, stroke: 8),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Overall completion',
+                      style: TextStyle(fontSize: 12, color: muted)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _Stat(value: '${state.startedCount}', label: 'started'),
+                      _Stat(value: '${state.totalCaught}', label: 'caught'),
+                      _Stat(value: '${state.totalBadges}', label: 'badges'),
+                    ],
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text('${(avg * 100).toStringAsFixed(1)}% across ${kGames.length} games'),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final String value;
+  final String label;
+  const _Stat({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(value,
+              style:
+                  const TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).textTheme.bodySmall?.color)),
+        ],
       ),
     );
   }
@@ -151,10 +217,11 @@ class _GameTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final pct = state.completion(game);
+    final tint =
+        state.regionTint ? regionColor(game.region, state.accent) : state.accent;
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      clipBehavior: Clip.antiAlias,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       child: InkWell(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => GameScreen(game: game)),
@@ -164,7 +231,7 @@ class _GameTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              GameBoxArt(game: game, height: 80),
+              GameBoxArt(game: game, height: 76),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -172,36 +239,129 @@ class _GameTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(game.title,
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${game.region} • ${game.releaseYear} • ${game.category.label}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(value: pct, minHeight: 6),
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        _MetaChip(text: game.region),
+                        _MetaChip(text: '${game.releaseYear}'),
+                        _MetaChip(text: game.category.label),
+                      ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('${(pct * 100).round()}%',
-                      style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 6),
-                  _DownloadControl(game: game),
-                ],
-              ),
+              const SizedBox(width: 10),
+              _CompletionRing(value: pct, color: tint, size: 46, stroke: 5),
+              const SizedBox(width: 6),
+              _DownloadControl(game: game),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+class _MetaChip extends StatelessWidget {
+  final String text;
+  const _MetaChip({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(text,
+          style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+    );
+  }
+}
+
+/// A circular completion ring with the percentage in the middle.
+class _CompletionRing extends StatelessWidget {
+  final double value; // 0..1
+  final Color color;
+  final double size;
+  final double stroke;
+  const _CompletionRing({
+    required this.value,
+    required this.color,
+    this.size = 46,
+    this.stroke = 5,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size(size, size),
+            painter: _RingPainter(
+              value: value.clamp(0.0, 1.0),
+              color: color,
+              track: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.8),
+              stroke: stroke,
+            ),
+          ),
+          Text('${(value * 100).round()}%',
+              style: TextStyle(
+                  fontSize: size * 0.26, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  final double value;
+  final Color color;
+  final Color track;
+  final double stroke;
+  _RingPainter({
+    required this.value,
+    required this.color,
+    required this.track,
+    required this.stroke,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = (size.width - stroke) / 2;
+    final bg = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..color = track;
+    canvas.drawCircle(center, radius, bg);
+    final fg = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius),
+        -math.pi / 2, 2 * math.pi * value, false, fg);
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) =>
+      old.value != value || old.color != color || old.track != track;
 }
 
 /// Clickable line showing the games library folder; opens it in Explorer.

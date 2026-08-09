@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../data/region_theme.dart';
 import '../state/app_state.dart';
 import 'emulators_screen.dart';
 import 'updates_screen.dart';
@@ -58,6 +59,42 @@ class SettingsScreen extends StatelessWidget {
             onSelectionChanged: (s) =>
                 context.read<AppState>().setThemeMode(s.first),
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              Text('Accent color',
+                  style: Theme.of(context).textTheme.bodyMedium),
+              const Spacer(),
+              for (final c in kAccentChoices)
+                GestureDetector(
+                  onTap: () => context.read<AppState>().setAccent(c),
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    margin: const EdgeInsets.only(left: 10),
+                    decoration: BoxDecoration(
+                      color: c,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: state.accent.toARGB32() == c.toARGB32()
+                            ? Theme.of(context).colorScheme.onSurface
+                            : Colors.transparent,
+                        width: 2.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        SwitchListTile(
+          title: const Text('Region color tinting'),
+          subtitle: const Text(
+              'Tint section headers and completion rings by region'),
+          value: state.regionTint,
+          onChanged: (v) => context.read<AppState>().setRegionTint(v),
         ),
 
         _header(context, 'Emulators'),

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5",
-  "notes": "New: Sync from save file. Each game has a Sync button that reads your emulator save and previews caught Pokedex, badges, team, and playtime before applying. Gen 1-2 read everything; Gen 3 reads the caught Pokedex; Gen 4-5 are being calibrated.",
+  "version": "1.0.6",
+  "notes": "Appearance overhaul: refreshed theme with rounded cards, a home dashboard with a completion ring and stats, region-tinted section headers and per-game completion rings, an accent-color picker plus region-tint toggle in Settings, and a new Poke Ball app icon and splash screen.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
