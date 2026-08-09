@@ -90,6 +90,15 @@ class AppState extends ChangeNotifier {
   int get totalCaught =>
       _progress.values.fold(0, (a, p) => a + p.caughtSpecies.length);
 
+  /// The set of national-dex ids caught in any game (for the global Pokedex).
+  Set<int> get allCaughtSpecies {
+    final s = <int>{};
+    for (final p in _progress.values) {
+      s.addAll(p.caughtSpecies);
+    }
+    return s;
+  }
+
   /// Total gym badges earned across every game (milestones named "…Badge").
   int get totalBadges => _progress.values.fold(
       0,

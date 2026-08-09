@@ -1,6 +1,6 @@
 {
-  "version": "1.0.8",
-  "notes": "The per-game Pokedex tab now uses the region theme: region-tinted progress bar, filter chips, caught checkboxes, and a subtle highlight on caught species.",
+  "version": "1.0.9",
+  "notes": "Global Pokedex polish: a sprite grid with a generation filter, restyled search, and a caught badge on Pokemon you've caught in any game.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
