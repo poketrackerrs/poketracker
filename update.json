@@ -1,6 +1,6 @@
 {
-  "version": "1.0.20",
-  "notes": "More detailed, shaded Game Boy (gradients, raised buttons, screen sheen) with an empty cartridge slot on the back. Launching now shows the cartridge sliding into the back slot, then the console rotates to the front and powers on.",
+  "version": "1.0.21",
+  "notes": "Added a real 3D Game Boy cartridge model — on the console shelf (Game Boy), tap 'View cartridge in 3D' to rotate and zoom the actual .glb model (Android/iOS).",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

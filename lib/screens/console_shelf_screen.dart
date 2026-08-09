@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import '../models/game.dart';
 import '../state/app_state.dart';
 import '../widgets/console_art.dart';
 import '../widgets/game_box_art.dart';
+import 'cartridge_viewer.dart';
 import 'emulators_screen.dart';
 import 'game_screen.dart';
 
@@ -30,6 +32,12 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
     final state = context.read<AppState>();
     return state.regionTint ? regionColor(g.region, state.accent) : state.accent;
   }
+
+  /// The .glb is a Game Boy cartridge and renders via a webview, so offer it
+  /// only for the Game Boy family on mobile.
+  bool get _show3dCartridge =>
+      (Platform.isAndroid || Platform.isIOS) &&
+      (widget.platform == BoxPlatform.gb || widget.platform == BoxPlatform.gbc);
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +122,19 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
               ),
             ],
           ),
+          if (_show3dCartridge)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextButton.icon(
+                icon: const Icon(Icons.view_in_ar, size: 18),
+                label: const Text('View cartridge in 3D'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CartridgeViewer(title: game.title),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
