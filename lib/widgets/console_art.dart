@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'game_box_art.dart' show BoxPlatform;
+import 'gameboy_3d.dart';
 
 /// Display name for each console platform.
 const Map<BoxPlatform, String> kConsoleNames = {
@@ -27,11 +28,13 @@ class ConsoleArt extends StatelessWidget {
   final BoxPlatform platform;
   final double size;
   final double glow;
+  final bool interactive; // only used by the 3D consoles
   const ConsoleArt({
     super.key,
     required this.platform,
     this.size = 120,
     this.glow = 0,
+    this.interactive = false,
   });
 
   /// Landscape consoles are wider than tall.
@@ -43,6 +46,10 @@ class ConsoleArt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The Game Boy is a constructed 3D model.
+    if (platform == BoxPlatform.gb) {
+      return GameBoy3D(size: size, glow: glow, interactive: interactive);
+    }
     final w = _landscape ? size : size * 0.72;
     final h = _landscape ? size * 0.72 : size;
     return SizedBox(

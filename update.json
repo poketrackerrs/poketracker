@@ -1,6 +1,6 @@
 {
-  "version": "1.0.18",
-  "notes": "Console mode polish: the box now hinges open, the cartridge is shaped to match the console (GB cart, DS/3DS card, Switch cart), the box flies in with a Hero animation, and there are insert + power-on sound effects.",
+  "version": "1.0.19",
+  "notes": "The Game Boy is now a real constructed 3D model — extruded with a detailed DMG-01 front, a back with cartridge slot and battery cover, and grey edges. Drag to rotate it on the console shelf; the launch animation lights its screen in 3D.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

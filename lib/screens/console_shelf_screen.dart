@@ -44,7 +44,7 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       body: Column(
         children: [
           const SizedBox(height: 16),
-          ConsoleArt(platform: widget.platform, size: 130),
+          ConsoleArt(platform: widget.platform, size: 130, interactive: true),
           const SizedBox(height: 12),
           Expanded(child: _selectedPanel(context, state, game)),
           _shelf(context, state),
