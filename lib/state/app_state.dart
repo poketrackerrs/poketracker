@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
 import '../models/game.dart';
 import '../models/progress.dart';
@@ -51,14 +52,12 @@ class AppState extends ChangeNotifier {
     await prefs.setInt('thememode', mode.index);
   }
 
-  /// Opens an external URL in the default browser.
+  /// Opens an external URL (store page, etc.) in the default browser/app.
+  /// Uses url_launcher so it works on Android and iOS as well as desktop.
   Future<void> openExternal(String url) async {
-    if (Platform.isWindows) {
-      await Process.start('explorer.exe', [url]);
-    } else if (Platform.isMacOS) {
-      await Process.start('open', [url]);
-    } else if (Platform.isLinux) {
-      await Process.start('xdg-open', [url]);
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 

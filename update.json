@@ -1,6 +1,6 @@
 {
-  "version": "1.0.2",
-  "notes": "Bundles the game box-art covers and the built-in Google Drive links, so covers show and per-game download buttons work automatically on every device.",
+  "version": "1.0.3",
+  "notes": "Fixes external links (emulator store pages) not opening on Android/iOS.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
