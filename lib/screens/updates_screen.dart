@@ -48,14 +48,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       _message = null;
     });
     try {
-      final path = await downloadAndInstall(url, (p) {
+      await downloadAndInstall(url, (p) {
         if (mounted) setState(() => _progress = p);
       });
       // On Windows the app exits before reaching here; this is the Android path.
       if (mounted) {
         setState(() {
           _downloading = false;
-          _message = 'Downloaded to:\n$path\nOpen it to finish installing.';
+          _message = 'Update downloaded. Follow the installer prompt to finish.';
         });
       }
     } catch (e) {

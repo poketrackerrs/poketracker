@@ -16,6 +16,8 @@ class AppState extends ChangeNotifier {
   final Map<String, GameProgress> _progress = {};
   List<DetectedEmulator> _detectedEmulators = [];
 
+  List<DetectedEmulator> get detectedEmulators => _detectedEmulators;
+
   // ---- Games library / downloads --------------------------------------
   Map<String, String> _driveFolders = {}; // gameId -> Drive folder id
   final Map<String, String?> _installed = {}; // gameId -> filename or null
@@ -71,6 +73,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Records a user-picked emulator executable and re-scans.
+  Future<void> setEmulatorPath(String emulatorName, String path) async {
+    await _emu.setManualPath(emulatorName, path);
+    await refreshEmulators();
+  }
+
   /// The installed emulator that can run a game, or null. Switch-era games
   /// (Gen 8-9 and Let's Go) have no supported emulator in the catalog.
   DetectedEmulator? emulatorForGame(Game game) {
@@ -94,6 +102,16 @@ class AppState extends ChangeNotifier {
     final d = emulatorForGame(game);
     if (rom == null || d?.path == null) return;
     await _emu.launch(d!.path!, rom);
+  }
+
+  /// Re-scans emulators if needed, then launches. Returns true if it launched.
+  Future<bool> tryLaunchGame(Game game) async {
+    if (!canLaunch(game)) await refreshEmulators();
+    if (canLaunch(game)) {
+      await launchGame(game);
+      return true;
+    }
+    return false;
   }
 
   /// Rescans the library so installed/removed ROMs are reflected. Each game's

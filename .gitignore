@@ -44,6 +44,11 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Built APKs/installers — never commit (they bundle the covers + are large).
+*.apk
+*.aab
+*-Setup.exe
+
 # Copyrighted game box art — kept LOCAL only, never published to the public repo
 # or bundled in distributed builds. The app falls back to styled cards without them.
 assets/games/*.png

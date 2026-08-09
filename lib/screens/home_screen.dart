@@ -273,31 +273,39 @@ class _DownloadControl extends StatelessWidget {
       );
     }
     if (state.isInstalled(game.id)) {
-      final canPlay = state.canLaunch(game);
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (canPlay)
-            IconButton(
-              tooltip: 'Play',
-              icon: const Icon(Icons.play_circle_fill, color: Colors.green, size: 28),
-              visualDensity: VisualDensity.compact,
-              onPressed: () {
-                final messenger = ScaffoldMessenger.of(context);
-                context.read<AppState>().launchGame(game);
+          IconButton(
+            tooltip: 'Play',
+            icon: const Icon(Icons.play_circle_fill,
+                color: Colors.green, size: 28),
+            visualDensity: VisualDensity.compact,
+            onPressed: () async {
+              final s = context.read<AppState>();
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(context);
+              final launched = await s.tryLaunchGame(game);
+              if (launched) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('Launching ${game.title}…')),
                 );
-              },
-            ),
+              } else {
+                messenger.showSnackBar(SnackBar(
+                  content: Text(
+                      'No emulator found for ${game.title}. Install one to play.'),
+                  action: SnackBarAction(
+                    label: 'Emulators',
+                    onPressed: () => navigator.push(MaterialPageRoute(
+                        builder: (_) => const EmulatorsScreen())),
+                  ),
+                ));
+              }
+            },
+          ),
           IconButton(
-            tooltip: canPlay
-                ? 'Show file in folder'
-                : 'Installed — no emulator detected for this game',
-            icon: Icon(
-              canPlay ? Icons.folder_open : Icons.check_circle,
-              color: canPlay ? null : Colors.green,
-            ),
+            tooltip: 'Show file in folder',
+            icon: const Icon(Icons.folder_open),
             visualDensity: VisualDensity.compact,
             onPressed: () => context.read<AppState>().revealGameFile(game.id),
           ),

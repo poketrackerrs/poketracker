@@ -117,16 +117,21 @@ class LibraryService {
       var uri = _normalizeDrive(url);
       var resp = await client.send(http.Request('GET', uri));
 
-      // Google Drive large-file interstitial: needs a confirm token.
-      if (_isHtml(resp) && uri.host.contains('drive.google.com')) {
+      // Google Drive large-file gate returns an HTML page. Read it ONCE, build
+      // a fresh confirmed URL, and send a NEW request (never re-listen to the
+      // already-consumed stream).
+      if (_isHtml(resp) && uri.host.contains('google.com')) {
         final body = await resp.stream.bytesToString();
-        final token = _driveConfirmToken(body);
-        if (token != null) {
-          uri = uri.replace(queryParameters: {
-            ...uri.queryParameters,
-            'confirm': token,
-          });
-          resp = await client.send(http.Request('GET', uri));
+        final retry = _driveRetryUri(uri, body);
+        if (retry == null) {
+          throw Exception('Google Drive did not return the file (check the link '
+              'is set to "anyone with the link", or try again later).');
+        }
+        uri = retry;
+        resp = await client.send(http.Request('GET', uri));
+        if (_isHtml(resp)) {
+          throw Exception('Google Drive blocked this download (often a daily '
+              'download-quota limit on the file). Try again later.');
         }
       }
       if (resp.statusCode != 200) {
@@ -160,24 +165,46 @@ class LibraryService {
   String _sanitize(String name) =>
       name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
 
+  String? _driveId(Uri uri) {
+    final byQuery = uri.queryParameters['id'];
+    if (byQuery != null && byQuery.isNotEmpty) return byQuery;
+    final m = RegExp(r'/file/d/([^/]+)').firstMatch(uri.path);
+    return m?.group(1);
+  }
+
   Uri _normalizeDrive(String url) {
     final uri = Uri.parse(url);
-    if (!uri.host.contains('drive.google.com')) return uri;
-    // Extract file id from /file/d/<id>/... or ?id=<id>
-    String? id = uri.queryParameters['id'];
-    final m = RegExp(r'/file/d/([^/]+)').firstMatch(uri.path);
-    if (m != null) id = m.group(1);
+    if (!uri.host.contains('google.com')) return uri;
+    final id = _driveId(uri);
     if (id == null) return uri;
-    return Uri.parse(
-        'https://drive.google.com/uc?export=download&id=$id');
+    // Use the current large-file endpoint with confirm=t, which serves most
+    // files directly and avoids the interstitial.
+    return Uri.https('drive.usercontent.google.com', '/download',
+        {'id': id, 'export': 'download', 'confirm': 't'});
   }
 
   bool _isHtml(http.StreamedResponse resp) =>
       (resp.headers['content-type'] ?? '').contains('text/html');
 
-  String? _driveConfirmToken(String html) {
-    final m = RegExp(r'confirm=([0-9A-Za-z_-]+)').firstMatch(html);
-    return m?.group(1);
+  /// From a Drive interstitial page, builds the confirmed download URL, pulling
+  /// the confirm token and uuid the page provides.
+  Uri? _driveRetryUri(Uri uri, String html) {
+    final id = _driveId(uri);
+    if (id == null) return null;
+    final confirm = RegExp(r'name="confirm"\s+value="([^"]+)"')
+            .firstMatch(html)
+            ?.group(1) ??
+        RegExp(r'[?&]confirm=([0-9A-Za-z_\-]+)').firstMatch(html)?.group(1) ??
+        't';
+    final uuid =
+        RegExp(r'name="uuid"\s+value="([^"]+)"').firstMatch(html)?.group(1);
+    final params = <String, String>{
+      'id': id,
+      'export': 'download',
+      'confirm': confirm,
+    };
+    if (uuid != null) params['uuid'] = uuid;
+    return Uri.https('drive.usercontent.google.com', '/download', params);
   }
 
   String _extensionFrom(http.StreamedResponse resp, Uri uri, [String? nameHint]) {

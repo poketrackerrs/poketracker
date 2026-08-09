@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+
+const MethodChannel _installerChannel = MethodChannel('poketracker/installer');
 
 /// Streams the update to a temp file, then launches/returns it per platform.
 Future<String> downloadAndInstall(
@@ -35,8 +38,12 @@ Future<String> downloadAndInstall(
       await Future.delayed(const Duration(milliseconds: 400));
       exit(0);
     }
-    // Android (and others): return the path; the caller prompts to open it.
-    // A later pass can auto-launch the install intent via a plugin.
+    if (Platform.isAndroid) {
+      // Hand the downloaded APK to the system package installer (native side
+      // wraps it in a FileProvider URI and fires the install intent).
+      await _installerChannel.invokeMethod('installApk', {'path': file.path});
+      return file.path;
+    }
     return file.path;
   } finally {
     client.close();
