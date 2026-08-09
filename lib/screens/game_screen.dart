@@ -58,7 +58,7 @@ class GameScreen extends StatelessWidget {
               child: TabBarView(
                 children: [
                   _MilestonesTab(game: game, tint: tint),
-                  _DexTab(game: game),
+                  _DexTab(game: game, tint: tint),
                   _TeamTab(game: game, tint: tint),
                   _ShinyTab(game: game),
                 ],
@@ -349,7 +349,8 @@ class _MilestoneRow extends StatelessWidget {
 /// caught checkbox that feeds completion.
 class _DexTab extends StatefulWidget {
   final Game game;
-  const _DexTab({required this.game});
+  final Color tint;
+  const _DexTab({required this.game, required this.tint});
 
   @override
   State<_DexTab> createState() => _DexTabState();
@@ -449,13 +450,18 @@ class _DexTabState extends State<_DexTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Caught $caught / $total',
-                  style: Theme.of(context).textTheme.titleMedium),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: LinearProgressIndicator(
                   value: total == 0 ? 0 : caught / total,
                   minHeight: 8,
+                  color: widget.tint,
+                  backgroundColor: widget.tint.withValues(alpha: 0.15),
                 ),
               ),
               const SizedBox(height: 8),
@@ -466,6 +472,14 @@ class _DexTabState extends State<_DexTab> {
                     ChoiceChip(
                       label: Text(f.name[0].toUpperCase() + f.name.substring(1)),
                       selected: _filter == f,
+                      selectedColor: widget.tint,
+                      showCheckmark: false,
+                      labelStyle: TextStyle(
+                        color: _filter == f
+                            ? Colors.white
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
                       onSelected: (_) => setState(() => _filter = f),
                     ),
                 ],
@@ -480,6 +494,8 @@ class _DexTabState extends State<_DexTab> {
               final s = visible[i];
               final isCaught = state.isCaught(widget.game.id, s.id);
               return ListTile(
+                tileColor:
+                    isCaught ? widget.tint.withValues(alpha: 0.07) : null,
                 leading: SizedBox(
                   width: 44,
                   height: 44,
@@ -509,6 +525,7 @@ class _DexTabState extends State<_DexTab> {
                 ),
                 trailing: Checkbox(
                   value: isCaught,
+                  activeColor: widget.tint,
                   onChanged: (v) =>
                       state.setCaught(widget.game.id, s.id, v ?? false),
                 ),
