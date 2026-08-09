@@ -53,7 +53,26 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       body: Column(
         children: [
           const SizedBox(height: 16),
-          ConsoleArt(platform: widget.platform, size: 130, interactive: true),
+          GestureDetector(
+            onTap: _show3dCartridge
+                ? () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ModelViewerScreen(
+                          src: 'assets/models/gameboy_classic.glb',
+                          title: 'Game Boy',
+                        ),
+                      ),
+                    )
+                : null,
+            child: ConsoleArt(
+                platform: widget.platform, size: 130, interactive: true),
+          ),
+          if (_show3dCartridge)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('Tap for 3D · drag to rotate',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ),
           const SizedBox(height: 12),
           Expanded(child: _selectedPanel(context, state, game)),
           _shelf(context, state),
@@ -130,7 +149,10 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
                 label: const Text('View cartridge in 3D'),
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => CartridgeViewer(title: game.title),
+                    builder: (_) => ModelViewerScreen(
+                      src: 'assets/models/gameboy_cartridge.glb',
+                      title: game.title,
+                    ),
                   ),
                 ),
               ),
