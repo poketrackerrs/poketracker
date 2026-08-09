@@ -499,7 +499,6 @@ class _TypeDefenses extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final weak = detail.matchups.entries.where((e) => e.value > 1).toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final resist = detail.matchups.entries
@@ -517,10 +516,8 @@ class _TypeDefenses extends StatelessWidget {
                   color: fg, fontSize: 12.5, fontWeight: FontWeight.w600)),
         );
 
-    Widget group(String title, List<MapEntry<String, double>> list, Color base) {
+    Widget group(String title, List<MapEntry<String, double>> list) {
       if (list.isEmpty) return const SizedBox.shrink();
-      final bg = base.withValues(alpha: dark ? 0.22 : 0.14);
-      final fg = dark ? base : Color.lerp(base, Colors.black, 0.35)!;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -534,7 +531,8 @@ class _TypeDefenses extends StatelessWidget {
             runSpacing: 8,
             children: [
               for (final e in list)
-                chip('${prettifyName(e.key)} ${_mult(e.value)}', bg, fg),
+                chip('${prettifyName(e.key)} ${_mult(e.value)}',
+                    _typeColors[e.key] ?? Colors.grey, Colors.white),
             ],
           ),
           const SizedBox(height: 10),
@@ -557,9 +555,9 @@ class _TypeDefenses extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            group('Weak to', weak, Colors.red),
-            group('Resists', resist, Colors.green),
-            group('Immune to', immune, Colors.blueGrey),
+            group('Weak to', weak),
+            group('Resists', resist),
+            group('Immune to', immune),
           ],
         ),
       ),
