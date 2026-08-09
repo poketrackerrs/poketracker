@@ -59,6 +59,27 @@ class PokedexService {
     return list;
   }
 
+  List<({int id, String name})>? _varietiesCache;
+
+  /// Every Pokemon variety (base species + alternate forms). Alternate forms
+  /// have ids >= 10000. One cached request.
+  Future<List<({int id, String name})>> loadAllVarieties() async {
+    if (_varietiesCache != null) return _varietiesCache!;
+    final json = await _cachedGet('$_base/pokemon?limit=100000&offset=0');
+    final results = (json['results'] as List).cast<Map<String, dynamic>>();
+    final out = <({int id, String name})>[];
+    for (final r in results) {
+      final id = _idFromUrl(r['url'] as String);
+      if (id == null) continue;
+      out.add((id: id, name: r['name'] as String));
+    }
+    return _varietiesCache = out;
+  }
+
+  /// Public form-label helper (e.g. "raichu-alola" + "raichu" -> "Alolan").
+  String labelForForm(String formName, String baseName) =>
+      _formLabel(formName, baseName);
+
   int? _idFromUrl(String url) {
     final parts = url.split('/').where((p) => p.isNotEmpty).toList();
     return parts.isEmpty ? null : int.tryParse(parts.last);

@@ -20,6 +20,25 @@ const List<({int gen, int start, int end})> _genRanges = [
   (gen: 9, start: 906, end: 1025),
 ];
 
+/// One grid cell: a base species or one of its alternate forms.
+class _GridItem {
+  final int id; // /pokemon id (base dex, or 10000+ for a form)
+  final int baseDex; // owning species' national dex
+  final String baseName;
+  final bool isForm;
+  final String? formLabel;
+  const _GridItem({
+    required this.id,
+    required this.baseDex,
+    required this.baseName,
+    required this.isForm,
+    this.formLabel,
+  });
+
+  String get spriteUrl =>
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$id.png';
+}
+
 class PokedexListScreen extends StatefulWidget {
   const PokedexListScreen({super.key});
 
@@ -29,9 +48,11 @@ class PokedexListScreen extends StatefulWidget {
 
 class _PokedexListScreenState extends State<PokedexListScreen> {
   final _service = PokedexService();
-  List<PokemonSummary> _all = [];
+  List<PokemonSummary> _base = [];
+  final Map<int, List<_GridItem>> _formsByDex = {};
   String _query = '';
   int? _gen; // null = all generations
+  bool _showForms = true;
   bool _loading = true;
   String? _error;
 
@@ -47,10 +68,32 @@ class _PokedexListScreenState extends State<PokedexListScreen> {
       _error = null;
     });
     try {
-      final list = await _service.loadIndex();
+      final base = await _service.loadIndex();
+      final baseNameToDex = {for (final s in base) s.name: s.id};
+      final varieties = await _service.loadAllVarieties();
+      final formsByDex = <int, List<_GridItem>>{};
+      for (final v in varieties) {
+        if (v.id < 10000) continue; // base species handled by loadIndex
+        final baseDex = _baseDexForForm(v.name, baseNameToDex);
+        if (baseDex == null) continue;
+        final baseName = base[baseDex - 1].name;
+        formsByDex.putIfAbsent(baseDex, () => []).add(_GridItem(
+              id: v.id,
+              baseDex: baseDex,
+              baseName: baseName,
+              isForm: true,
+              formLabel: _service.labelForForm(v.name, baseName),
+            ));
+      }
+      for (final list in formsByDex.values) {
+        list.sort((a, b) => a.id.compareTo(b.id));
+      }
       if (!mounted) return;
       setState(() {
-        _all = list;
+        _base = base;
+        _formsByDex
+          ..clear()
+          ..addAll(formsByDex);
         _loading = false;
       });
     } catch (e) {
@@ -63,18 +106,38 @@ class _PokedexListScreenState extends State<PokedexListScreen> {
     }
   }
 
-  List<PokemonSummary> get _filtered {
+  /// Finds a form's owning species by longest base-name prefix match.
+  int? _baseDexForForm(String formName, Map<String, int> baseNameToDex) {
+    final parts = formName.split('-');
+    for (var take = parts.length - 1; take >= 1; take--) {
+      final dex = baseNameToDex[parts.take(take).join('-')];
+      if (dex != null) return dex;
+    }
+    return null;
+  }
+
+  List<_GridItem> get _filtered {
     final q = _query.toLowerCase();
-    return _all.where((p) {
+    final out = <_GridItem>[];
+    for (final s in _base) {
       if (_gen != null) {
         final r = _genRanges[_gen! - 1];
-        if (p.id < r.start || p.id > r.end) return false;
+        if (s.id < r.start || s.id > r.end) continue;
       }
-      if (q.isEmpty) return true;
-      return p.name.toLowerCase().contains(q) ||
-          p.id.toString() == q ||
-          '#${p.id}'.contains(q);
-    }).toList();
+      final base = _GridItem(
+          id: s.id, baseDex: s.id, baseName: s.name, isForm: false);
+      final group = <_GridItem>[base, if (_showForms) ...?_formsByDex[s.id]];
+      for (final item in group) {
+        if (q.isEmpty ||
+            item.baseName.toLowerCase().contains(q) ||
+            (item.formLabel?.toLowerCase().contains(q) ?? false) ||
+            item.baseDex.toString() == q ||
+            '#${item.baseDex}'.contains(q)) {
+          out.add(item);
+        }
+      }
+    }
+    return out;
   }
 
   @override
@@ -106,7 +169,10 @@ class _PokedexListScreenState extends State<PokedexListScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             children: [
-              _genChip(context, label: 'All', selected: _gen == null, accent: accent,
+              _genChip(context,
+                  label: 'All',
+                  selected: _gen == null,
+                  accent: accent,
                   onTap: () => setState(() => _gen = null)),
               for (final r in _genRanges)
                 _genChip(context,
@@ -114,6 +180,22 @@ class _PokedexListScreenState extends State<PokedexListScreen> {
                     selected: _gen == r.gen,
                     accent: accent,
                     onTap: () => setState(() => _gen = r.gen)),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, right: 8),
+                child: FilterChip(
+                  label: const Text('Forms'),
+                  selected: _showForms,
+                  showCheckmark: true,
+                  checkmarkColor: Colors.white,
+                  selectedColor: accent,
+                  labelStyle: TextStyle(
+                    color: _showForms ? Colors.white : scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                  onSelected: (v) => setState(() => _showForms = v),
+                ),
+              ),
             ],
           ),
         ),
@@ -174,18 +256,21 @@ class _PokedexListScreenState extends State<PokedexListScreen> {
         mainAxisSpacing: 10,
       ),
       itemCount: items.length,
-      itemBuilder: (context, i) =>
-          _DexCard(summary: items[i], caught: caught.contains(items[i].id), accent: accent),
+      itemBuilder: (context, i) => _DexCard(
+        item: items[i],
+        caught: !items[i].isForm && caught.contains(items[i].baseDex),
+        accent: accent,
+      ),
     );
   }
 }
 
 class _DexCard extends StatelessWidget {
-  final PokemonSummary summary;
+  final _GridItem item;
   final bool caught;
   final Color accent;
   const _DexCard({
-    required this.summary,
+    required this.item,
     required this.caught,
     required this.accent,
   });
@@ -200,8 +285,11 @@ class _DexCard extends StatelessWidget {
       child: InkWell(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) =>
-                PokemonDetailScreen(id: summary.id, name: summary.name),
+            builder: (_) => PokemonDetailScreen(
+              id: item.baseDex,
+              name: item.baseName,
+              initialFormId: item.isForm ? item.id : null,
+            ),
           ),
         ),
         child: Container(
@@ -218,7 +306,7 @@ class _DexCard extends StatelessWidget {
                   children: [
                     Positioned.fill(
                       child: CachedNetworkImage(
-                        imageUrl: summary.spriteUrl,
+                        imageUrl: item.spriteUrl,
                         fit: BoxFit.contain,
                         errorWidget: (_, _, _) => Icon(Icons.catching_pokemon,
                             color: scheme.onSurfaceVariant),
@@ -228,7 +316,7 @@ class _DexCard extends StatelessWidget {
                     Positioned(
                       top: 0,
                       left: 2,
-                      child: Text('#${summary.id.toString().padLeft(4, '0')}',
+                      child: Text('#${item.baseDex.toString().padLeft(4, '0')}',
                           style: TextStyle(
                               fontSize: 10, color: scheme.onSurfaceVariant)),
                     ),
@@ -238,20 +326,44 @@ class _DexCard extends StatelessWidget {
                         right: 0,
                         child: Container(
                           padding: const EdgeInsets.all(2),
-                          decoration:
-                              BoxDecoration(color: accent, shape: BoxShape.circle),
+                          decoration: BoxDecoration(
+                              color: accent, shape: BoxShape.circle),
                           child: const Icon(Icons.check,
                               size: 12, color: Colors.white),
+                        ),
+                      ),
+                    if (item.isForm && item.formLabel != null)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: accent,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(item.formLabel!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600)),
+                          ),
                         ),
                       ),
                   ],
                 ),
               ),
               Text(
-                prettifyName(summary.name),
+                prettifyName(item.baseName),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
               ),
             ],
           ),

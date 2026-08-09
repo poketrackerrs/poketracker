@@ -26,11 +26,15 @@ class PokemonDetailScreen extends StatefulWidget {
   /// game's generation. Null when opened from the global Pokedex.
   final int? generation;
 
+  /// When set, auto-selects this form (variety) id after the species loads.
+  final int? initialFormId;
+
   const PokemonDetailScreen({
     super.key,
     required this.id,
     required this.name,
     this.generation,
+    this.initialFormId,
   });
 
   @override
@@ -94,6 +98,12 @@ class _PokemonDetailScreenState extends State<PokemonDetailScreen> {
         _detail = d;
         _loading = false;
       });
+      if (widget.initialFormId != null) {
+        final match = d.forms.where((f) => f.id == widget.initialFormId);
+        if (match.isNotEmpty && !match.first.isDefault) {
+          _selectForm(match.first);
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
