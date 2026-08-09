@@ -1,6 +1,6 @@
 {
-  "version": "1.0.10",
-  "notes": "Shiny hunt tab polish: shiny sprites, a big region-tinted encounter counter, live cumulative odds by method, a caught state that highlights the card, and a tap-to-edit sheet with quick method presets.",
+  "version": "1.0.11",
+  "notes": "Forms, part 1: the Pokemon detail page now has a form switcher for regional variants (Alolan, Galarian, Hisuian, Paldean) and alternate forms (Mega, Origin, Therian, Rotom, etc.) — switching reloads types, stats, abilities, moves, size, and artwork.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

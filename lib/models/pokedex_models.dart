@@ -92,6 +92,47 @@ class EvoStage {
       'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$id.png';
 }
 
+/// A selectable variety/form of a species (base, regional, mega, etc.).
+class PokemonForm {
+  final int id; // PokeAPI /pokemon id (10000+ for alternate forms)
+  final String name; // e.g. "raichu-alola"
+  final String label; // display, e.g. "Alolan"
+  final bool isDefault;
+  const PokemonForm({
+    required this.id,
+    required this.name,
+    required this.label,
+    required this.isDefault,
+  });
+
+  String get spriteUrl =>
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/$id.png';
+}
+
+/// The form-specific data that overrides a species' base values.
+class FormOverride {
+  final int id;
+  final List<String> types;
+  final Map<String, int> stats;
+  final List<AbilityInfo> abilities;
+  final List<MoveEntry> moves;
+  final Map<String, double> matchups;
+  final double height;
+  final double weight;
+  final String artworkUrl;
+  const FormOverride({
+    required this.id,
+    required this.types,
+    required this.stats,
+    required this.abilities,
+    required this.moves,
+    required this.matchups,
+    required this.height,
+    required this.weight,
+    required this.artworkUrl,
+  });
+}
+
 /// Full detail for one Pokemon.
 class PokemonDetail {
   final int id;
@@ -115,6 +156,12 @@ class PokemonDetail {
   final int baseHappiness;
   final String growthRate;
 
+  /// All selectable varieties/forms of this species (base + alternates).
+  final List<PokemonForm> forms;
+
+  /// Set when showing a non-default form, to override the artwork.
+  final String? artworkUrlOverride;
+
   const PokemonDetail({
     required this.id,
     required this.name,
@@ -134,7 +181,34 @@ class PokemonDetail {
     this.eggGroups = const [],
     this.baseHappiness = 0,
     this.growthRate = '',
+    this.forms = const [],
+    this.artworkUrlOverride,
   });
+
+  /// A copy showing [o]'s form-specific data (types, stats, moves, abilities,
+  /// matchups, size, artwork); species-level data (dex, evolution, genus) stays.
+  PokemonDetail copyWithForm(FormOverride o) => PokemonDetail(
+        id: id,
+        name: name,
+        types: o.types,
+        stats: o.stats,
+        moves: o.moves,
+        dexEntriesByGen: dexEntriesByGen,
+        abilities: o.abilities,
+        evolution: evolution,
+        matchups: o.matchups,
+        pastTypes: const [],
+        height: o.height,
+        weight: o.weight,
+        genus: genus,
+        captureRate: captureRate,
+        genderRate: genderRate,
+        eggGroups: eggGroups,
+        baseHappiness: baseHappiness,
+        growthRate: growthRate,
+        forms: forms,
+        artworkUrlOverride: o.artworkUrl,
+      );
 
   /// Human-readable gender ratio, e.g. "87.5% ♂ · 12.5% ♀" or "Genderless".
   String get genderText {
@@ -159,6 +233,7 @@ class PokemonDetail {
   }
 
   String get artworkUrl =>
+      artworkUrlOverride ??
       'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$id.png';
 
   int get statTotal => stats.values.fold(0, (a, b) => a + b);

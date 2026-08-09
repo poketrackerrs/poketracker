@@ -43,10 +43,47 @@ class _PokemonDetailScreenState extends State<PokemonDetailScreen> {
   bool _loading = true;
   String? _error;
 
+  // Form switcher state.
+  PokemonForm? _selectedForm; // null = base/default
+  FormOverride? _override;
+  bool _formLoading = false;
+
+  /// The detail with the selected form's overrides applied (base if none).
+  PokemonDetail get _active =>
+      _override == null ? _detail! : _detail!.copyWithForm(_override!);
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<void> _selectForm(PokemonForm form) async {
+    if (form.isDefault) {
+      setState(() {
+        _selectedForm = form;
+        _override = null;
+      });
+      return;
+    }
+    setState(() {
+      _selectedForm = form;
+      _formLoading = true;
+    });
+    try {
+      final o = await _service.fetchForm(form.id);
+      if (!mounted) return;
+      setState(() {
+        _override = o;
+        _formLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _formLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load the ${form.label} form.')),
+      );
+    }
   }
 
   Future<void> _load() async {
@@ -69,9 +106,10 @@ class _PokemonDetailScreenState extends State<PokemonDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final d = _detail;
-    // Tint the app bar with the primary type once loaded (Bulbapedia feel).
-    final Color? banner =
-        d == null ? null : _typeColors[d.typesForGeneration(widget.generation).first];
+    // Tint the app bar with the active form's primary type once loaded.
+    final Color? banner = d == null
+        ? null
+        : _typeColors[_active.typesForGeneration(widget.generation).first];
     return Scaffold(
       appBar: AppBar(
         backgroundColor: banner,
@@ -82,15 +120,27 @@ class _PokemonDetailScreenState extends State<PokemonDetailScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(child: Text(_error!, textAlign: TextAlign.center))
-              : _buildContent(_detail!),
+              : _buildContent(_active),
     );
   }
 
   Widget _buildContent(PokemonDetail d) {
+    final defaultId =
+        d.forms.isEmpty ? d.id : d.forms.firstWhere((f) => f.isDefault, orElse: () => d.forms.first).id;
+    final currentFormId = _selectedForm?.id ?? defaultId;
     return ListView(
       padding: EdgeInsets.zero,
       children: [
         _HeaderBanner(detail: d, generation: widget.generation),
+        if (d.forms.length > 1)
+          _FormSwitcher(
+            forms: d.forms,
+            currentId: currentFormId,
+            loading: _formLoading,
+            color: _typeColors[d.typesForGeneration(widget.generation).first] ??
+                Colors.grey,
+            onSelect: _selectForm,
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
           child: Column(
@@ -124,6 +174,64 @@ class _PokemonDetailScreenState extends State<PokemonDetailScreen> {
               ?.copyWith(fontWeight: FontWeight.bold),
         ),
       );
+}
+
+/// Horizontal chips to switch between a species' forms (regional, mega, etc.).
+class _FormSwitcher extends StatelessWidget {
+  final List<PokemonForm> forms;
+  final int currentId;
+  final bool loading;
+  final Color color;
+  final void Function(PokemonForm) onSelect;
+  const _FormSwitcher({
+    required this.forms,
+    required this.currentId,
+    required this.loading,
+    required this.color,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final f in forms)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(f.label),
+                  selected: f.id == currentId,
+                  showCheckmark: false,
+                  selectedColor: color,
+                  labelStyle: TextStyle(
+                    color: f.id == currentId
+                        ? Colors.white
+                        : scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                  onSelected: loading ? null : (_) => onSelect(f),
+                ),
+              ),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6),
+                child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Type-colored header: artwork, national number, name, genus, type badges.

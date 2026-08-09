@@ -140,34 +140,7 @@ class PokedexService {
 
     final pokemon = await _cachedGet('$_base/pokemon/$id');
     final species = await _cachedGet('$_base/pokemon-species/$id');
-
-    // Types
-    final types = (pokemon['types'] as List)
-        .map((t) => (t['type']['name'] as String))
-        .toList();
-
-    // Base stats
-    final stats = <String, int>{};
-    for (final s in (pokemon['stats'] as List)) {
-      stats[s['stat']['name'] as String] = s['base_stat'] as int;
-    }
-
-    // Movepool -> flatten (move x version-group) into per-generation entries
-    final moves = <MoveEntry>[];
-    for (final m in (pokemon['moves'] as List)) {
-      final moveName = m['move']['name'] as String;
-      for (final d in (m['version_group_details'] as List)) {
-        final vg = d['version_group']['name'] as String;
-        final gen = kVersionGroupToGen[vg];
-        if (gen == null) continue;
-        moves.add(MoveEntry(
-          name: moveName,
-          method: d['move_learn_method']['name'] as String,
-          level: (d['level_learned_at'] as int?) ?? 0,
-          generation: gen,
-        ));
-      }
-    }
+    final core = await _buildCore(pokemon);
 
     // Pokedex entries (English), grouped by generation, de-duplicated
     final dexByGen = <int, List<String>>{};
@@ -189,7 +162,93 @@ class PokedexService {
       dexByGen.putIfAbsent(gen, () => []).add(text);
     }
 
-    // Abilities (with effect descriptions)
+    final evolution = await _evolutionChain(species);
+    final eggGroups = (species['egg_groups'] as List? ?? [])
+        .map((g) => g['name'] as String)
+        .toList();
+    final forms = _parseForms(species, pokemon['name'] as String);
+
+    final detail = PokemonDetail(
+      id: id,
+      name: pokemon['name'] as String,
+      types: core.types,
+      stats: core.stats,
+      moves: core.moves,
+      dexEntriesByGen: dexByGen,
+      abilities: core.abilities,
+      evolution: evolution,
+      matchups: core.matchups,
+      pastTypes: core.pastTypes,
+      height: core.height,
+      weight: core.weight,
+      genus: _englishGenus(species),
+      captureRate: (species['capture_rate'] as int?) ?? 0,
+      genderRate: (species['gender_rate'] as int?) ?? -1,
+      eggGroups: eggGroups,
+      baseHappiness: (species['base_happiness'] as int?) ?? 0,
+      growthRate: (species['growth_rate']?['name'] as String?) ?? '',
+      forms: forms,
+    );
+    _memCache[id] = detail;
+    return detail;
+  }
+
+  /// Fetches the form-specific data for a variety (e.g. Alolan, Mega).
+  Future<FormOverride> fetchForm(int formId) async {
+    final pokemon = await _cachedGet('$_base/pokemon/$formId');
+    final core = await _buildCore(pokemon);
+    return FormOverride(
+      id: formId,
+      types: core.types,
+      stats: core.stats,
+      abilities: core.abilities,
+      moves: core.moves,
+      matchups: core.matchups,
+      height: core.height,
+      weight: core.weight,
+      artworkUrl: core.artworkUrl,
+    );
+  }
+
+  /// Builds the form-level data (types/stats/moves/abilities/matchups/size/art)
+  /// shared by both a species' default form and its alternate forms.
+  Future<
+      ({
+        List<String> types,
+        Map<String, int> stats,
+        List<MoveEntry> moves,
+        List<AbilityInfo> abilities,
+        Map<String, double> matchups,
+        List<PastType> pastTypes,
+        double height,
+        double weight,
+        String artworkUrl,
+      })> _buildCore(Map<String, dynamic> pokemon) async {
+    final types = (pokemon['types'] as List)
+        .map((t) => (t['type']['name'] as String))
+        .toList();
+
+    final stats = <String, int>{};
+    for (final s in (pokemon['stats'] as List)) {
+      stats[s['stat']['name'] as String] = s['base_stat'] as int;
+    }
+
+    final moves = <MoveEntry>[];
+    for (final m in (pokemon['moves'] as List)) {
+      final moveName = m['move']['name'] as String;
+      for (final d in (m['version_group_details'] as List)) {
+        final vg = d['version_group']['name'] as String;
+        final gen = kVersionGroupToGen[vg];
+        if (gen == null) continue;
+        moves.add(MoveEntry(
+          name: moveName,
+          method: d['move_learn_method']['name'] as String,
+          level: (d['level_learned_at'] as int?) ?? 0,
+          generation: gen,
+        ));
+      }
+    }
+
     final abilities = <AbilityInfo>[];
     for (final a in (pokemon['abilities'] as List)) {
       final aname = a['ability']['name'] as String;
@@ -218,7 +277,6 @@ class PokedexService {
       ));
     }
 
-    // Historical typings
     final pastTypes = <PastType>[];
     for (final pt in (pokemon['past_types'] as List? ?? [])) {
       final gen = _romanGenToInt(pt['generation']['name'] as String);
@@ -227,39 +285,67 @@ class PokedexService {
       if (gen != null) pastTypes.add(PastType(generation: gen, types: tps));
     }
 
-    // Type matchups (defensive): combine damage_from across this Pokemon's types
     final matchups = await _typeMatchups(types);
 
-    // Evolution chain
-    final evolution = await _evolutionChain(species);
+    final sprites = pokemon['sprites'] as Map<String, dynamic>?;
+    final art = (sprites?['other']?['official-artwork']?['front_default']) ??
+        sprites?['front_default'];
+    final artworkUrl = (art as String?) ??
+        'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon['id']}.png';
 
-    // Species "infobox" fields
-    final eggGroups = (species['egg_groups'] as List? ?? [])
-        .map((g) => g['name'] as String)
-        .toList();
-
-    final detail = PokemonDetail(
-      id: id,
-      name: pokemon['name'] as String,
+    return (
       types: types,
       stats: stats,
       moves: moves,
-      dexEntriesByGen: dexByGen,
       abilities: abilities,
-      evolution: evolution,
       matchups: matchups,
       pastTypes: pastTypes,
-      height: ((pokemon['height'] as int?) ?? 0) / 10.0, // decimetres -> m
-      weight: ((pokemon['weight'] as int?) ?? 0) / 10.0, // hectograms -> kg
-      genus: _englishGenus(species),
-      captureRate: (species['capture_rate'] as int?) ?? 0,
-      genderRate: (species['gender_rate'] as int?) ?? -1,
-      eggGroups: eggGroups,
-      baseHappiness: (species['base_happiness'] as int?) ?? 0,
-      growthRate: (species['growth_rate']?['name'] as String?) ?? '',
+      height: ((pokemon['height'] as int?) ?? 0) / 10.0,
+      weight: ((pokemon['weight'] as int?) ?? 0) / 10.0,
+      artworkUrl: artworkUrl,
     );
-    _memCache[id] = detail;
-    return detail;
+  }
+
+  static const Map<String, String> _formWords = {
+    'alola': 'Alolan', 'galar': 'Galarian', 'hisui': 'Hisuian',
+    'paldea': 'Paldean', 'mega': 'Mega', 'gmax': 'Gigantamax',
+    'primal': 'Primal', 'origin': 'Origin', 'therian': 'Therian',
+    'incarnate': 'Incarnate', 'zen': 'Zen', 'standard': 'Standard',
+    'attack': 'Attack', 'defense': 'Defense', 'speed': 'Speed',
+    'sunshine': 'Sunshine', 'plant': 'Plant', 'sandy': 'Sandy', 'trash': 'Trash',
+    'heat': 'Heat', 'wash': 'Wash', 'frost': 'Frost', 'fan': 'Fan', 'mow': 'Mow',
+    'black': 'Black', 'white': 'White', 'x': 'X', 'y': 'Y',
+    'blaze': 'Blaze', 'aqua': 'Aqua', 'crowned': 'Crowned', 'eternamax': 'Eternamax',
+  };
+
+  static String _formLabel(String formName, String base) {
+    if (formName == base) return 'Normal';
+    final q =
+        formName.startsWith('$base-') ? formName.substring(base.length + 1) : formName;
+    return q
+        .split('-')
+        .map((t) => _formWords[t] ?? prettifyName(t))
+        .join(' ');
+  }
+
+  /// Parses a species' varieties into a form list. Returns [] when there's only
+  /// the base form (so the UI shows no switcher).
+  List<PokemonForm> _parseForms(Map<String, dynamic> species, String baseName) {
+    final out = <PokemonForm>[];
+    for (final v in (species['varieties'] as List? ?? [])) {
+      final p = v['pokemon'] as Map<String, dynamic>;
+      final id = _idFromUrl(p['url'] as String);
+      if (id == null) continue;
+      final name = p['name'] as String;
+      out.add(PokemonForm(
+        id: id,
+        name: name,
+        isDefault: v['is_default'] == true,
+        label: _formLabel(name, baseName),
+      ));
+    }
+    out.sort((a, b) => (a.isDefault ? 0 : 1).compareTo(b.isDefault ? 0 : 1));
+    return out.length <= 1 ? const [] : out;
   }
 
   static String _englishGenus(Map<String, dynamic> species) {
