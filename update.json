@@ -1,6 +1,6 @@
 {
-  "version": "1.0.19",
-  "notes": "The Game Boy is now a real constructed 3D model — extruded with a detailed DMG-01 front, a back with cartridge slot and battery cover, and grey edges. Drag to rotate it on the console shelf; the launch animation lights its screen in 3D.",
+  "version": "1.0.20",
+  "notes": "More detailed, shaded Game Boy (gradients, raised buttons, screen sheen) with an empty cartridge slot on the back. Launching now shows the cartridge sliding into the back slot, then the console rotates to the front and powers on.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

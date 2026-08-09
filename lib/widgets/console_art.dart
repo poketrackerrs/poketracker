@@ -29,12 +29,16 @@ class ConsoleArt extends StatelessWidget {
   final double size;
   final double glow;
   final bool interactive; // only used by the 3D consoles
+  final double? yaw; // drive rotation externally (3D consoles)
+  final double? pitch;
   const ConsoleArt({
     super.key,
     required this.platform,
     this.size = 120,
     this.glow = 0,
     this.interactive = false,
+    this.yaw,
+    this.pitch,
   });
 
   /// Landscape consoles are wider than tall.
@@ -48,7 +52,13 @@ class ConsoleArt extends StatelessWidget {
   Widget build(BuildContext context) {
     // The Game Boy is a constructed 3D model.
     if (platform == BoxPlatform.gb) {
-      return GameBoy3D(size: size, glow: glow, interactive: interactive);
+      return GameBoy3D(
+        size: size,
+        glow: glow,
+        interactive: interactive,
+        yaw: yaw,
+        pitch: pitch,
+      );
     }
     final w = _landscape ? size : size * 0.72;
     final h = _landscape ? size * 0.72 : size;

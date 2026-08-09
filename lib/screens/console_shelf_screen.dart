@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -263,7 +264,7 @@ class _LaunchSequenceState extends State<_LaunchSequence>
   void initState() {
     super.initState();
     _c = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 2600))
+        vsync: this, duration: const Duration(milliseconds: 3200))
       ..addStatusListener((s) async {
         if (s == AnimationStatus.completed) {
           await widget.onLaunch();
@@ -279,11 +280,11 @@ class _LaunchSequenceState extends State<_LaunchSequence>
 
   void _maybePlaySounds() {
     final t = _c.value;
-    if (!_playedInsert && t >= 0.52) {
+    if (!_playedInsert && t >= 0.62) {
       _playedInsert = true;
       _play('sfx/insert.wav');
     }
-    if (!_playedPower && t >= 0.82) {
+    if (!_playedPower && t >= 0.9) {
       _playedPower = true;
       _play('sfx/poweron.wav');
     }
@@ -316,23 +317,33 @@ class _LaunchSequenceState extends State<_LaunchSequence>
         animation: _c,
         builder: (context, _) {
           final t = _c.value;
-          final glow = _seg(t, 0.82, 1.0);
-          // Box hinges open from the top like a lid, then fades.
-          final open = Curves.easeIn.transform(_seg(t, 0.16, 0.44));
-          final boxOpacity = 1 - _seg(t, 0.46, 0.6);
+          // Box flies in (Hero), hinges open, ejects the cartridge.
+          final open = Curves.easeIn.transform(_seg(t, 0.12, 0.34));
+          final boxOpacity = 1 - _seg(t, 0.34, 0.46);
           final lid = Matrix4.identity()
             ..setEntry(3, 2, 0.0018)
             ..rotateX(-1.35 * open);
-          // Cartridge emerges from the box then rises into the console.
-          final cartFade = _seg(t, 0.42, 0.52);
-          final travel = Curves.easeInOut.transform(_seg(t, 0.52, 0.82));
+          // Cartridge rises into the console's (back-facing) top slot.
+          final cartFade = _seg(t, 0.34, 0.44);
+          final travel = Curves.easeInOut.transform(_seg(t, 0.44, 0.68));
           final cartDy = 40.0 + (-250.0 - 40.0) * travel;
-          final cartScale = 1.0 - 0.45 * travel;
-          final cartOpacity = cartFade * (1 - _seg(t, 0.8, 0.9));
+          final cartScale = 1.0 - 0.5 * travel;
+          final cartOpacity = cartFade * (1 - _seg(t, 0.62, 0.7));
+          // Console shows its back while the cart inserts, then rotates to
+          // front and powers on.
+          final gb = widget.platform == BoxPlatform.gb;
+          final rot = Curves.easeInOut.transform(_seg(t, 0.7, 0.9));
+          final yaw = gb ? math.pi * (1 - rot) : null; // back → front
+          final glow = _seg(t, 0.9, 1.0);
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ConsoleArt(platform: widget.platform, size: 160, glow: glow),
+              ConsoleArt(
+                  platform: widget.platform,
+                  size: 160,
+                  glow: glow,
+                  yaw: yaw,
+                  pitch: gb ? 0.14 : null),
               SizedBox(
                 height: 250,
                 child: Center(
@@ -372,7 +383,9 @@ class _LaunchSequenceState extends State<_LaunchSequence>
               Text(
                 glow > 0.1
                     ? 'Now loading ${_shortTitle(widget.game)}…'
-                    : (t > 0.5 ? 'Inserting cartridge…' : 'Opening case…'),
+                    : (t > 0.44
+                        ? 'Inserting cartridge…'
+                        : 'Opening case…'),
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
             ],
