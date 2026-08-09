@@ -15,8 +15,14 @@ class SaveService {
     switch (generation) {
       case 1:
         return _parseGen1(bytes, versionId);
+      case 2:
+        return _parseGen2(bytes, versionId);
       case 3:
         return _parseGen3(bytes, versionId);
+      case 4:
+        return _parseGen4(bytes, versionId);
+      case 5:
+        return _parseGen5(bytes, versionId);
       default:
         throw SaveParseException(
             'Auto-tracking for Gen $generation saves is coming soon.');
@@ -91,6 +97,59 @@ class SaveService {
     );
   }
 
+  // ==================================================================== Gen 2
+
+  SaveData _parseGen2(Uint8List b, String versionId) {
+    if (b.length < 0x8000) {
+      throw const SaveParseException(
+          'This does not look like a Game Boy Color save (expected 32 KB).');
+    }
+    final crystal = versionId == 'crystal';
+    // English GS vs Crystal offsets (Bulbapedia).
+    final ownedOfs = crystal ? 0x2A47 : 0x2A4C; // 32 bytes
+    final seenOfs = crystal ? 0x2A67 : 0x2A6C; // 32 bytes
+    final johtoOfs = crystal ? 0x23E5 : 0x23E4; // 1 byte (8 Johto badges)
+    final partyOfs = crystal ? 0x2865 : 0x288A; // count, species list, structs
+    const nameOfs = 0x200B; // 11 bytes
+    const tidOfs = 0x2008; // 2 bytes big-endian
+    const timeOfs = 0x2053; // hours (2), minutes (1), seconds (1)
+
+    final caught = _dexFromBitfield(b, ownedOfs, 251);
+    final seen = _countBits(b, seenOfs, 32);
+    final badges = _countBits(b, johtoOfs, 1); // Johto gym badges (0-8)
+
+    final team = <SaveTeamMon>[];
+    final count = b[partyOfs].clamp(0, 6);
+    for (var i = 0; i < count; i++) {
+      final species = b[partyOfs + 1 + i]; // Gen 2 index == national dex
+      final structOfs = partyOfs + 8 + i * 48;
+      final level = b[structOfs + 0x1F];
+      team.add(SaveTeamMon(
+        dexId: (species >= 1 && species <= 251) ? species : null,
+        level: level,
+      ));
+    }
+
+    final tid = (b[tidOfs] << 8) | b[tidOfs + 1];
+    final hours = (b[timeOfs] << 8) | b[timeOfs + 1];
+    final minutes = b[timeOfs + 2];
+
+    return SaveData(
+      generation: 2,
+      versionId: versionId,
+      caughtDex: caught,
+      seenCount: seen,
+      badgeCount: badges,
+      team: team,
+      trainerName: _decodeGen1Text(b, nameOfs, 11), // same charset as Gen 1
+      trainerId: tid,
+      playTime: Duration(hours: hours, minutes: minutes),
+      notes: const [
+        'Badge count is Johto gyms only; Kanto gyms aren\'t mapped yet.',
+      ],
+    );
+  }
+
   // ==================================================================== Gen 3
 
   static int _u16(Uint8List b, int o) => b[o] | (b[o + 1] << 8);
@@ -131,12 +190,10 @@ class SaveService {
       throw const SaveParseException('GBA save trainer section missing.');
     }
 
-    // Owned (caught) national-dex bitfield lives in section 0. Offset differs
-    // between RS/E and FRLG.
-    final frlg = versionId == 'firered' || versionId == 'leafgreen';
-    final ownedOfs = s0 + (frlg ? 0x5C : 0x28);
-    final maxDex = frlg ? 386 : 386;
-    final caught = _dexFromBitfield(b, ownedOfs, maxDex);
+    // Owned (caught) national-dex bitfield is in section 0 at 0x28 for all Gen 3
+    // games, indexed by (national dex number - 1). (Bulbapedia.)
+    final ownedOfs = s0 + 0x28;
+    final caught = _dexFromBitfield(b, ownedOfs, 386);
 
     final tid = _u32(b, s0 + 0x0A) & 0xFFFF;
     final hours = _u16(b, s0 + 0x0E);
@@ -151,7 +208,55 @@ class SaveService {
       playTime: Duration(hours: hours, minutes: minutes),
       notes: const [
         'Gen 3 badges and team aren\'t read yet — coming next.',
-        'If the caught count looks off, tell me and I\'ll correct the offset.',
+      ],
+    );
+  }
+
+  // ============================================================== Gen 4 (DS)
+
+  SaveData _parseGen4(Uint8List b, String versionId) {
+    if (b.length < 0x80000) {
+      throw const SaveParseException(
+          'This does not look like a DS save (expected 512 KB).');
+    }
+    // General (small) block size per game; two block-pairs, second at +0x40000.
+    final genSize = switch (versionId) {
+      'platinum' => 0xCF2C,
+      'heartgold' || 'soulsilver' => 0xF700,
+      _ => 0xC100, // diamond / pearl
+    };
+    // Pick the most recent slot by the save counter in the block footer
+    // (last 0x14 bytes of the general block).
+    int counter(int base) => _u32(b, base + genSize - 0x14);
+    final base = (counter(0x40000) > counter(0x0000)) ? 0x40000 : 0x0000;
+
+    final tid = _u32(b, base + 0x78) & 0xFFFF; // public trainer ID
+    final hours = _u16(b, base + 0x8A);
+    final minutes = b[base + 0x8C];
+
+    return SaveData(
+      generation: 4,
+      versionId: versionId,
+      trainerId: tid,
+      playTime: Duration(hours: hours, minutes: minutes),
+      notes: const [
+        'Gen 4 caught-Pokedex, badges, and team are still being calibrated. '
+            'Send me a DS save (.sav/.dsv) for this game and I\'ll finish them '
+            'in a patch.',
+      ],
+    );
+  }
+
+  // ============================================================== Gen 5 (DS)
+
+  SaveData _parseGen5(Uint8List b, String versionId) {
+    return SaveData(
+      generation: 5,
+      versionId: versionId,
+      notes: const [
+        'Gen 5 auto-tracking is being calibrated. Send me a Black/White or '
+            'B2W2 save (.sav/.dsv) and I\'ll enable caught-Pokedex, team, and '
+            'badges in a patch.',
       ],
     );
   }
