@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3",
-  "notes": "Fixes external links (emulator store pages) not opening on Android/iOS.",
+  "version": "1.0.4",
+  "notes": "Redesigned Pokedex detail page in a Bulbapedia/Serebii style: type-colored header, infobox, stat bars with a hexagon toggle, grouped type defenses, evolution line with conditions, and a filterable movepool.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
