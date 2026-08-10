@@ -1,0 +1,25 @@
+melonDS DS (libretro core) — bundled binary
+============================================
+
+This application bundles the melonDS DS libretro core
+(melondsds_libretro), which emulates the Nintendo DS. It is built on the
+melonDS emulator.
+
+  melonDS DS (libretro core):  https://github.com/JesseTG/melonDS-ds
+  melonDS emulator:            https://github.com/melonDS-emu/melonDS
+
+Both projects are licensed under the GNU General Public License, version 3
+(GPLv3). Because this application bundles the GPLv3-licensed melonDS DS
+core, the distributed binary is a combined work covered by the terms of the
+GPLv3.
+
+The complete corresponding source code for this application is available at:
+
+  https://github.com/poketrackerrs/poketracker
+
+The full text of the GNU General Public License, version 3, is available at:
+
+  https://www.gnu.org/licenses/gpl-3.0.txt
+
+The melonDS DS core is used as an unmodified prebuilt shared library; no
+changes were made to it.

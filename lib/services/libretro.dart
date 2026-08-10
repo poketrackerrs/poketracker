@@ -6,9 +6,17 @@ import 'package:ffi/ffi.dart';
 
 // ---- environment command constants ----
 const int envGetCanDupe = 3;
+const int envGetVariable = 15;
+const int envSetVariables = 16;
+const int envGetVariableUpdate = 17;
 const int envGetSystemDirectory = 9;
 const int envSetPixelFormat = 10;
 const int envGetSaveDirectory = 31;
+const int envGetCoreOptionsVersion = 52;
+const int envSetCoreOptions = 53;
+const int envSetCoreOptionsIntl = 54;
+const int envSetCoreOptionsV2 = 67;
+const int envSetCoreOptionsV2Intl = 68;
 
 // pixel formats
 const int pf0RGB1555 = 0;
@@ -60,6 +68,12 @@ final class RetroGameInfo extends Struct {
   @IntPtr()
   external int size;
   external Pointer<Utf8> meta;
+}
+
+/// retro_variable — the core sets [key]; we fill [value] with our chosen option.
+final class RetroVariable extends Struct {
+  external Pointer<Utf8> key;
+  external Pointer<Utf8> value;
 }
 
 // ---- callback native signatures ----

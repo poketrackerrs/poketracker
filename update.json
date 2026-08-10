@@ -1,6 +1,6 @@
 {
-  "version": "1.0.50",
-  "notes": "Polished the built-in emulator's on-screen touch controls in portrait: the D-pad, A/B buttons, L/R shoulders, and Start/Select are now spread out comfortably instead of crowded at the bottom edge. Landscape is unchanged.",
+  "version": "1.0.51",
+  "notes": "Built-in Nintendo DS player (Gen 4–5)! Diamond/Pearl/Platinum, HeartGold/SoulSilver and Black/White now run in the app on Windows and Android via the melonDS core — dual-screen layout with a real touch screen (mouse on desktop, stylus on phone), on-screen touch controls in portrait, remappable keyboard/controller input, audio and fast-forward. Encrypted retail DS ROMs need Nintendo DS BIOS files: import your own bios7/bios9/firmware under Settings → Built-in DS player → Nintendo DS BIOS (decrypted ROMs work without them). Also fixes a fast-forward freeze on the DS core.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

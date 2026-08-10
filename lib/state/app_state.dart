@@ -286,12 +286,12 @@ class AppState extends ChangeNotifier {
   bool canLaunch(Game game) =>
       isInstalled(game.id) && emulatorForGame(game) != null;
 
-  /// True if [game] can run in the **built-in** mGBA player. mGBA plays the
-  /// whole Game Boy family (GB/GBC/GBA = gens 1–3); currently Windows only.
+  /// True if [game] can run in the **built-in** player: mGBA for the Game Boy
+  /// family (GB/GBC/GBA = gens 1–3) and melonDS for Nintendo DS (gens 4–5).
   bool canPlayBuiltIn(Game game) =>
       (Platform.isWindows || Platform.isAndroid) &&
       game.generation >= 1 &&
-      game.generation <= 3 &&
+      game.generation <= 5 &&
       isInstalled(game.id);
 
   /// Full path to the installed ROM for the built-in player, or null.

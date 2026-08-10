@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../data/region_theme.dart';
 import '../state/app_state.dart';
+import 'ds_bios_screen.dart';
 import 'emulators_screen.dart';
 import 'updates_screen.dart';
 
@@ -156,6 +157,21 @@ class SettingsScreen extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
+
+        if (Platform.isWindows || Platform.isAndroid) ...[
+          _header(context, 'Built-in DS player'),
+          ListTile(
+            leading: const Icon(Icons.memory),
+            title: const Text('Nintendo DS BIOS files'),
+            subtitle: const Text(
+                'Import bios7/bios9/firmware so encrypted DS ROMs boot in the '
+                'built-in player (decrypted ROMs work without them)'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const DsBiosScreen()),
+            ),
+          ),
+        ],
 
         _header(context, 'Game downloads'),
         ListTile(

@@ -39,7 +39,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   bool _turboHeld = false;
   bool _turboLatch = false;
   bool _fullscreen = false;
-  int _fitMode = 0; // 0 = Fill (default), 1 = Fit, 2 = Zoom
+  int _fitMode = 1; // 0 = Fill, 1 = Fit (default), 2 = Zoom
   String _status = 'starting…';
   String? _savPath;
 
@@ -49,6 +49,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
+  bool get _isDs => widget.game.generation >= 4; // DS uses a dual-screen layout
   BoxFit get _fit => const [BoxFit.fill, BoxFit.contain, BoxFit.cover][_fitMode];
   String get _fitName => const ['Fill', 'Fit', 'Zoom'][_fitMode];
 
@@ -72,7 +73,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       _prefs = await EmulatorPrefs.load();
       await _initAudio();
       _applyVolume();
-      final (dll, sys) = await GbaEmulator.provision();
+      final coreBase =
+          widget.game.generation >= 4 ? 'melondsds_libretro' : 'mgba_libretro';
+      final (dll, sys) = await GbaEmulator.provision(coreBase);
       final emu = GbaEmulator(dll);
       emu.init(sys);
       final ok = emu.loadRom(widget.romPath);
@@ -190,8 +193,17 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     _timer = Timer.periodic(const Duration(milliseconds: 16), (_) {
       final emu = _emu;
       if (emu == null || !emu.loaded) return;
-      final steps = _turbo ? (_prefs?.ffSpeed ?? _defaultFf) : 1;
-      for (var i = 0; i < steps; i++) {
+      if (_turbo) {
+        // Fast-forward: run extra frames, but time-box so a heavy core (melonDS)
+        // can't run for longer than one tick and freeze the whole app.
+        final maxSteps = _prefs?.ffSpeed ?? _defaultFf;
+        final sw = Stopwatch()..start();
+        var ran = 0;
+        do {
+          emu.runFrame();
+          ran++;
+        } while (ran < maxSteps && sw.elapsedMilliseconds < 8);
+      } else {
         emu.runFrame();
       }
       if (gAudioChunks.isNotEmpty) {
@@ -435,11 +447,13 @@ class _EmulatorScreenState extends State<EmulatorScreen>
 
   Widget _touchControls(bool portrait) {
     // Portrait has lots of vertical room, so spread the clusters out; landscape
-    // keeps everything hugging the bottom edges over the letterbox.
-    final clusterB = portrait ? 190.0 : 18.0;
-    final shoulderLB = portrait ? 384.0 : 196.0;
-    final shoulderRB = portrait ? 384.0 : 146.0;
-    final startSelectB = portrait ? 80.0 : 18.0;
+    // keeps everything hugging the bottom edges over the letterbox. DS keeps the
+    // buttons compact even in portrait so the two screens get the upper space.
+    final spread = portrait && !_isDs;
+    final clusterB = spread ? 190.0 : 18.0;
+    final shoulderLB = spread ? 384.0 : 196.0;
+    final shoulderRB = spread ? 384.0 : 146.0;
+    final startSelectB = spread ? 80.0 : 18.0;
     return Positioned.fill(
       child: SafeArea(
         child: Stack(
@@ -512,10 +526,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     );
   }
 
-  Widget _screen(BoxFit fit) {
-    final img = _image;
-    if (img == null) {
-      return Center(
+  Widget get _loadingView => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -525,8 +536,98 @@ class _EmulatorScreenState extends State<EmulatorScreen>
           ],
         ),
       );
-    }
+
+  Widget _screen(BoxFit fit) {
+    final img = _image;
+    if (img == null) return _loadingView;
     return RawImage(image: img, fit: fit, filterQuality: FilterQuality.none);
+  }
+
+  // ---- DS dual-screen ----
+  // melonDS presents both screens stacked in one framebuffer (256x384). We split
+  // it into a top screen and a touch-enabled bottom screen: side-by-side when the
+  // area is wider than tall, stacked otherwise.
+  Widget _dsScreens() {
+    final img = _image;
+    if (img == null) return _loadingView;
+    final fw = img.width.toDouble();
+    final half = img.height / 2; // top screen height == bottom screen height
+    return LayoutBuilder(
+      builder: (ctx, c) {
+        final w = c.maxWidth, h = c.maxHeight;
+        const gap = 6.0;
+        final stacked = h >= w;
+        late Rect top, bot;
+        if (stacked) {
+          final s = _minD(w / fw, (h - gap) / (half * 2));
+          final sw = fw * s, sh = half * s;
+          final left = (w - sw) / 2;
+          final ty = (h - (sh * 2 + gap)) / 2;
+          top = Rect.fromLTWH(left, ty, sw, sh);
+          bot = Rect.fromLTWH(left, ty + sh + gap, sw, sh);
+        } else {
+          final s = _minD((w - gap) / (fw * 2), h / half);
+          final sw = fw * s, sh = half * s;
+          final left = (w - (sw * 2 + gap)) / 2;
+          final ty = (h - sh) / 2;
+          top = Rect.fromLTWH(left, ty, sw, sh);
+          bot = Rect.fromLTWH(left + sw + gap, ty, sw, sh);
+        }
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(painter: _DsPainter(img, top, bot)),
+            ),
+            Positioned.fromRect(
+              rect: bot,
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (e) => _dsTouch(e.localPosition, bot.size),
+                onPointerMove: (e) => _dsTouch(e.localPosition, bot.size),
+                onPointerUp: (_) => _dsTouchUp(),
+                onPointerCancel: (_) => _dsTouchUp(),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  double _minD(double a, double b) => a < b ? a : b;
+
+  void _dsTouch(Offset local, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final lx = (local.dx / size.width).clamp(0.0, 1.0);
+    final ly = (local.dy / size.height).clamp(0.0, 1.0);
+    // libretro normalizes pointer coords over the whole framebuffer to
+    // -0x7fff..0x7fff; the bottom screen is its lower half, so Y maps to 0..0x7fff.
+    gPointerX = ((lx * 2 - 1) * 0x7fff).round();
+    gPointerY = (ly * 0x7fff).round();
+    gPointerDown = 1;
+  }
+
+  void _dsTouchUp() => gPointerDown = 0;
+
+  Widget _gameLayer(bool portrait) {
+    if (_isDs) {
+      // Portrait phone: reserve the bottom strip for the compact buttons.
+      if (_isMobile && portrait) {
+        return Positioned(
+            top: 52, left: 0, right: 0, bottom: 236, child: _dsScreens());
+      }
+      return Positioned.fill(child: _dsScreens());
+    }
+    if (portrait) {
+      return Positioned(
+        top: 60,
+        left: 0,
+        right: 0,
+        child: AspectRatio(aspectRatio: 3 / 2, child: _screen(BoxFit.contain)),
+      );
+    }
+    return Positioned.fill(child: _screen(_fit));
   }
 
   @override
@@ -541,16 +642,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         child: Stack(
           children: [
             const Positioned.fill(child: ColoredBox(color: Colors.black)),
-            if (portrait)
-              Positioned(
-                top: 60,
-                left: 0,
-                right: 0,
-                child: AspectRatio(
-                    aspectRatio: 3 / 2, child: _screen(BoxFit.contain)),
-              )
-            else
-              Positioned.fill(child: _screen(_fit)),
+            _gameLayer(portrait),
             if (_isMobile) _touchControls(portrait),
             Align(
               alignment: Alignment.topCenter,
@@ -583,13 +675,14 @@ class _EmulatorScreenState extends State<EmulatorScreen>
                         onPressed: () =>
                             setState(() => _turboLatch = !_turboLatch),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.aspect_ratio),
-                        color: Colors.white,
-                        tooltip: 'Scale: $_fitName (V)',
-                        onPressed: () =>
-                            setState(() => _fitMode = (_fitMode + 1) % 3),
-                      ),
+                      if (!_isDs)
+                        IconButton(
+                          icon: const Icon(Icons.aspect_ratio),
+                          color: Colors.white,
+                          tooltip: 'Scale: $_fitName (V)',
+                          onPressed: () =>
+                              setState(() => _fitMode = (_fitMode + 1) % 3),
+                        ),
                       IconButton(
                         icon: Icon(_fullscreen
                             ? Icons.fullscreen_exit
@@ -620,4 +713,26 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       ),
     );
   }
+}
+
+/// Paints the melonDS framebuffer as two separate screens: the top half of the
+/// source image into [top], the bottom half into [bot].
+class _DsPainter extends CustomPainter {
+  final ui.Image image;
+  final Rect top;
+  final Rect bot;
+  _DsPainter(this.image, this.top, this.bot);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..filterQuality = FilterQuality.none;
+    final w = image.width.toDouble();
+    final half = image.height / 2;
+    canvas.drawImageRect(image, Rect.fromLTWH(0, 0, w, half), top, p);
+    canvas.drawImageRect(image, Rect.fromLTWH(0, half, w, half), bot, p);
+  }
+
+  @override
+  bool shouldRepaint(_DsPainter old) =>
+      old.image != image || old.top != top || old.bot != bot;
 }

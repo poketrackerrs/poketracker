@@ -26,6 +26,24 @@ final List<Uint8List> gAudioChunks = <Uint8List>[];
 // RetroPad button state (index = RETRO_DEVICE_ID_JOYPAD_*). 1 = pressed.
 final List<int> gButtons = List<int>.filled(16, 0);
 
+// DS touch pointer (RETRO_DEVICE_POINTER). Coords normalized to -0x7fff..0x7fff
+// over the full framebuffer; the core maps them to the touch screen.
+int gPointerX = 0;
+int gPointerY = 0;
+int gPointerDown = 0;
+
+// Core-option overrides answered via RETRO_ENVIRONMENT_GET_VARIABLE. Values are
+// kept as persistent native strings. e.g. melonDS's touch cursor -> 'disabled'.
+final Map<String, Pointer<Utf8>> gVarOverrides = {};
+
+/// Sets (or clears, when [value] is null) a core-option override, freeing any
+/// previously-allocated native string for that key.
+void _setVar(String key, String? value) {
+  final old = gVarOverrides.remove(key);
+  if (old != null) malloc.free(old);
+  if (value != null) gVarOverrides[key] = value.toNativeUtf8();
+}
+
 // RETRO_DEVICE_ID_JOYPAD_* ids
 const int retroB = 0;
 const int retroY = 1;
@@ -55,6 +73,28 @@ bool _env(int cmd, Pointer<Void> data) {
     case envGetCanDupe:
       data.cast<Uint8>().value = 1;
       return true;
+    case envGetCoreOptionsVersion:
+      data.cast<Uint32>().value = 2; // we speak the v2 core-options API
+      return true;
+    case envSetVariables:
+    case envSetCoreOptions:
+    case envSetCoreOptionsIntl:
+    case envSetCoreOptionsV2:
+    case envSetCoreOptionsV2Intl:
+      return true; // acknowledge; specific values come back via GET_VARIABLE
+    case envGetVariableUpdate:
+      data.cast<Uint8>().value = 0; // no pending option changes
+      return true;
+    case envGetVariable:
+      if (data == nullptr) return false;
+      final v = data.cast<RetroVariable>();
+      if (v.ref.key == nullptr) return false;
+      final override = gVarOverrides[v.ref.key.toDartString()];
+      if (override != null) {
+        v.ref.value = override;
+        return true;
+      }
+      return false;
     default:
       return false;
   }
@@ -127,6 +167,19 @@ void _inputPoll() {}
 
 int _inputState(int port, int device, int index, int id) {
   if (device == 1 && id >= 0 && id < gButtons.length) return gButtons[id];
+  if (device == 6) {
+    // RETRO_DEVICE_POINTER: X, Y, PRESSED, COUNT
+    switch (id) {
+      case 0:
+        return gPointerX;
+      case 1:
+        return gPointerY;
+      case 2:
+        return gPointerDown;
+      case 3:
+        return gPointerDown; // count: 1 while a finger is down
+    }
+  }
   return 0;
 }
 
@@ -140,39 +193,50 @@ class GbaEmulator {
 
   GbaEmulator(String dllPath) : core = LibretroCore(dllPath);
 
-  static String? _coreDllPath;
-  static String? _systemDir;
-
-  /// Copies the bundled mGBA core out of assets to a runtime path and returns
-  /// (dllPath, systemDir). Works in dev and release without CMake bundling.
-  static Future<(String, String)> provision() async {
-    if (_coreDllPath != null && _systemDir != null) {
-      return (_coreDllPath!, _systemDir!);
-    }
+  /// Provisions a bundled libretro core and returns (coreHandle, systemDir).
+  /// [coreBase] is e.g. 'mgba_libretro' (GB/GBC/GBA) or 'melondsds_libretro' (DS).
+  /// Windows: copies `assets/cores/<coreBase>.dll` out to a runtime path.
+  /// Android: the core ships in jniLibs and loads by soname `lib<coreBase>.so`.
+  static Future<(String, String)> provision(String coreBase) async {
     final support = await getApplicationSupportDirectory();
     final coresPath = '${support.path}/cores';
     await Directory(coresPath).create(recursive: true);
     if (Platform.isAndroid) {
-      // The core ships in android/app/src/main/jniLibs and loads by soname.
-      _coreDllPath = 'libmgba_libretro.so';
-      _systemDir = coresPath;
-      return (_coreDllPath!, _systemDir!);
+      return ('lib$coreBase.so', coresPath);
     }
-    final dll = File('$coresPath/mgba_libretro.dll');
-    final data = await rootBundle.load('assets/cores/mgba_libretro.dll');
+    final dll = File('$coresPath/$coreBase.dll');
+    final data = await rootBundle.load('assets/cores/$coreBase.dll');
     final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
     if (!dll.existsSync() || dll.lengthSync() != bytes.length) {
       await dll.writeAsBytes(bytes, flush: true);
     }
-    _coreDllPath = dll.path;
-    _systemDir = coresPath;
-    return (_coreDllPath!, _systemDir!);
+    return (dll.path, coresPath);
   }
 
   int get apiVersion => core.retroApiVersion();
 
   void init(String systemDir) {
     gSysDir = systemDir.toNativeUtf8();
+    // Hide melonDS's on-screen touch cursor (default 'always' leaves a lingering
+    // square on the bottom screen). Registered before the core queries options.
+    gVarOverrides.putIfAbsent(
+        'melonds_show_cursor', () => 'disabled'.toNativeUtf8());
+    // If the user has supplied real DS BIOS + firmware, switch melonDS to Native
+    // mode with direct boot so encrypted retail ROMs decrypt and run. Without
+    // them the core stays on built-in FreeBIOS (which only boots decrypted ROMs).
+    // Require the expected byte sizes (must match kNdsBiosSlots) so a wrong file
+    // falls back to the clean FreeBIOS path instead of crashing the core.
+    bool okBios(String name, List<int> sizes) {
+      final f = File('$systemDir/$name');
+      return f.existsSync() && sizes.contains(f.lengthSync());
+    }
+
+    final hasNdsBios = okBios('bios7.bin', const [16384]) &&
+        okBios('bios9.bin', const [4096]) &&
+        okBios('firmware.bin', const [131072, 262144]);
+    _setVar('melonds_sysfile_mode', hasNdsBios ? 'native' : null);
+    _setVar('melonds_boot_mode', hasNdsBios ? 'direct' : null);
+    _setVar('melonds_firmware_nds_path', hasNdsBios ? 'firmware.bin' : null);
     core.retroSetEnvironment(Pointer.fromFunction<EnvCbNative>(_env, false));
     core.retroInit();
     core.retroSetVideoRefresh(Pointer.fromFunction<VideoCbNative>(_video));
