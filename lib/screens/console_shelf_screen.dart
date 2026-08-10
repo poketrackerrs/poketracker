@@ -52,29 +52,33 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       ),
       body: Column(
         children: [
-          const SizedBox(height: 16),
-          GestureDetector(
-            onTap: _show3dCartridge
-                ? () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ModelViewerScreen(
-                          src: 'assets/models/gameboy_classic.glb',
-                          title: 'Game Boy',
-                        ),
-                      ),
-                    )
-                : null,
-            child: ConsoleArt(
-                platform: widget.platform, size: 130, interactive: true),
-          ),
-          if (_show3dCartridge)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text('Tap for 3D · drag to rotate',
-                  style: Theme.of(context).textTheme.bodySmall),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: _show3dCartridge
+                        ? () => showModelViewerDialog(context,
+                            src: 'assets/models/gameboy_classic.glb',
+                            title: kConsoleNames[widget.platform] ?? 'Console')
+                        : null,
+                    child: ConsoleArt(
+                        platform: widget.platform, size: 130, interactive: true),
+                  ),
+                  if (_show3dCartridge)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text('Tap for 3D · drag to rotate',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                  const SizedBox(height: 12),
+                  _selectedPanel(context, state, game),
+                  const SizedBox(height: 12),
+                ],
+              ),
             ),
-          const SizedBox(height: 12),
-          Expanded(child: _selectedPanel(context, state, game)),
+          ),
           _shelf(context, state),
         ],
       ),
@@ -88,23 +92,31 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Hero(
-            tag: 'boxhero_${game.id}',
-            child: GameBoxArt(game: game, height: 170),
+          GestureDetector(
+            onTap: () => _showBoxPopout(context, game),
+            child: Hero(
+              tag: 'boxhero_${game.id}',
+              child: GameBoxArt(game: game, height: 170),
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(game.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 2),
+          Text('Tap the box to inspect',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 10),
+          Text(game.title,
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center),
           Text('${game.region} • ${game.releaseYear}',
               style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               if (downloading)
-                const FilledButton(
-                    onPressed: null, child: Text('Downloading…'))
+                const FilledButton(onPressed: null, child: Text('Downloading…'))
               else if (installed)
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
@@ -130,34 +142,46 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
                   },
                 )
               else
-                Text('Link your Drive in Settings to download',
-                    style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(width: 8),
+                const Text('Link your Drive in Settings'),
               OutlinedButton(
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => GameScreen(game: game)),
                 ),
                 child: const Text('Details'),
               ),
+              if (_show3dCartridge)
+                TextButton.icon(
+                  icon: const Icon(Icons.view_in_ar, size: 18),
+                  label: const Text('Cartridge 3D'),
+                  onPressed: () => showModelViewerDialog(context,
+                      src: 'assets/models/gameboy_cartridge.glb',
+                      title: game.title),
+                ),
             ],
           ),
-          if (_show3dCartridge)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextButton.icon(
-                icon: const Icon(Icons.view_in_ar, size: 18),
-                label: const Text('View cartridge in 3D'),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ModelViewerScreen(
-                      src: 'assets/models/gameboy_cartridge.glb',
-                      title: game.title,
-                    ),
-                  ),
-                ),
-              ),
-            ),
         ],
+      ),
+    );
+  }
+
+  /// Pops the game's box into a hovering, drag-to-rotate overlay.
+  void _showBoxPopout(BuildContext context, Game game) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.85),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GameBoxArt(game: game, height: 360, interactive: true),
+            const SizedBox(height: 16),
+            const Text('Drag to rotate · tap outside to close',
+                style: TextStyle(color: Colors.white70, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }

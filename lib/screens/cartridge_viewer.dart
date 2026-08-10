@@ -1,31 +1,71 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:model_viewer_plus/model_viewer_plus.dart';
 import 'package:webview_windows/webview_windows.dart' as ww;
 
-/// A rotatable 3D viewer for a bundled .glb model.
-/// - Android/iOS: model_viewer_plus (WebView + `model-viewer`).
-/// - Windows: webview_windows (WebView2) pointed at a tiny local server that
-///   serves the model, with `model-viewer` loaded from a CDN.
-class ModelViewerScreen extends StatelessWidget {
-  final String src; // asset path, e.g. assets/models/gameboy_classic.glb
-  final String title;
-  const ModelViewerScreen({super.key, required this.src, required this.title});
+/// Shows the 3D model in a floating dialog that hovers over the current page.
+Future<void> showModelViewerDialog(
+  BuildContext context, {
+  required String src,
+  required String title,
+}) {
+  final size = MediaQuery.of(context).size;
+  final w = math.min(size.width * 0.92, 560.0);
+  final h = math.min(size.height * 0.82, 660.0);
+  return showDialog(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.6),
+    builder: (ctx) => Dialog(
+      clipBehavior: Clip.antiAlias,
+      insetPadding: const EdgeInsets.all(20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: SizedBox(
+        width: w,
+        height: h,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(title,
+                        style: Theme.of(ctx).textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: ModelView(src: src, alt: title)),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Platform-appropriate 3D model content (no Scaffold), for embedding in a
+/// dialog or page. Android/iOS → model_viewer_plus; Windows → WebView2.
+class ModelView extends StatelessWidget {
+  final String src;
+  final String alt;
+  const ModelView({super.key, required this.src, required this.alt});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Platform.isWindows
-          ? _WindowsModelView(assetPath: src)
-          : ModelViewer(
-              src: src,
-              alt: title,
-              autoRotate: true,
-              cameraControls: true,
-              backgroundColor: const Color(0xFF101013),
-            ),
+    if (Platform.isWindows) return _WindowsModelView(assetPath: src);
+    return ModelViewer(
+      src: src,
+      alt: alt,
+      autoRotate: true,
+      cameraControls: true,
+      backgroundColor: const Color(0xFF101013),
     );
   }
 }
@@ -104,7 +144,10 @@ model-viewer{width:100%;height:100vh}</style>
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
-      return Center(child: Text(_error!, textAlign: TextAlign.center));
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Center(child: Text(_error!, textAlign: TextAlign.center)),
+      );
     }
     if (!_ready) return const Center(child: CircularProgressIndicator());
     return ww.Webview(_controller);
