@@ -1,6 +1,6 @@
 {
-  "version": "1.0.24",
-  "notes": "The Windows 3D viewer now bundles the model-viewer library, so it works fully offline (no internet needed).",
+  "version": "1.0.25",
+  "notes": "Compressed the 3D models (textures downscaled) — the Game Boy dropped from 44MB to 1MB and the cartridge from 10MB to 0.3MB, so the app is far smaller with no visible quality loss.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
