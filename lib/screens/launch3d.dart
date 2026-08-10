@@ -57,7 +57,7 @@ class _Launch3DState extends State<_Launch3D> {
 <script type="module" src="/model-viewer.min.js" defer></script></head>
 <body><div id="stage">
  <model-viewer id="console" src="/console.glb" interaction-prompt="none"
-   camera-orbit="25deg 72deg 108%" disable-tap disable-zoom></model-viewer>
+   camera-orbit="180deg 82deg 110%" disable-tap disable-zoom></model-viewer>
  <model-viewer id="cart" src="/cart.glb" interaction-prompt="none"
    camera-orbit="0deg 80deg 105%" disable-tap disable-zoom></model-viewer>
  <div id="flash"></div>
@@ -69,7 +69,7 @@ class _Launch3DState extends State<_Launch3D> {
  function run(){
    setTimeout(()=>cart.classList.add('in'),450);
    setTimeout(()=>{cart.classList.add('gone');label.textContent='Booting…';},1750);
-   setTimeout(()=>{con.cameraOrbit='0deg 78deg 108%';},1900);
+   setTimeout(()=>{con.cameraOrbit='0deg 80deg 110%';},1900);
    setTimeout(()=>{flash.classList.add('on');label.textContent='Now loading…';},2400);
  }
  window.addEventListener('load',run);

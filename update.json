@@ -1,6 +1,6 @@
 {
-  "version": "1.0.29",
-  "notes": "Play now runs a real-3D launch: the actual cartridge model slides down into the real Game Boy, the screen powers on, then the emulator launches.",
+  "version": "1.0.30",
+  "notes": "Launch tweak: the Game Boy now faces its back (slot toward you) straight-on as the cartridge slides in, then turns to the front and powers on.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
