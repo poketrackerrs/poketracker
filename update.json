@@ -1,6 +1,6 @@
 {
-  "version": "1.0.35",
-  "notes": "Launch animation is smoother (more frames) and the cartridge now seats fully into the slot.",
+  "version": "1.0.36",
+  "notes": "Launch: the cartridge now slides out of the game box before going into the Game Boy, and the whole sequence runs at more frames for extra-smooth motion.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

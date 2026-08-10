@@ -18,7 +18,7 @@ Future<void> showLaunch3D(
   );
 }
 
-const _frameCount = 46; // assets/launch/f00.png .. f45.png
+const _frameCount = 68; // assets/launch/f00.png .. f67.png
 
 class _Launch3D extends StatefulWidget {
   final Game game;
@@ -39,7 +39,7 @@ class _Launch3DState extends State<_Launch3D>
   void initState() {
     super.initState();
     _c = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 2800))
+        vsync: this, duration: const Duration(milliseconds: 3800))
       ..addListener(_sounds)
       ..addStatusListener((s) async {
         if (s == AnimationStatus.completed) {
@@ -67,11 +67,11 @@ class _Launch3DState extends State<_Launch3D>
 
   void _sounds() {
     final t = _c.value;
-    if (!_insert && t >= 0.42) {
+    if (!_insert && t >= 0.6) {
       _insert = true;
       _play('sfx/insert.wav');
     }
-    if (!_power && t >= 0.72) {
+    if (!_power && t >= 0.85) {
       _power = true;
       _play('sfx/poweron.wav');
     }
@@ -91,12 +91,16 @@ class _Launch3DState extends State<_Launch3D>
     super.dispose();
   }
 
+  // Timeline: 0–0.24 cartridge slides out of the box; 0.24–0.32 crossfade to
+  // the 3D scene; 0.32–0.86 insertion + turn; 0.86–1.0 power-on.
   String _label(double t) {
-    if (t < 0.18) return 'Opening case…';
-    if (t < 0.45) return 'Inserting cartridge…';
-    if (t < 0.72) return 'Booting…';
+    if (t < 0.24) return 'Taking out the cartridge…';
+    if (t < 0.62) return 'Inserting cartridge…';
+    if (t < 0.86) return 'Booting…';
     return 'Now loading ${widget.game.title.replaceFirst(RegExp(r'^Pok[eé]mon\s+'), '')}…';
   }
+
+  double _seg(double t, double a, double b) => ((t - a) / (b - a)).clamp(0.0, 1.0);
 
   @override
   Widget build(BuildContext context) {
@@ -110,10 +114,15 @@ class _Launch3DState extends State<_Launch3D>
         animation: _c,
         builder: (context, _) {
           final t = _c.value;
-          final frameProg = (t / 0.72).clamp(0.0, 1.0);
-          final idx = (frameProg * (_frameCount - 1)).round();
-          final boxOpacity = 1 - (t / 0.16).clamp(0.0, 1.0);
-          final flash = ((t - 0.72) / 0.22).clamp(0.0, 1.0);
+          final seqProg = _seg(t, 0.32, 0.86);
+          final idx = (seqProg * (_frameCount - 1)).round();
+          final seqOpacity = _seg(t, 0.24, 0.34);
+          final boxOpacity = 1 - _seg(t, 0.22, 0.32);
+          // cartridge slides up out of the box during phase A
+          final aOut = Curves.easeOut.transform(_seg(t, 0.02, 0.24));
+          final cartY = 0.55 + (-0.45 - 0.55) * aOut;
+          final cartStillOpacity = boxOpacity;
+          final flash = _seg(t, 0.86, 1.0);
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -123,26 +132,39 @@ class _Launch3DState extends State<_Launch3D>
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    if (!_c.isAnimating && t == 0)
+                    if (t == 0)
                       const Center(child: CircularProgressIndicator()),
-                    Image.asset(
-                      'assets/launch/f${idx.toString().padLeft(2, '0')}.png',
-                      gaplessPlayback: true,
-                      fit: BoxFit.contain,
-                    ),
-                    // The game box the cartridge emerges from (fades early).
+                    // Phase A: cartridge coming out of the box (cart behind box).
+                    if (cartStillOpacity > 0.01)
+                      Align(
+                        alignment: Alignment(0, cartY),
+                        child: Opacity(
+                          opacity: cartStillOpacity,
+                          child: Image.asset('assets/launch/cart.png',
+                              height: side * 0.42),
+                        ),
+                      ),
                     if (boxOpacity > 0.01)
                       Align(
-                        alignment: const Alignment(0, -0.9),
+                        alignment: const Alignment(0, 0.15),
                         child: Opacity(
                           opacity: boxOpacity,
                           child: Image.asset(widget.game.boxArtAsset,
-                              height: side * 0.3,
+                              height: side * 0.5,
                               errorBuilder: (_, _, _) =>
                                   const SizedBox.shrink()),
                         ),
                       ),
-                    // Power-on glow.
+                    // Phase B/C: the 3D insertion sequence.
+                    if (seqOpacity > 0.01)
+                      Opacity(
+                        opacity: seqOpacity,
+                        child: Image.asset(
+                          'assets/launch/f${idx.toString().padLeft(2, '0')}.png',
+                          gaplessPlayback: true,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     if (flash > 0.01)
                       IgnorePointer(
                         child: Opacity(
