@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import '../models/game.dart';
@@ -124,8 +125,12 @@ class _Launch3DState extends State<_Launch3D>
         animation: _c,
         builder: (context, _) {
           final t = _c.value;
+          // Left-hinged cover swings OUTWARD toward the viewer (positive turns
+          // the free right edge up and out), opening to ~110°.
           final coverAngle =
-              -2.5 * Curves.easeOut.transform(_seg(t, 0.0, 0.16));
+              1.92 * Curves.easeOut.transform(_seg(t, 0.0, 0.16));
+          // Past 90° we're looking at the back of the cover — show it grey.
+          final coverBackVisible = coverAngle > math.pi / 2;
           final cartOut = Curves.easeInOut.transform(_seg(t, 0.14, 0.30));
           final cartY = 0.12 + (-0.55 - 0.12) * cartOut;
           final boxOpacity = 1 - _seg(t, 0.30, 0.38);
@@ -146,7 +151,7 @@ class _Launch3DState extends State<_Launch3D>
                       const Center(child: CircularProgressIndicator()),
                     // ---- Phase A: the hinged box ----
                     if (boxOpacity > 0.01) ...[
-                      // box interior (revealed as the cover opens)
+                      // box interior (revealed as the cover opens) — grey
                       Align(
                         alignment: const Alignment(0, 0.05),
                         child: Opacity(
@@ -155,8 +160,16 @@ class _Launch3DState extends State<_Launch3D>
                             width: coverW,
                             height: coverH,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF3A342C),
+                              color: const Color(0xFF9AA0A6),
                               borderRadius: BorderRadius.circular(6),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x55000000),
+                                  blurRadius: 6,
+                                  spreadRadius: -2,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -180,14 +193,24 @@ class _Launch3DState extends State<_Launch3D>
                             transform: Matrix4.identity()
                               ..setEntry(3, 2, 0.0016)
                               ..rotateY(coverAngle),
-                            child: Image.asset(widget.game.boxArtAsset,
-                                width: coverW,
-                                height: coverH,
-                                fit: BoxFit.fill,
-                                errorBuilder: (_, _, _) => Container(
+                            // Front = cover art; back (once past 90°) = grey.
+                            child: coverBackVisible
+                                ? Container(
                                     width: coverW,
                                     height: coverH,
-                                    color: const Color(0xFF8a2020))),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF9AA0A6),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                  )
+                                : Image.asset(widget.game.boxArtAsset,
+                                    width: coverW,
+                                    height: coverH,
+                                    fit: BoxFit.fill,
+                                    errorBuilder: (_, _, _) => Container(
+                                        width: coverW,
+                                        height: coverH,
+                                        color: const Color(0xFF8a2020))),
                           ),
                         ),
                       ),
