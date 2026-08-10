@@ -1,6 +1,6 @@
 {
-  "version": "1.0.53",
-  "notes": "Nintendo 3DS firmware/CIA fetch (Windows): under Settings → Nintendo 3DS, link the Google Drive folder that holds your 3DS firmware / CIA files, then tap 'Fetch 3DS files from Drive' to download every CIA into Documents\\PokeTracker\\3DS. Install them into your 3DS emulator afterward (Azahar: File → Install CIA → select all), and 'Open 3DS folder' jumps right to them. Like the DS BIOS, these copyrighted files stay in your private Drive and are never bundled into the app.",
+  "version": "1.0.54",
+  "notes": "3DS folder polish (Windows): the app's managed 3DS folder is now 'Documents\\PokeTracker\\3DS Firmware' so Fetch and Open point to the same place, and 'Open 3DS folder' opens straight to your CIAs (the updates subfolder) instead of an empty folder.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
