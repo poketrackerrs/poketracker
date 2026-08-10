@@ -1,6 +1,6 @@
 {
-  "version": "1.0.30",
-  "notes": "Launch tweak: the Game Boy now faces its back (slot toward you) straight-on as the cartridge slides in, then turns to the front and powers on.",
+  "version": "1.0.31",
+  "notes": "Launch animation now starts with the cartridge coming out of the game box, sliding into the back of the Game Boy (shown straight-on), then the console turns to the front and powers on.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

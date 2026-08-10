@@ -284,7 +284,7 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
 
     if (_show3dConsole) {
       // Real console + cartridge slot-in animation.
-      await showLaunch3D(context, onLaunch: doLaunch);
+      await showLaunch3D(context, game: game, onLaunch: doLaunch);
     } else {
       await showDialog(
         context: context,
