@@ -433,7 +433,13 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     );
   }
 
-  Widget _touchControls() {
+  Widget _touchControls(bool portrait) {
+    // Portrait has lots of vertical room, so spread the clusters out; landscape
+    // keeps everything hugging the bottom edges over the letterbox.
+    final clusterB = portrait ? 190.0 : 18.0;
+    final shoulderLB = portrait ? 384.0 : 196.0;
+    final shoulderRB = portrait ? 384.0 : 146.0;
+    final startSelectB = portrait ? 80.0 : 18.0;
     return Positioned.fill(
       child: SafeArea(
         child: Stack(
@@ -441,7 +447,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
             // D-pad, bottom-left
             Positioned(
               left: 18,
-              bottom: 18,
+              bottom: clusterB,
               width: 168,
               height: 168,
               child: Stack(
@@ -467,7 +473,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
             // A / B, bottom-right (A upper-right, B lower-left)
             Positioned(
               right: 18,
-              bottom: 18,
+              bottom: clusterB,
               width: 156,
               height: 120,
               child: Stack(
@@ -482,13 +488,13 @@ class _EmulatorScreenState extends State<EmulatorScreen>
               ),
             ),
             // shoulders, above each cluster
-            Positioned(left: 18, bottom: 196, child: _pillBtn(retroL, 'L')),
-            Positioned(right: 18, bottom: 146, child: _pillBtn(retroR, 'R')),
+            Positioned(left: 18, bottom: shoulderLB, child: _pillBtn(retroL, 'L')),
+            Positioned(right: 18, bottom: shoulderRB, child: _pillBtn(retroR, 'R')),
             // start / select, bottom-center
             Positioned(
               left: 0,
               right: 0,
-              bottom: 18,
+              bottom: startSelectB,
               child: Center(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -545,7 +551,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
               )
             else
               Positioned.fill(child: _screen(_fit)),
-            if (_isMobile) _touchControls(),
+            if (_isMobile) _touchControls(portrait),
             Align(
               alignment: Alignment.topCenter,
               child: Container(

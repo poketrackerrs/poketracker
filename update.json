@@ -1,6 +1,6 @@
 {
-  "version": "1.0.49",
-  "notes": "The built-in emulator now works on Android too! Play Game Boy / Color / Advance games (Red through Emerald) right inside PokeTracker on your phone — with on-screen touch controls, hardware controller support, sound + volume, selectable fast-forward, and free rotation (portrait and landscape). Saves are written next to your ROM, so the auto-tracker reads them. Windows and Android now share the same built-in player.",
+  "version": "1.0.50",
+  "notes": "Polished the built-in emulator's on-screen touch controls in portrait: the D-pad, A/B buttons, L/R shoulders, and Start/Select are now spread out comfortably instead of crowded at the bottom edge. Landscape is unchanged.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
