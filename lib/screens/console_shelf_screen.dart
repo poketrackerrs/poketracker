@@ -11,6 +11,7 @@ import '../widgets/game_box_art.dart';
 import 'cartridge_viewer.dart';
 import 'emulators_screen.dart';
 import 'game_screen.dart';
+import 'launch3d.dart';
 
 /// A shelf of a console's games shown as cartridge spines. Tap a spine to bring
 /// the box forward; play runs the box-open → cartridge-insert → power-on
@@ -277,19 +278,26 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     bool launched = false;
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.9),
-      builder: (ctx) => _LaunchSequence(
-        game: game,
-        platform: widget.platform,
-        tint: _tint(context, game),
-        onLaunch: () async {
-          launched = await state.tryLaunchGame(game);
-        },
-      ),
-    );
+    Future<void> doLaunch() async {
+      launched = await state.tryLaunchGame(game);
+    }
+
+    if (_show3dConsole) {
+      // Real console + cartridge slot-in animation.
+      await showLaunch3D(context, onLaunch: doLaunch);
+    } else {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withValues(alpha: 0.9),
+        builder: (ctx) => _LaunchSequence(
+          game: game,
+          platform: widget.platform,
+          tint: _tint(context, game),
+          onLaunch: doLaunch,
+        ),
+      );
+    }
     if (!mounted) return;
     if (launched) {
       messenger.showSnackBar(

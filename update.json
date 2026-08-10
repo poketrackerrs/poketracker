@@ -1,6 +1,6 @@
 {
-  "version": "1.0.28",
-  "notes": "The Windows 3D viewer is now fully transparent — the model floats over the dimmed page with no dark panel or border, matching the box popout.",
+  "version": "1.0.29",
+  "notes": "Play now runs a real-3D launch: the actual cartridge model slides down into the real Game Boy, the screen powers on, then the emulator launches.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
