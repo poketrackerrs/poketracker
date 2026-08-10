@@ -1,6 +1,6 @@
 {
-  "version": "1.0.38",
-  "notes": "Android emulators: Play button now boots straight into Pizza Boy (Gen 1-3) and melonDS (Gen 4-5). Lemuroid can't be launched into directly, so added a 'Sync games to Lemuroid folder' option in Settings that copies your downloads to a shared folder Lemuroid can scan (new downloads copy over automatically).",
+  "version": "1.0.39",
+  "notes": "Shelf: inverted the game spine titles so they read bottom-to-top.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

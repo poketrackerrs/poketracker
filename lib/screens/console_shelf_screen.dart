@@ -241,7 +241,7 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
                     alignment: Alignment.bottomCenter,
                     padding: const EdgeInsets.only(bottom: 10),
                     child: RotatedBox(
-                      quarterTurns: 1,
+                      quarterTurns: 3,
                       child: Text(
                         _shortTitle(g),
                         maxLines: 1,
