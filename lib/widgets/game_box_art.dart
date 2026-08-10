@@ -68,13 +68,25 @@ class WrapLayout {
   final Rect back;
   final Rect spine;
   final Rect front;
-  const WrapLayout({required this.back, required this.spine, required this.front});
+
+  /// Vertical fraction of the spine occupied by the console banner (which sits
+  /// at the TOP of the printed spine). The spine face recomposes so this banner
+  /// is drawn at the BOTTOM and the game title on top — each kept upright.
+  final double spineSplit;
+
+  const WrapLayout({
+    required this.back,
+    required this.spine,
+    required this.front,
+    this.spineSplit = 0.28,
+  });
 }
 
 const WrapLayout _gbWrap = WrapLayout(
-  back: Rect.fromLTRB(0.0, 0.0, 0.464, 1.0),
-  spine: Rect.fromLTRB(0.464, 0.0, 0.527, 1.0),
-  front: Rect.fromLTRB(0.527, 0.0, 0.995, 1.0),
+  back: Rect.fromLTRB(0.0, 0.0, 0.468, 1.0),
+  spine: Rect.fromLTRB(0.468, 0.0, 0.529, 1.0),
+  front: Rect.fromLTRB(0.529, 0.0, 0.995, 1.0),
+  spineSplit: 0.30,
 );
 
 // DS full wraps: back content ends ~46.3% (then a white fold), spine 47.5–53%.
@@ -82,6 +94,7 @@ const WrapLayout _dsWrap = WrapLayout(
   back: Rect.fromLTRB(0.0, 0.0, 0.463, 1.0),
   spine: Rect.fromLTRB(0.475, 0.0, 0.530, 1.0),
   front: Rect.fromLTRB(0.530, 0.0, 0.995, 1.0),
+  spineSplit: 0.28,
 );
 
 // 3DS horizontal wraps: back ends ~47.6%, spine 47.6–52.2%, front from 52.2%.
@@ -89,6 +102,7 @@ const WrapLayout _n3dsWrap = WrapLayout(
   back: Rect.fromLTRB(0.0, 0.0, 0.476, 1.0),
   spine: Rect.fromLTRB(0.476, 0.0, 0.522, 1.0),
   front: Rect.fromLTRB(0.522, 0.0, 0.995, 1.0),
+  spineSplit: 0.28,
 );
 
 WrapLayout? _wrapLayoutFor(BoxPlatform p) {
@@ -208,15 +222,9 @@ class _GameBoxArtState extends State<GameBoxArt> {
       raw.add((c: [0, 0, d / 2], n: [0, 0, 1], rot: _ry(math.pi),
           child: SizedBox(width: w, height: h, child: panel(layout.back))));
       raw.add((c: [w / 2, 0, 0], n: [1, 0, 0], rot: _ry(math.pi / 2),
-          child: SizedBox(
-              width: d,
-              height: h,
-              child: RotatedBox(quarterTurns: 2, child: panel(layout.spine)))));
+          child: _wrapSpineFace(wrap, layout, d, h)));
       raw.add((c: [-w / 2, 0, 0], n: [-1, 0, 0], rot: _ry(-math.pi / 2),
-          child: SizedBox(
-              width: d,
-              height: h,
-              child: RotatedBox(quarterTurns: 2, child: panel(layout.spine)))));
+          child: _wrapSpineFace(wrap, layout, d, h)));
       raw.add((c: [0, -h / 2, 0], n: [0, -1, 0], rot: _rx(math.pi / 2),
           child: SizedBox(width: w, height: d, child: Container(color: edgeColor))));
       raw.add((c: [0, h / 2, 0], n: [0, 1, 0], rot: _rx(-math.pi / 2),
@@ -292,6 +300,37 @@ class _GameBoxArtState extends State<GameBoxArt> {
         ),
         child: child,
       );
+
+  /// Recomposes the wrap's spine so the console banner (the top [spineSplit] of
+  /// the printed spine, e.g. the white-outlined GAME BOY box) sits at the
+  /// BOTTOM and the game title on top — each kept upright, the way the spine
+  /// reads on a shelf. Native row proportions are preserved via the flexes.
+  Widget _wrapSpineFace(ui.Image wrap, WrapLayout layout, double d, double h) {
+    final sp = layout.spine;
+    final split = layout.spineSplit;
+    final titleRect = Rect.fromLTRB(sp.left, split, sp.right, 1.0);
+    final bannerRect = Rect.fromLTRB(sp.left, 0.0, sp.right, split);
+    return SizedBox(
+      width: d,
+      height: h,
+      child: Column(
+        children: [
+          Expanded(
+            flex: ((1 - split) * 1000).round(),
+            child: CustomPaint(
+                painter: _PanelPainter(wrap, titleRect),
+                child: const SizedBox.expand()),
+          ),
+          Expanded(
+            flex: (split * 1000).round(),
+            child: CustomPaint(
+                painter: _PanelPainter(wrap, bannerRect),
+                child: const SizedBox.expand()),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _frontCover(double w, double h) => ClipRRect(
         borderRadius: BorderRadius.circular(3),
