@@ -18,7 +18,7 @@ Future<void> showLaunch3D(
   );
 }
 
-const _frameCount = 26; // assets/launch/f00.png .. f25.png
+const _frameCount = 46; // assets/launch/f00.png .. f45.png
 
 class _Launch3D extends StatefulWidget {
   final Game game;

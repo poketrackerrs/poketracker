@@ -1,6 +1,6 @@
 {
-  "version": "1.0.34",
-  "notes": "Fixed the Android RetroArch link — the old com.retroarch listing is gone; it now points to RetroArch Plus (the current Play Store build).",
+  "version": "1.0.35",
+  "notes": "Launch animation is smoother (more frames) and the cartridge now seats fully into the slot.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
