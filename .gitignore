@@ -53,3 +53,24 @@ app.*.map.json
 # never distributed. Only the intermediate dieline working files stay untracked.
 assets/games/dielines/*.png
 assets/games/dielines/*.jpg
+
+# Copyrighted ROMs / BIOS / firmware — NEVER commit. The app keeps these in the
+# user's Documents folder, but this guards against any copy dropped in the repo
+# tree (e.g. a Drive folder downloaded here). This repo is public.
+*.cia
+*.3ds
+*.cci
+*.cxi
+*.nds
+*.gba
+*.gbc
+*.gb
+*.srm
+*.sav
+boot9.bin
+boot11.bin
+bios7.bin
+bios9.bin
+firmware.bin
+3DS Firmware/
+/3DS/
