@@ -37,24 +37,34 @@ CI (unsigned, sideloaded). It auto-updates from GitHub Releases.
 
 ---
 
-## Machine setup (⚠ paths below are the OLD PC — verify/reinstall on this one)
+## Machine setup (✅ installed + verified on THIS PC 2026-08-10 — paths below are live)
+
+As of 2026-08-10 this machine is a fully set-up build box: both `flutter build windows
+--release` and `flutter build apk --release` succeed and `flutter doctor` is all green.
+When moving to a *new* machine, re-verify each path below.
 
 Flutter's Windows build **breaks on paths with spaces**, so the project must live
-at a space-free path (was `C:\PokeTracker`). Do not move it under `C:\Poke Project`.
+at a space-free path (`C:\PokeTracker`). Do not move it under `C:\Poke Project`.
 
-Toolchain the build expects (install if missing on this machine):
-- **Flutter SDK** — was `C:\dev\flutter\bin` (on PATH). `flutter --version`.
-- **Windows build**: Visual Studio 2022 + "Desktop development with C++" workload;
-  Developer Mode on.
-- **Inno Setup 6** (Windows installer) — was `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe`.
-- **Android**: JDK 17 (was `C:\Program Files\Microsoft\jdk-17*`) + Android SDK (was
-  `C:\Android`, platforms android-35 & android-36, build-tools 35 & 36). Accept
-  licenses by writing the license *files* under `<sdk>\licenses` (piped `y` didn't
-  work). `compileSdk` is pinned to 36 in `android/app/build.gradle.kts`.
-- **GitHub CLI** (`gh`) — was `C:\Program Files\GitHub CLI\gh.exe`, authed as
-  `poketrackerrs`. Not on PATH in bash; call by full path or from PowerShell.
-- Python (for asset tooling: pygltflib, Pillow, trimesh, pyglet<2, scipy) — used to
-  compress `.glb` models and crop/measure covers. No Node.js in this project.
+Toolchain (all installed here unless noted):
+- **Flutter SDK** — `C:\dev\flutter\bin` (on PATH). Flutter 3.44.9 / Dart 3.12.2. `flutter --version`.
+- **Windows build**: Visual Studio 2022 **Build Tools** 17.14.37 + "Desktop development with
+  C++" (Windows 10 SDK 10.0.26100) at
+  `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`. **Developer Mode is ON**
+  (required for Flutter plugin symlinks — `ms-settings:developers`).
+- **Inno Setup 6** (Windows installer) — `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe` (v6.7.3).
+- **Android**: JDK 17 at `C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot` + Android SDK at
+  **`C:\dev\Android`** (⚠ NOT `C:\Android` — the drive-root path is blocked by a harness safety
+  guard, so nest SDK dirs under `C:\dev\`). Platforms android-35 & android-36, build-tools 35.0.0
+  & 36.0.0, platform-tools r37, cmake 3.22.1. Persistent env vars `ANDROID_HOME` /
+  `ANDROID_SDK_ROOT` = `C:\dev\Android`, `JAVA_HOME` = the JDK above. Licenses accepted via
+  `sdkmanager --licenses` with piped `y` (worked here); writing the license *files* under
+  `<sdk>\licenses` also works. `compileSdk` is pinned to 36 in `android/app/build.gradle.kts`.
+- **GitHub CLI** (`gh`) — `C:\Program Files\GitHub CLI\gh.exe` (v2.97.0). ✅ **Authed** as
+  `poketrackerrs` (keyring; `repo` + `workflow` scopes) — `gh release create` works. Not on
+  PATH in bash; call by full path or from PowerShell.
+- Python (for asset tooling: pygltflib, Pillow, trimesh, pyglet<2, scipy) — **not yet installed
+  here**; only needed to compress `.glb` models and crop/measure covers. No Node.js in this project.
 
 ---
 
@@ -77,18 +87,18 @@ self-updates.
 5. **Build both**: `flutter build windows --release` → compile the Inno installer
    (`installer/poketracker.iss` → `dist/PokeTracker-Setup.exe`); and
    `flutter build apk --release` → copy to `dist/PokeTracker.apk`. The combined
-   script `build_both.ps1` (below) does both; note it hard-codes the old machine's
-   Flutter/SDK/JDK paths — adjust them.
+   script `build_both.ps1` (below) does both; its paths are set for THIS PC
+   (re-verify Flutter/SDK/JDK paths on a new machine).
 6. **Release**: `gh release create vX.Y.Z dist\PokeTracker-Setup.exe dist\PokeTracker.apk
    --title "vX.Y.Z" --notes "..."`. Asset names MUST be exactly `PokeTracker-Setup.exe`
    and `PokeTracker.apk` (the manifest points at `releases/latest/download/<name>`).
    PowerShell mangles complex `--notes`/`--jq` strings — use `--notes-file` and pipe
    `gh ... --json` through `ConvertFrom-Json` instead of `--jq`.
 
-`build_both.ps1` (recreate under a scratch dir; **fix the paths for this machine**):
+`build_both.ps1` (recreate under a scratch dir; **paths below are set for THIS PC — re-verify on a new machine**):
 ```powershell
 $env:Path = 'C:\dev\flutter\bin;' + $env:Path      # <- Flutter bin
-$env:ANDROID_HOME = 'C:\Android'; $env:ANDROID_SDK_ROOT = 'C:\Android'
+$env:ANDROID_HOME = 'C:\dev\Android'; $env:ANDROID_SDK_ROOT = 'C:\dev\Android'
 $jdk = (Get-ChildItem "C:\Program Files\Microsoft\jdk-*" -Directory | Select -First 1).FullName
 if ($jdk) { $env:JAVA_HOME = $jdk }
 Set-Location C:\PokeTracker
