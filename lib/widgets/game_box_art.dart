@@ -83,8 +83,8 @@ class WrapLayout {
 }
 
 const WrapLayout _gbWrap = WrapLayout(
-  back: Rect.fromLTRB(0.0, 0.0, 0.468, 1.0),
-  spine: Rect.fromLTRB(0.468, 0.0, 0.529, 1.0),
+  back: Rect.fromLTRB(0.0, 0.0, 0.4714, 1.0),
+  spine: Rect.fromLTRB(0.4714, 0.0, 0.529, 1.0),
   front: Rect.fromLTRB(0.529, 0.0, 0.995, 1.0),
   spineSplit: 0.30,
 );
