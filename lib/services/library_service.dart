@@ -9,6 +9,10 @@ import '../data/games_data.dart';
 /// Reserved key in the Drive folder map for the user's private BIOS subfolder.
 const String kBiosFolderKey = '__bios__';
 
+/// Reserved key for the user's private "3ds firmware" Drive subfolder (holds
+/// 3DS system files + an "updates" subfolder of update CIAs).
+const String k3dsFolderKey = '__3ds__';
+
 /// Manages the on-device games library folder and downloads user-supplied files
 /// into it. The app ships with NO sources — every download URL is provided by
 /// the user (e.g. a share link to their own Google Drive file).
@@ -136,10 +140,16 @@ class LibraryService {
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
           .replaceAll(RegExp(r'^-+|-+$'), '');
-      // A subfolder named for BIOS/firmware (e.g. "BIOS and Firmware") holds the
-      // DS system files, fetched separately into the core system dir (kept
-      // private — never bundled/shipped).
-      if (norm.contains('bios') || norm.contains('firmware')) {
+      // Private tooling subfolders (matched before games). Check 3DS first: its
+      // "3ds firmware" name also contains "firmware", which would otherwise be
+      // grabbed by the DS-BIOS matcher below.
+      if (norm.contains('3ds')) {
+        map[k3dsFolderKey] = ids[i];
+        continue;
+      }
+      // "BIOS and Firmware" → the DS system files (fetched into the core system
+      // dir; kept private — never bundled/shipped).
+      if (norm.contains('bios')) {
         map[kBiosFolderKey] = ids[i];
         continue;
       }
@@ -285,6 +295,76 @@ class LibraryService {
       }
     }
     return present;
+  }
+
+  /// Records a direct link to a 3DS firmware/CIA Drive folder (its contents are
+  /// fetched by [fetch3dsUpdates]). Unlike the game library, this points the app
+  /// straight at the folder rather than a parent that contains it.
+  Future<void> set3dsFolderFromLink(String linkOrId) async {
+    final id = _driveFolderId(linkOrId);
+    if (id == null) {
+      throw Exception('Could not read a Drive folder ID from that link.');
+    }
+    final current = await loadDriveFolders();
+    final map = Map<String, String>.from(current)..[k3dsFolderKey] = id;
+    final docs = await getApplicationDocumentsDirectory();
+    final dir = Directory('${docs.path}${Platform.pathSeparator}PokeTracker');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final f = File('${dir.path}${Platform.pathSeparator}drive_folders.json');
+    await f.writeAsString(jsonEncode(map));
+    _driveFolders = map;
+  }
+
+  /// The managed folder for 3DS files: `Documents/PokeTracker/3DS`.
+  Future<Directory> threeDsDir() async {
+    final docs = await getApplicationDocumentsDirectory();
+    final d = Directory('${docs.path}${Platform.pathSeparator}'
+        'PokeTracker${Platform.pathSeparator}3DS');
+    if (!await d.exists()) await d.create(recursive: true);
+    return d;
+  }
+
+  /// Mirrors the linked "3ds firmware" Drive folder into [threeDsDir]: any files
+  /// sitting directly in it go to `3DS/`, and the nested "updates" subfolder of
+  /// CIAs goes to `3DS/updates/`. Skips files already downloaded (same size).
+  /// Reports each downloaded filename via [onFile]. Returns the count present.
+  Future<int> fetch3dsUpdates({void Function(String name)? onFile}) async {
+    final folders = await loadDriveFolders();
+    final root = folders[k3dsFolderKey];
+    if (root == null) return 0;
+    final base = await threeDsDir();
+    final entries = await resolveDriveFiles(root);
+    var count = 0;
+
+    Future<void> pull(({String id, String name}) e, Directory into) async {
+      final dest = File('${into.path}${Platform.pathSeparator}${_sanitize(e.name)}');
+      if (dest.existsSync() && dest.lengthSync() > 0) {
+        count++;
+        return;
+      }
+      onFile?.call(e.name);
+      try {
+        await downloadDriveFileTo(e.id, dest);
+        if (dest.existsSync() && dest.lengthSync() > 0) count++;
+      } catch (_) {
+        // an entry that was actually a subfolder, or a transient error — skip
+      }
+    }
+
+    for (final e in entries) {
+      if (e.name.toLowerCase().contains('update')) {
+        // The nested "updates" folder of CIAs.
+        final subDir = Directory('${base.path}${Platform.pathSeparator}updates');
+        if (!await subDir.exists()) await subDir.create(recursive: true);
+        for (final c in await resolveDriveFiles(e.id)) {
+          await pull(c, subDir);
+        }
+      } else if (e.name.contains('.')) {
+        // A firmware/system file sitting directly in the folder.
+        await pull(e, base);
+      }
+    }
+    return count;
   }
 
   // ---- User-configured per-game source URLs ---------------------------

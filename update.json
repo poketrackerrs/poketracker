@@ -1,6 +1,6 @@
 {
-  "version": "1.0.52",
-  "notes": "DS BIOS auto-fetch from your Drive: put your own bios7/bios9/firmware in a 'BIOS' subfolder of your linked Google Drive folder, and PokeTracker downloads them into place automatically (or tap Fetch under Settings → Built-in DS player → Nintendo DS BIOS) — so encrypted DS ROMs boot on your phone without manual file-picking. Also fixes the Updates screen: the Download button now stays pinned at the top so it's always reachable, even with long release notes (the notes scroll on their own).",
+  "version": "1.0.53",
+  "notes": "Nintendo 3DS firmware/CIA fetch (Windows): under Settings → Nintendo 3DS, link the Google Drive folder that holds your 3DS firmware / CIA files, then tap 'Fetch 3DS files from Drive' to download every CIA into Documents\\PokeTracker\\3DS. Install them into your 3DS emulator afterward (Azahar: File → Install CIA → select all), and 'Open 3DS folder' jumps right to them. Like the DS BIOS, these copyrighted files stay in your private Drive and are never bundled into the app.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

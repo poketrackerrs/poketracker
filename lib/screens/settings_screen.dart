@@ -173,6 +173,36 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
 
+        if (Platform.isWindows) ...[
+          _header(context, 'Nintendo 3DS'),
+          ListTile(
+            leading: const Icon(Icons.link),
+            title: const Text('Link 3DS firmware folder'),
+            subtitle: Text(state.has3dsDriveFolder
+                ? 'Linked. Paste a new link to change it.'
+                : 'Paste the Drive folder that holds your 3DS firmware / CIAs'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _link3dsFolder(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.system_update_alt),
+            title: const Text('Fetch 3DS files from Drive'),
+            subtitle: const Text(
+                'Download every CIA from the linked folder, then install them '
+                'in your 3DS emulator (Azahar: File → Install CIA → select all)'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _fetch3dsUpdates(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.folder_open),
+            title: const Text('Open 3DS folder'),
+            subtitle: const Text(
+                'Where the downloaded 3DS CIAs are saved'),
+            trailing: const Icon(Icons.open_in_new),
+            onTap: () => context.read<AppState>().open3dsFolder(),
+          ),
+        ],
+
         _header(context, 'Game downloads'),
         ListTile(
           leading: const Icon(Icons.cloud_download),
@@ -293,6 +323,89 @@ class SettingsScreen extends StatelessWidget {
       messenger.showSnackBar(SnackBar(
           content: Text(
               'Linked $n games — download buttons now appear on the Games tab.')));
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(
+          content: Text('$e'.replaceFirst('Exception: ', '')),
+          duration: const Duration(seconds: 6)));
+    }
+  }
+
+  Future<void> _link3dsFolder(BuildContext context) async {
+    final controller = TextEditingController();
+    final link = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Link 3DS firmware folder'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Paste the share link to the Drive folder that holds your 3DS '
+              'firmware / CIA files. It must be shared "anyone with the link". '
+              'Stored only on this device.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'https://drive.google.com/drive/folders/…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Link')),
+        ],
+      ),
+    );
+    if (link == null || link.isEmpty || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<AppState>().link3dsFolder(link);
+      messenger.showSnackBar(const SnackBar(
+          content: Text('3DS folder linked. Tap "Fetch 3DS files from Drive".')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text('$e'.replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  Future<void> _fetch3dsUpdates(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final state = context.read<AppState>();
+    if (!state.has3dsDriveFolder) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text(
+              'Link your Google Drive folder first, and make sure it has a '
+              '"3ds firmware" subfolder — then try again.'),
+          duration: Duration(seconds: 6)));
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(
+        content: Text(
+            'Downloading 3DS updates from Drive… large CIAs can take a while.'),
+        duration: Duration(seconds: 8)));
+    try {
+      final n = await state.fetch3dsUpdatesFromDrive();
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(
+          content: Text(n == 0
+              ? 'No 3DS files found in your "3ds firmware" Drive folder.'
+              : 'Downloaded $n 3DS file${n == 1 ? '' : 's'}. Open the 3DS '
+                  'folder and install the CIAs in your 3DS emulator.'),
+          duration: const Duration(seconds: 6)));
     } catch (e) {
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(SnackBar(

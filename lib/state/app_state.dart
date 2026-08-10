@@ -115,6 +115,37 @@ class AppState extends ChangeNotifier {
   /// action is worth offering).
   bool get hasBiosDriveFolder => _driveFolders.containsKey(kBiosFolderKey);
 
+  // ---- Nintendo 3DS (Windows): pull update CIAs from Drive ------------
+  /// Whether a private "3ds firmware" Drive folder is linked.
+  bool get has3dsDriveFolder => _driveFolders.containsKey(k3dsFolderKey);
+
+  /// Records a direct link to the user's 3DS firmware/CIA Drive folder.
+  Future<void> link3dsFolder(String link) async {
+    await _library.set3dsFolderFromLink(link);
+    _driveFolders = await _library.loadDriveFolders();
+    notifyListeners();
+  }
+
+  /// Downloads the 3DS system files + update CIAs from the linked Drive folder
+  /// into `Documents/PokeTracker/3DS`. Returns how many files are present.
+  Future<int> fetch3dsUpdatesFromDrive() async {
+    final n = await _library.fetch3dsUpdates();
+    notifyListeners();
+    return n;
+  }
+
+  /// Opens the managed 3DS folder in the OS file manager.
+  Future<void> open3dsFolder() async {
+    final dir = (await _library.threeDsDir()).path;
+    if (Platform.isWindows) {
+      await Process.start('explorer.exe', [dir]);
+    } else if (Platform.isMacOS) {
+      await Process.start('open', [dir]);
+    } else if (Platform.isLinux) {
+      await Process.start('xdg-open', [dir]);
+    }
+  }
+
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
     notifyListeners();
