@@ -31,6 +31,11 @@ class ConsoleArt extends StatelessWidget {
   final bool interactive; // only used by the 3D consoles
   final double? yaw; // drive rotation externally (3D consoles)
   final double? pitch;
+
+  /// Preview mode: for the Game Boy, show the rendered photo of the real model
+  /// instead of the constructed 3D (used in the grid + shelf header).
+  final bool preview;
+
   const ConsoleArt({
     super.key,
     required this.platform,
@@ -39,6 +44,7 @@ class ConsoleArt extends StatelessWidget {
     this.interactive = false,
     this.yaw,
     this.pitch,
+    this.preview = false,
   });
 
   /// Landscape consoles are wider than tall.
@@ -50,8 +56,17 @@ class ConsoleArt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The Game Boy is a constructed 3D model.
+    // The Game Boy: a photo of the real model as the preview icon, or the
+    // constructed 3D (used by the launch animation, which needs glow/rotation).
     if (platform == BoxPlatform.gb) {
+      if (preview) {
+        return Image.asset(
+          'assets/models/gameboy_icon.png',
+          height: size,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => GameBoy3D(size: size),
+        );
+      }
       return GameBoy3D(
         size: size,
         glow: glow,

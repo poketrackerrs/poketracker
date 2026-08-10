@@ -1,6 +1,6 @@
 {
-  "version": "1.0.26",
-  "notes": "Fixes: the console shelf now scrolls so Play/Details and the box are always reachable at any window size (buttons wrap on narrow widths), tapping the box opens a rotate-to-inspect popout, and the 3D viewer now hovers in a dialog over the page instead of opening a separate black screen.",
+  "version": "1.0.27",
+  "notes": "The 3D model viewers now float over the page like the box popout (drag to rotate, tap outside to close), and the Game Boy preview icon is now a render of the actual 3D model instead of the stylized drawing.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

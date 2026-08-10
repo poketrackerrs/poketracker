@@ -5,46 +5,37 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:model_viewer_plus/model_viewer_plus.dart';
 import 'package:webview_windows/webview_windows.dart' as ww;
 
-/// Shows the 3D model in a floating dialog that hovers over the current page.
+/// Shows the 3D model floating over the page (like the box popout): dim
+/// backdrop, drag to rotate, tap outside to close.
 Future<void> showModelViewerDialog(
   BuildContext context, {
   required String src,
   required String title,
 }) {
   final size = MediaQuery.of(context).size;
-  final w = math.min(size.width * 0.92, 560.0);
-  final h = math.min(size.height * 0.82, 660.0);
+  final side = math.min(size.shortestSide * 0.86, 440.0);
   return showDialog(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+    barrierColor: Colors.black.withValues(alpha: 0.85),
     builder: (ctx) => Dialog(
-      clipBehavior: Clip.antiAlias,
-      insetPadding: const EdgeInsets.all(20),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: SizedBox(
-        width: w,
-        height: h,
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(title,
-                        style: Theme.of(ctx).textTheme.titleMedium,
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(ctx).pop(),
-                  ),
-                ],
-              ),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: SizedBox(
+              width: side,
+              height: side,
+              child: ModelView(src: src, alt: title),
             ),
-            Expanded(child: ModelView(src: src, alt: title)),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Drag to rotate · tap outside to close',
+              style: TextStyle(color: Colors.white70, fontSize: 13)),
+        ],
       ),
     ),
   );
@@ -65,7 +56,7 @@ class ModelView extends StatelessWidget {
       alt: alt,
       autoRotate: true,
       cameraControls: true,
-      backgroundColor: const Color(0xFF101013),
+      backgroundColor: Colors.transparent,
     );
   }
 }

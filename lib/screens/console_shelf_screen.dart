@@ -39,6 +39,11 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       (Platform.isAndroid || Platform.isIOS || Platform.isWindows) &&
       (widget.platform == BoxPlatform.gb || widget.platform == BoxPlatform.gbc);
 
+  /// A real 3D console model exists only for the Game Boy.
+  bool get _show3dConsole =>
+      (Platform.isAndroid || Platform.isIOS || Platform.isWindows) &&
+      widget.platform == BoxPlatform.gb;
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -58,18 +63,21 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
                 children: [
                   const SizedBox(height: 16),
                   GestureDetector(
-                    onTap: _show3dCartridge
+                    onTap: _show3dConsole
                         ? () => showModelViewerDialog(context,
                             src: 'assets/models/gameboy_classic.glb',
                             title: kConsoleNames[widget.platform] ?? 'Console')
                         : null,
                     child: ConsoleArt(
-                        platform: widget.platform, size: 130, interactive: true),
+                        platform: widget.platform,
+                        size: 150,
+                        preview: true,
+                        interactive: true),
                   ),
-                  if (_show3dCartridge)
+                  if (_show3dConsole)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
-                      child: Text('Tap for 3D · drag to rotate',
+                      child: Text('Tap to view in 3D',
                           style: Theme.of(context).textTheme.bodySmall),
                     ),
                   const SizedBox(height: 12),

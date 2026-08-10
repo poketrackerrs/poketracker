@@ -194,7 +194,7 @@ class _ConsoleCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Center(
-                  child: ConsoleArt(platform: platform, size: 96),
+                  child: ConsoleArt(platform: platform, size: 96, preview: true),
                 ),
               ),
               const SizedBox(height: 8),
