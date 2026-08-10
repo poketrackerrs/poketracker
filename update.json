@@ -1,6 +1,6 @@
 {
-  "version": "1.0.32",
-  "notes": "Launch: cartridge and console are now both straight-on (untilted); cartridge label faces you and seats into the back-top slot, matching how it really sits.",
+  "version": "1.0.33",
+  "notes": "Real-3D launch: a pre-rendered animation where the cartridge comes out of the box and slides into the back of a straight Game Boy, which then turns to the front and powers on. No more tilt or flat-overlay look.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
