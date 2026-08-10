@@ -478,21 +478,32 @@ class _DownloadControl extends StatelessWidget {
               final s = context.read<AppState>();
               final messenger = ScaffoldMessenger.of(context);
               final navigator = Navigator.of(context);
-              final launched = await s.tryLaunchGame(game);
-              if (launched) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Launching ${game.title}…')),
-                );
-              } else {
-                messenger.showSnackBar(SnackBar(
-                  content: Text(
-                      'No emulator found for ${game.title}. Install one to play.'),
-                  action: SnackBarAction(
-                    label: 'Emulators',
-                    onPressed: () => navigator.push(MaterialPageRoute(
-                        builder: (_) => const EmulatorsScreen())),
-                  ),
-                ));
+              final outcome = await s.tryLaunchGame(game);
+              void toEmulators() => navigator.push(MaterialPageRoute(
+                  builder: (_) => const EmulatorsScreen()));
+              switch (outcome) {
+                case LaunchOutcome.launched:
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Launching ${game.title}…')),
+                  );
+                case LaunchOutcome.handoffFailed:
+                  final emu = s.emulatorNameFor(game) ?? 'the emulator';
+                  messenger.showSnackBar(SnackBar(
+                    content: Text(
+                        'Opened $emu, but it won\'t load ${game.title} '
+                        'automatically. Load it from inside $emu, or install '
+                        'mGBA for one-tap launch.'),
+                    duration: const Duration(seconds: 7),
+                    action: SnackBarAction(
+                        label: 'Emulators', onPressed: toEmulators),
+                  ));
+                case LaunchOutcome.noEmulator:
+                  messenger.showSnackBar(SnackBar(
+                    content: Text(
+                        'No emulator found for ${game.title}. Install one to play.'),
+                    action: SnackBarAction(
+                        label: 'Emulators', onPressed: toEmulators),
+                  ));
               }
             },
           ),
