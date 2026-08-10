@@ -1,6 +1,6 @@
 {
-  "version": "1.0.39",
-  "notes": "Shelf: inverted the game spine titles so they read bottom-to-top.",
+  "version": "1.0.40",
+  "notes": "Box viewer: inverted the 3D box spine art so it reads the right way up.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

@@ -208,9 +208,15 @@ class _GameBoxArtState extends State<GameBoxArt> {
       raw.add((c: [0, 0, d / 2], n: [0, 0, 1], rot: _ry(math.pi),
           child: SizedBox(width: w, height: h, child: panel(layout.back))));
       raw.add((c: [w / 2, 0, 0], n: [1, 0, 0], rot: _ry(math.pi / 2),
-          child: SizedBox(width: d, height: h, child: panel(layout.spine))));
+          child: SizedBox(
+              width: d,
+              height: h,
+              child: RotatedBox(quarterTurns: 2, child: panel(layout.spine)))));
       raw.add((c: [-w / 2, 0, 0], n: [-1, 0, 0], rot: _ry(-math.pi / 2),
-          child: SizedBox(width: d, height: h, child: panel(layout.spine))));
+          child: SizedBox(
+              width: d,
+              height: h,
+              child: RotatedBox(quarterTurns: 2, child: panel(layout.spine)))));
       raw.add((c: [0, -h / 2, 0], n: [0, -1, 0], rot: _rx(math.pi / 2),
           child: SizedBox(width: w, height: d, child: Container(color: edgeColor))));
       raw.add((c: [0, h / 2, 0], n: [0, 1, 0], rot: _rx(-math.pi / 2),
