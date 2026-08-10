@@ -289,7 +289,7 @@ class AppState extends ChangeNotifier {
   /// True if [game] can run in the **built-in** mGBA player. mGBA plays the
   /// whole Game Boy family (GB/GBC/GBA = gens 1–3); currently Windows only.
   bool canPlayBuiltIn(Game game) =>
-      Platform.isWindows &&
+      (Platform.isWindows || Platform.isAndroid) &&
       game.generation >= 1 &&
       game.generation <= 3 &&
       isInstalled(game.id);

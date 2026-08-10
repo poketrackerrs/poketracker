@@ -152,6 +152,12 @@ class GbaEmulator {
     final support = await getApplicationSupportDirectory();
     final coresPath = '${support.path}/cores';
     await Directory(coresPath).create(recursive: true);
+    if (Platform.isAndroid) {
+      // The core ships in android/app/src/main/jniLibs and loads by soname.
+      _coreDllPath = 'libmgba_libretro.so';
+      _systemDir = coresPath;
+      return (_coreDllPath!, _systemDir!);
+    }
     final dll = File('$coresPath/mgba_libretro.dll');
     final data = await rootBundle.load('assets/cores/mgba_libretro.dll');
     final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);

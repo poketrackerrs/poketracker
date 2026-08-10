@@ -32,6 +32,14 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // Extract native libs (.so) so the bundled mGBA libretro core can be
+    // dlopen'd by dart:ffi (DynamicLibrary.open('libmgba_libretro.so')).
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 kotlin {

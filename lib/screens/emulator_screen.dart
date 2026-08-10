@@ -48,6 +48,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   bool get _turbo => _turboHeld || _turboLatch;
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  bool get _isMobile => Platform.isAndroid || Platform.isIOS;
   BoxFit get _fit => const [BoxFit.fill, BoxFit.contain, BoxFit.cover][_fitMode];
   String get _fitName => const ['Fill', 'Fit', 'Zoom'][_fitMode];
 
@@ -55,6 +56,13 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (_isMobile) {
+      // Landscape (both ways, so it rotates with the phone) + immersive.
+      _fullscreen = true;
+      // Allow all orientations so it rotates freely (landscape and portrait).
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
     _boot();
   }
 
@@ -171,6 +179,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       try {
         await windowManager.setFullScreen(f);
       } catch (_) {}
+    } else if (_isMobile) {
+      SystemChrome.setEnabledSystemUIMode(
+          f ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge);
     }
   }
 
@@ -256,8 +267,10 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
+        builder: (ctx, setSheet) => SingleChildScrollView(
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -302,12 +315,16 @@ class _EmulatorScreenState extends State<EmulatorScreen>
                   style: Theme.of(ctx).textTheme.titleMedium),
               const SizedBox(height: 8),
               Wrap(
-                spacing: 8,
+                spacing: 6,
                 children: [
                   for (final s in kFfSpeeds)
                     ChoiceChip(
-                      label: Text('${s}x'),
+                      label: Text('${s}x', style: const TextStyle(fontSize: 12)),
                       selected: p.ffSpeed == s,
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
                       onSelected: (_) {
                         setSheet(() => p.ffSpeed = s);
                         p.save();
@@ -317,6 +334,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -357,12 +375,138 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         windowManager.setFullScreen(false);
       } catch (_) {}
     }
+    if (_isMobile) {
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     _image?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  Widget _screen() {
+  // ---- on-screen touch controls (mobile) ----
+  Widget _padBtn(int retroId, {IconData? icon, String? label, double size = 56}) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (_) => gButtons[retroId] = 1,
+      onPointerUp: (_) => gButtons[retroId] = 0,
+      onPointerCancel: (_) => gButtons[retroId] = 0,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.16),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white24),
+        ),
+        alignment: Alignment.center,
+        child: icon != null
+            ? Icon(icon, color: Colors.white, size: 28)
+            : Text(label ?? '',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20)),
+      ),
+    );
+  }
+
+  Widget _pillBtn(int retroId, String label) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (_) => gButtons[retroId] = 1,
+      onPointerUp: (_) => gButtons[retroId] = 0,
+      onPointerCancel: (_) => gButtons[retroId] = 0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Text(label,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
+  Widget _touchControls() {
+    return Positioned.fill(
+      child: SafeArea(
+        child: Stack(
+          children: [
+            // D-pad, bottom-left
+            Positioned(
+              left: 18,
+              bottom: 18,
+              width: 168,
+              height: 168,
+              child: Stack(
+                children: [
+                  Align(
+                      alignment: Alignment.topCenter,
+                      child: _padBtn(retroUp, icon: Icons.keyboard_arrow_up)),
+                  Align(
+                      alignment: Alignment.bottomCenter,
+                      child:
+                          _padBtn(retroDown, icon: Icons.keyboard_arrow_down)),
+                  Align(
+                      alignment: Alignment.centerLeft,
+                      child:
+                          _padBtn(retroLeft, icon: Icons.keyboard_arrow_left)),
+                  Align(
+                      alignment: Alignment.centerRight,
+                      child: _padBtn(retroRight,
+                          icon: Icons.keyboard_arrow_right)),
+                ],
+              ),
+            ),
+            // A / B, bottom-right (A upper-right, B lower-left)
+            Positioned(
+              right: 18,
+              bottom: 18,
+              width: 156,
+              height: 120,
+              child: Stack(
+                children: [
+                  Align(
+                      alignment: Alignment.bottomLeft,
+                      child: _padBtn(retroB, label: 'B', size: 62)),
+                  Align(
+                      alignment: Alignment.topRight,
+                      child: _padBtn(retroA, label: 'A', size: 62)),
+                ],
+              ),
+            ),
+            // shoulders, above each cluster
+            Positioned(left: 18, bottom: 196, child: _pillBtn(retroL, 'L')),
+            Positioned(right: 18, bottom: 146, child: _pillBtn(retroR, 'R')),
+            // start / select, bottom-center
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 18,
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _pillBtn(retroSelect, 'SELECT'),
+                    const SizedBox(width: 14),
+                    _pillBtn(retroStart, 'START'),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _screen(BoxFit fit) {
     final img = _image;
     if (img == null) {
       return Center(
@@ -376,13 +520,13 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         ),
       );
     }
-    return SizedBox.expand(
-      child: RawImage(image: img, fit: _fit, filterQuality: FilterQuality.none),
-    );
+    return RawImage(image: img, fit: fit, filterQuality: FilterQuality.none);
   }
 
   @override
   Widget build(BuildContext context) {
+    final portrait =
+        _isMobile && MediaQuery.of(context).orientation == Orientation.portrait;
     return Scaffold(
       backgroundColor: Colors.black,
       body: Focus(
@@ -390,7 +534,18 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         onKeyEvent: _onKey,
         child: Stack(
           children: [
-            Positioned.fill(child: ColoredBox(color: Colors.black, child: _screen())),
+            const Positioned.fill(child: ColoredBox(color: Colors.black)),
+            if (portrait)
+              Positioned(
+                top: 60,
+                left: 0,
+                right: 0,
+                child: AspectRatio(
+                    aspectRatio: 3 / 2, child: _screen(BoxFit.contain)),
+              )
+            else
+              Positioned.fill(child: _screen(_fit)),
+            if (_isMobile) _touchControls(),
             Align(
               alignment: Alignment.topCenter,
               child: Container(
