@@ -134,9 +134,14 @@ class AppState extends ChangeNotifier {
     return n;
   }
 
-  /// Opens the managed 3DS folder in the OS file manager.
+  /// Opens the managed 3DS folder in the OS file manager, landing on the CIAs:
+  /// the `updates` subfolder when it has files, otherwise the base folder.
   Future<void> open3dsFolder() async {
-    final dir = (await _library.threeDsDir()).path;
+    final base = (await _library.threeDsDir()).path;
+    final updates = Directory('$base${Platform.pathSeparator}updates');
+    final hasUpdates = updates.existsSync() &&
+        updates.listSync().whereType<File>().isNotEmpty;
+    final dir = hasUpdates ? updates.path : base;
     if (Platform.isWindows) {
       await Process.start('explorer.exe', [dir]);
     } else if (Platform.isMacOS) {

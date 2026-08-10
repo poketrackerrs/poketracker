@@ -315,11 +315,11 @@ class LibraryService {
     _driveFolders = map;
   }
 
-  /// The managed folder for 3DS files: `Documents/PokeTracker/3DS`.
+  /// The managed folder for 3DS files: `Documents/PokeTracker/3DS Firmware`.
   Future<Directory> threeDsDir() async {
     final docs = await getApplicationDocumentsDirectory();
     final d = Directory('${docs.path}${Platform.pathSeparator}'
-        'PokeTracker${Platform.pathSeparator}3DS');
+        'PokeTracker${Platform.pathSeparator}3DS Firmware');
     if (!await d.exists()) await d.create(recursive: true);
     return d;
   }

@@ -206,8 +206,9 @@ which the software-framebuffer FFI player can't do). What the app *does* do is
 **deliver the user's private 3DS files to their PC**: Settings → Nintendo 3DS →
 **Link 3DS firmware folder** (paste a *direct* Drive folder link — `k3dsFolderKey`
 in `drive_folders.json`, set via `set3dsFolderFromLink`), then **Fetch 3DS files
-from Drive** downloads every CIA into `Documents/PokeTracker/3DS` (`fetch3dsUpdates`
-in `library_service.dart`; a nested `updates/` subfolder goes to `3DS/updates/`).
+from Drive** downloads every CIA into `Documents/PokeTracker/3DS Firmware`
+(`fetch3dsUpdates` in `library_service.dart`; a nested `updates/` subfolder is
+kept). "Open 3DS folder" lands on the `updates/` subfolder when it has files.
 The user then installs the CIAs in Azahar. The firmware set is ~137 system-title
 CIAs (~224 MB) named by hex Title ID — copyrighted, kept in the user's Drive,
 never bundled/shipped (same rule as BIOS). To play a game you usually don't need
