@@ -1,6 +1,6 @@
 {
-  "version": "1.0.37",
-  "notes": "Launch: the game box now opens on a left hinge and the cartridge lifts out before sliding into the Game Boy; sped the whole thing up. Emulators: swapped the stale RetroArch Plus (too old for modern Android) for Pizza Boy on the Android list, fixed the iOS RetroArch link, and removed the delisted DraStic.",
+  "version": "1.0.38",
+  "notes": "Android emulators: Play button now boots straight into Pizza Boy (Gen 1-3) and melonDS (Gen 4-5). Lemuroid can't be launched into directly, so added a 'Sync games to Lemuroid folder' option in Settings that copies your downloads to a shared folder Lemuroid can scan (new downloads copy over automatically).",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

@@ -16,11 +16,15 @@ class _EmuLink {
 }
 
 // Android → Google Play pages (maintained, modern-Android compatible).
+// Launchers first (the Play button boots ROMs straight into these), then
+// Lemuroid, which is a library browser used via the folder sync below.
 const _androidEmus = [
-  _EmuLink('Lemuroid', 'GB · GBC · GBA · DS · more',
-      'https://play.google.com/store/apps/details?id=com.swordfish.lemuroid'),
-  _EmuLink('Pizza Boy (GBA)', 'Game Boy Advance',
+  _EmuLink('Pizza Boy (GBA)', 'Gen 1–3 · GB · GBC · GBA',
       'https://play.google.com/store/apps/details?id=it.dbtecno.pizzaboygba'),
+  _EmuLink('melonDS', 'Gen 4–5 · Nintendo DS',
+      'https://play.google.com/store/apps/details?id=me.magnum.melonds'),
+  _EmuLink('Lemuroid', 'Library browser · GB → DS',
+      'https://play.google.com/store/apps/details?id=com.swordfish.lemuroid'),
 ];
 
 // iOS / iPadOS → App Store pages.
@@ -161,6 +165,16 @@ class SettingsScreen extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => _importDrive(context),
         ),
+        if (Platform.isAndroid)
+          ListTile(
+            leading: const Icon(Icons.drive_file_move),
+            title: const Text('Sync games to Lemuroid folder'),
+            subtitle: const Text(
+                'Copy downloaded games to a shared folder so Lemuroid can '
+                'scan them (Lemuroid can\'t be launched into directly)'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _syncLemuroid(context),
+          ),
 
         _header(context, 'Library'),
         ListTile(
@@ -267,6 +281,97 @@ class SettingsScreen extends StatelessWidget {
           content: Text('$e'.replaceFirst('Exception: ', '')),
           duration: const Duration(seconds: 6)));
     }
+  }
+
+  Future<void> _syncLemuroid(BuildContext context) async {
+    final state = context.read<AppState>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    // 1) Make sure we can write shared storage.
+    if (!await state.lemuroidHasAccess()) {
+      final granted = await state.lemuroidRequestAccess();
+      if (!granted) {
+        if (!context.mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Allow file access'),
+            content: const Text(
+                'PokeTracker needs "All files access" to place your games in a '
+                'folder Lemuroid can scan.\n\nOn the screen that just opened, '
+                'turn on "Allow access to manage all files" for PokeTracker, '
+                'then come back and tap "Sync games to Lemuroid folder" again.'),
+            actions: [
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK')),
+            ],
+          ),
+        );
+        return;
+      }
+    }
+
+    // 2) Copy every downloaded ROM into the shared folder.
+    messenger.showSnackBar(
+        const SnackBar(content: Text('Syncing games to the Lemuroid folder…')));
+    final count = await state.lemuroidSyncAll();
+    final folder = await state.lemuroidFolder();
+    if (!context.mounted) return;
+    messenger.hideCurrentSnackBar();
+
+    if (count == 0) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text(
+              'No downloaded games to sync yet. Download some first, then sync.')));
+      return;
+    }
+
+    // 3) Tell the user exactly what to pick inside Lemuroid.
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$count game${count == 1 ? '' : 's'} ready for Lemuroid'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Your games are now in this folder:',
+                style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 6),
+            SelectableText(
+              folder ?? 'PokeTracker',
+              style: const TextStyle(
+                  fontFamily: 'monospace', fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 14),
+            const Text('In Lemuroid:', style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 4),
+            const Text(
+              '1. Open Settings → Directories.\n'
+              '2. Choose the "PokeTracker" folder above.\n'
+              '3. Lemuroid scans it and your games appear.\n\n'
+              'New downloads are copied here automatically.',
+              style: TextStyle(fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Done')),
+          FilledButton.icon(
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('Open Lemuroid'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              state.openExternal(
+                  'https://play.google.com/store/apps/details?id=com.swordfish.lemuroid');
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   List<_EmuLink> _emusForPlatform() {

@@ -12,6 +12,7 @@ import '../services/library_service.dart';
 import '../services/emulator_service.dart';
 import '../services/save_service.dart';
 import '../services/pokedex_service.dart';
+import '../services/lemuroid_sync.dart';
 
 /// Central app state: holds progress for every game and persists on change.
 class AppState extends ChangeNotifier {
@@ -20,6 +21,7 @@ class AppState extends ChangeNotifier {
   final EmulatorService _emu = EmulatorService();
   final SaveService _save = SaveService();
   final PokedexService _pokedex = PokedexService();
+  final LemuroidSyncService _lemuroid = LemuroidSyncService();
   final Map<String, GameProgress> _progress = {};
   List<DetectedEmulator> _detectedEmulators = [];
 
@@ -260,6 +262,9 @@ class AppState extends ChangeNotifier {
       return null;
     }
     for (final d in _detectedEmulators) {
+      // Skip library-only emulators (e.g. Lemuroid) — they can't be launched
+      // into with a specific ROM, so the Play button must not select them.
+      if (!d.emu.launchable) continue;
       if (d.installed && d.emu.generations.contains(game.generation)) return d;
     }
     return null;
@@ -314,6 +319,11 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       });
       _installed[gameId] = file.path;
+      // If the Lemuroid folder is set up (access granted), mirror the new ROM
+      // there too so it appears in Lemuroid without a manual re-sync.
+      if (Platform.isAndroid) {
+        _lemuroid.mirror(gameId, file.path); // best-effort, fire-and-forget
+      }
     } finally {
       _downloadProgress.remove(gameId);
       notifyListeners();
@@ -325,6 +335,22 @@ class AppState extends ChangeNotifier {
     _installed[gameId] = null;
     notifyListeners();
   }
+
+  // ---- Lemuroid folder sync (Android) ---------------------------------
+  /// Whether the app already has the storage access needed to write the
+  /// shared Lemuroid folder.
+  Future<bool> lemuroidHasAccess() => _lemuroid.hasAccess();
+
+  /// Opens the "All files access" screen if needed. Returns true if access is
+  /// already granted.
+  Future<bool> lemuroidRequestAccess() => _lemuroid.requestAccess();
+
+  /// The folder to point Lemuroid at (e.g. /storage/emulated/0/PokeTracker).
+  Future<String?> lemuroidFolder() => _lemuroid.targetRoot();
+
+  /// Copies every downloaded ROM into the shared Lemuroid folder. Returns how
+  /// many games are now present there.
+  Future<int> lemuroidSyncAll() => _lemuroid.syncAll(_installed);
 
   /// Opens the library folder in the OS file manager.
   Future<void> openLibraryFolder() async {

@@ -9,6 +9,11 @@ class Emulator {
   final String downloadUrl; // official download page
   final String note;
 
+  /// Whether the app can hand a ROM to this emulator via a launch (file intent
+  /// on Android, CLI arg on desktop). Library-only emulators like Lemuroid have
+  /// no external-launch support, so the Play button must not pick them.
+  final bool launchable;
+
   const Emulator({
     required this.name,
     required this.systems,
@@ -18,6 +23,7 @@ class Emulator {
     required this.downloadUrl,
     this.androidPackages = const [],
     this.note = '',
+    this.launchable = true,
   });
 }
 
@@ -74,7 +80,9 @@ const List<Emulator> kEmulators = [
     hints: [],
     androidPackages: ['com.swordfish.lemuroid'],
     downloadUrl: 'https://play.google.com/store/apps/details?id=com.swordfish.lemuroid',
-    note: 'Android all-in-one; plays GB/GBC/GBA/DS.',
+    note: 'Android all-in-one; plays GB/GBC/GBA/DS. Browse its own library — '
+        'it can\'t be launched into directly, so use the Lemuroid folder sync.',
+    launchable: false,
   ),
   Emulator(
     name: 'Pizza Boy (GBA/GBC)',
