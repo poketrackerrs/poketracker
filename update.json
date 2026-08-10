@@ -1,6 +1,6 @@
 {
-  "version": "1.0.41",
-  "notes": "Box viewer: recomposed the 3D box spine — game title on top, the white-outlined GAME BOY banner on the bottom, at true proportions with the outline no longer clipped.",
+  "version": "1.0.42",
+  "notes": "Box viewer: fixed the spine text reading reversed — the spine faces were showing the mirrored back of the artwork, so the outward side now reads correctly.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

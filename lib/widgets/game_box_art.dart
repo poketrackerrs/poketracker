@@ -310,24 +310,30 @@ class _GameBoxArtState extends State<GameBoxArt> {
     final split = layout.spineSplit;
     final titleRect = Rect.fromLTRB(sp.left, split, sp.right, 1.0);
     final bannerRect = Rect.fromLTRB(sp.left, 0.0, sp.right, split);
-    return SizedBox(
-      width: d,
-      height: h,
-      child: Column(
-        children: [
-          Expanded(
-            flex: ((1 - split) * 1000).round(),
-            child: CustomPaint(
-                painter: _PanelPainter(wrap, titleRect),
-                child: const SizedBox.expand()),
-          ),
-          Expanded(
-            flex: (split * 1000).round(),
-            child: CustomPaint(
-                painter: _PanelPainter(wrap, bannerRect),
-                child: const SizedBox.expand()),
-          ),
-        ],
+    // Both spine faces are rotated ±90° about Y, which turns their texture to
+    // face inward — so from outside we'd see the mirrored back. Flip the
+    // texture horizontally so the outward side reads correctly.
+    return Transform.flip(
+      flipX: true,
+      child: SizedBox(
+        width: d,
+        height: h,
+        child: Column(
+          children: [
+            Expanded(
+              flex: ((1 - split) * 1000).round(),
+              child: CustomPaint(
+                  painter: _PanelPainter(wrap, titleRect),
+                  child: const SizedBox.expand()),
+            ),
+            Expanded(
+              flex: (split * 1000).round(),
+              child: CustomPaint(
+                  painter: _PanelPainter(wrap, bannerRect),
+                  child: const SizedBox.expand()),
+            ),
+          ],
+        ),
       ),
     );
   }
