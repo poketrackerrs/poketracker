@@ -68,7 +68,7 @@ class _Launch3DState extends State<_Launch3D> {
  <model-viewer id="console" src="/console.glb" interaction-prompt="none"
    camera-orbit="180deg 90deg 110%" disable-tap disable-zoom></model-viewer>
  <model-viewer id="cart" src="/cart.glb" interaction-prompt="none"
-   camera-orbit="0deg 82deg 105%" disable-tap disable-zoom></model-viewer>
+   camera-orbit="0deg 90deg 105%" disable-tap disable-zoom></model-viewer>
  <div id="flash"></div>
  <div id="label">Opening case…</div>
 </div>

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.31",
-  "notes": "Launch animation now starts with the cartridge coming out of the game box, sliding into the back of the Game Boy (shown straight-on), then the console turns to the front and powers on.",
+  "version": "1.0.32",
+  "notes": "Launch: cartridge and console are now both straight-on (untilted); cartridge label faces you and seats into the back-top slot, matching how it really sits.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
