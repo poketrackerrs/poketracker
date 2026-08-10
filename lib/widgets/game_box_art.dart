@@ -400,6 +400,102 @@ class _GameBoxArtState extends State<GameBoxArt> {
   }
 }
 
+/// A game's box spine as a flat vertical strip — the same recomposed spine the
+/// 3D box shows (game title on top, console banner on the bottom). Used on the
+/// console shelf so the spines match the boxes. Falls back to a generated
+/// color + short-title strip when the game has no full wrap.
+class GameSpine extends StatefulWidget {
+  final Game game;
+  const GameSpine({super.key, required this.game});
+
+  @override
+  State<GameSpine> createState() => _GameSpineState();
+}
+
+class _GameSpineState extends State<GameSpine> {
+  ui.Image? _wrap;
+
+  String get _wrapAsset => 'assets/games/wraps/${widget.game.id}.png';
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveWrap();
+  }
+
+  @override
+  void didUpdateWidget(GameSpine old) {
+    super.didUpdateWidget(old);
+    if (old.game.id != widget.game.id) {
+      _wrap = null;
+      _resolveWrap();
+    }
+  }
+
+  void _resolveWrap() {
+    if (_wrapLayoutFor(_platformFor(widget.game)) == null) return;
+    final s = AssetImage(_wrapAsset).resolve(ImageConfiguration.empty);
+    late ImageStreamListener l;
+    l = ImageStreamListener((info, _) {
+      if (mounted) setState(() => _wrap = info.image);
+      s.removeListener(l);
+    }, onError: (_, _) => s.removeListener(l));
+    s.addListener(l);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final platform = _platformFor(widget.game);
+    final layout = _wrapLayoutFor(platform);
+    final wrap = _wrap;
+    if (wrap != null && layout != null) {
+      final sp = layout.spine;
+      final split = layout.spineSplit;
+      // Flat strip faces the viewer directly, so (unlike the 3D box faces) no
+      // horizontal flip is needed.
+      return Column(
+        children: [
+          Expanded(
+            flex: ((1 - split) * 1000).round(),
+            child: CustomPaint(
+                painter: _PanelPainter(
+                    wrap, Rect.fromLTRB(sp.left, split, sp.right, 1.0)),
+                child: const SizedBox.expand()),
+          ),
+          Expanded(
+            flex: (split * 1000).round(),
+            child: CustomPaint(
+                painter: _PanelPainter(
+                    wrap, Rect.fromLTRB(sp.left, 0.0, sp.right, split)),
+                child: const SizedBox.expand()),
+          ),
+        ],
+      );
+    }
+    // Fallback: generated spine tint + the game's short title for identity.
+    final spec = _specFor(platform);
+    final short =
+        widget.game.title.replaceFirst(RegExp(r'^Pok[eé]mon\s+'), '');
+    return Container(
+      color: spec.spine,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: RotatedBox(
+        quarterTurns: 3,
+        child: Text(
+          short,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+              color: spec.labelColor,
+              fontSize: 10,
+              fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+}
+
 /// Paints one fractional panel of a wrap image onto a face.
 class _PanelPainter extends CustomPainter {
   final ui.Image image;

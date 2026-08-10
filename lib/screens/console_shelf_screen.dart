@@ -224,8 +224,8 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
                     curve: Curves.easeOut,
                     transform: Matrix4.translationValues(0, selected ? -18 : 0, 0),
                     width: 30,
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
-                      color: _tint(context, g),
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(4)),
                       boxShadow: const [
@@ -238,21 +238,8 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
                           ? Border.all(color: Colors.white, width: 2)
                           : null,
                     ),
-                    alignment: Alignment.bottomCenter,
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: RotatedBox(
-                      quarterTurns: 3,
-                      child: Text(
-                        _shortTitle(g),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+                    // Real box spine artwork so the shelf matches the boxes.
+                    child: GameSpine(game: g),
                   ),
                 );
               },
