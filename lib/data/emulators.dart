@@ -53,16 +53,6 @@ const List<Emulator> kEmulators = [
     note: 'Alternative DS emulator for Gen 4–5 (.nds).',
   ),
   Emulator(
-    name: 'DraStic (DS)',
-    systems: 'Nintendo DS',
-    generations: [4, 5],
-    exeNames: [],
-    hints: [],
-    androidPackages: ['com.dsemu.drastic'],
-    downloadUrl: 'https://play.google.com/store/apps/details?id=com.dsemu.drastic',
-    note: 'Popular DS emulator on Android for Gen 4–5.',
-  ),
-  Emulator(
     name: 'Azahar',
     systems: 'Nintendo 3DS',
     generations: [6, 7],

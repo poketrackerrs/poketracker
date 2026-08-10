@@ -28,7 +28,7 @@ const _iosEmus = [
   _EmuLink('Delta', 'GB · GBC · GBA · DS · N64 · SNES',
       'https://apps.apple.com/us/app/delta-game-emulator/id1048524688'),
   _EmuLink('RetroArch', 'multi-system',
-      'https://apps.apple.com/us/app/retroarch/id1519875692'),
+      'https://apps.apple.com/us/app/retroarch/id6499539433'),
 ];
 
 // Windows → official download pages.

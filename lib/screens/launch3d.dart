@@ -39,7 +39,7 @@ class _Launch3DState extends State<_Launch3D>
   void initState() {
     super.initState();
     _c = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 3800))
+        vsync: this, duration: const Duration(milliseconds: 2500))
       ..addListener(_sounds)
       ..addStatusListener((s) async {
         if (s == AnimationStatus.completed) {
@@ -55,6 +55,12 @@ class _Launch3DState extends State<_Launch3D>
     if (_precached) return;
     _precached = true;
     Future(() async {
+      if (!mounted) return;
+      await precacheImage(const AssetImage('assets/launch/cart.png'), context);
+      if (mounted) {
+        await precacheImage(AssetImage(widget.game.boxArtAsset), context)
+            .catchError((_) {});
+      }
       for (var i = 0; i < _frameCount; i++) {
         if (!mounted) return;
         await precacheImage(
@@ -91,12 +97,14 @@ class _Launch3DState extends State<_Launch3D>
     super.dispose();
   }
 
-  // Timeline: 0–0.24 cartridge slides out of the box; 0.24–0.32 crossfade to
-  // the 3D scene; 0.32–0.86 insertion + turn; 0.86–1.0 power-on.
+  // Timeline: 0–0.16 box cover opens (left hinge); 0.14–0.30 cartridge lifts
+  // out; 0.30–0.38 crossfade to the 3D scene; 0.38–0.84 insertion + turn;
+  // 0.84–1.0 power-on.
   String _label(double t) {
-    if (t < 0.24) return 'Taking out the cartridge…';
-    if (t < 0.62) return 'Inserting cartridge…';
-    if (t < 0.86) return 'Booting…';
+    if (t < 0.16) return 'Opening the box…';
+    if (t < 0.32) return 'Taking out the cartridge…';
+    if (t < 0.70) return 'Inserting cartridge…';
+    if (t < 0.84) return 'Booting…';
     return 'Now loading ${widget.game.title.replaceFirst(RegExp(r'^Pok[eé]mon\s+'), '')}…';
   }
 
@@ -106,6 +114,8 @@ class _Launch3DState extends State<_Launch3D>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final side = size.shortestSide * 0.9;
+    final coverH = side * 0.5;
+    final coverW = side * 0.4;
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -114,15 +124,15 @@ class _Launch3DState extends State<_Launch3D>
         animation: _c,
         builder: (context, _) {
           final t = _c.value;
-          final seqProg = _seg(t, 0.32, 0.86);
+          final coverAngle =
+              -2.5 * Curves.easeOut.transform(_seg(t, 0.0, 0.16));
+          final cartOut = Curves.easeInOut.transform(_seg(t, 0.14, 0.30));
+          final cartY = 0.12 + (-0.55 - 0.12) * cartOut;
+          final boxOpacity = 1 - _seg(t, 0.30, 0.38);
+          final seqOpacity = _seg(t, 0.30, 0.38);
+          final seqProg = _seg(t, 0.38, 0.84);
           final idx = (seqProg * (_frameCount - 1)).round();
-          final seqOpacity = _seg(t, 0.24, 0.34);
-          final boxOpacity = 1 - _seg(t, 0.22, 0.32);
-          // cartridge slides up out of the box during phase A
-          final aOut = Curves.easeOut.transform(_seg(t, 0.02, 0.24));
-          final cartY = 0.55 + (-0.45 - 0.55) * aOut;
-          final cartStillOpacity = boxOpacity;
-          final flash = _seg(t, 0.86, 1.0);
+          final flash = _seg(t, 0.84, 1.0);
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -134,28 +144,55 @@ class _Launch3DState extends State<_Launch3D>
                   children: [
                     if (t == 0)
                       const Center(child: CircularProgressIndicator()),
-                    // Phase A: cartridge coming out of the box (cart behind box).
-                    if (cartStillOpacity > 0.01)
+                    // ---- Phase A: the hinged box ----
+                    if (boxOpacity > 0.01) ...[
+                      // box interior (revealed as the cover opens)
+                      Align(
+                        alignment: const Alignment(0, 0.05),
+                        child: Opacity(
+                          opacity: boxOpacity,
+                          child: Container(
+                            width: coverW,
+                            height: coverH,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3A342C),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // cartridge sitting inside / lifting out
                       Align(
                         alignment: Alignment(0, cartY),
                         child: Opacity(
-                          opacity: cartStillOpacity,
+                          opacity: boxOpacity,
                           child: Image.asset('assets/launch/cart.png',
-                              height: side * 0.42),
+                              height: side * 0.36),
                         ),
                       ),
-                    if (boxOpacity > 0.01)
+                      // front cover, hinged on the left edge
                       Align(
-                        alignment: const Alignment(0, 0.15),
+                        alignment: const Alignment(0, 0.05),
                         child: Opacity(
                           opacity: boxOpacity,
-                          child: Image.asset(widget.game.boxArtAsset,
-                              height: side * 0.5,
-                              errorBuilder: (_, _, _) =>
-                                  const SizedBox.shrink()),
+                          child: Transform(
+                            alignment: Alignment.centerLeft,
+                            transform: Matrix4.identity()
+                              ..setEntry(3, 2, 0.0016)
+                              ..rotateY(coverAngle),
+                            child: Image.asset(widget.game.boxArtAsset,
+                                width: coverW,
+                                height: coverH,
+                                fit: BoxFit.fill,
+                                errorBuilder: (_, _, _) => Container(
+                                    width: coverW,
+                                    height: coverH,
+                                    color: const Color(0xFF8a2020))),
+                          ),
                         ),
                       ),
-                    // Phase B/C: the 3D insertion sequence.
+                    ],
+                    // ---- Phase B/C: 3D insertion sequence ----
                     if (seqOpacity > 0.01)
                       Opacity(
                         opacity: seqOpacity,

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.36",
-  "notes": "Launch: the cartridge now slides out of the game box before going into the Game Boy, and the whole sequence runs at more frames for extra-smooth motion.",
+  "version": "1.0.37",
+  "notes": "Launch: the game box now opens on a left hinge and the cartridge lifts out before sliding into the Game Boy; sped the whole thing up. Also fixed the iOS RetroArch App Store link and removed the delisted DraStic.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
