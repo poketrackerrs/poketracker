@@ -264,9 +264,9 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
     final state = context.read<AppState>();
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
-    bool launched = false;
+    LaunchOutcome outcome = LaunchOutcome.noEmulator;
     Future<void> doLaunch() async {
-      launched = await state.tryLaunchGame(game);
+      outcome = await state.tryLaunchGame(game);
     }
 
     if (_show3dConsole) {
@@ -286,18 +286,26 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       );
     }
     if (!mounted) return;
-    if (launched) {
-      messenger.showSnackBar(
-          SnackBar(content: Text('Launching ${game.title}…')));
-    } else {
-      messenger.showSnackBar(SnackBar(
-        content: Text('No emulator found for ${game.title}.'),
-        action: SnackBarAction(
-          label: 'Emulators',
-          onPressed: () => navigator.push(
-              MaterialPageRoute(builder: (_) => const EmulatorsScreen())),
-        ),
-      ));
+    void toEmulators() => navigator.push(
+        MaterialPageRoute(builder: (_) => const EmulatorsScreen()));
+    switch (outcome) {
+      case LaunchOutcome.launched:
+        messenger.showSnackBar(
+            SnackBar(content: Text('Launching ${game.title}…')));
+      case LaunchOutcome.handoffFailed:
+        final emu = state.emulatorNameFor(game) ?? 'the emulator';
+        messenger.showSnackBar(SnackBar(
+          content: Text(
+              'Opened $emu, but it won\'t load ${game.title} automatically. '
+              'Load it from inside $emu, or install mGBA for one-tap launch.'),
+          duration: const Duration(seconds: 7),
+          action: SnackBarAction(label: 'Emulators', onPressed: toEmulators),
+        ));
+      case LaunchOutcome.noEmulator:
+        messenger.showSnackBar(SnackBar(
+          content: Text('No emulator found for ${game.title}.'),
+          action: SnackBarAction(label: 'Emulators', onPressed: toEmulators),
+        ));
     }
   }
 }

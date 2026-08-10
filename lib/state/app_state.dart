@@ -14,6 +14,19 @@ import '../services/save_service.dart';
 import '../services/pokedex_service.dart';
 import '../services/lemuroid_sync.dart';
 
+/// Result of a launch attempt.
+enum LaunchOutcome {
+  /// The ROM was handed to the emulator.
+  launched,
+
+  /// The emulator opened but couldn't auto-load the ROM (it doesn't accept the
+  /// launch intent) — the user must load the ROM from inside it.
+  handoffFailed,
+
+  /// No installed emulator can run this game.
+  noEmulator,
+}
+
 /// Central app state: holds progress for every game and persists on change.
 class AppState extends ChangeNotifier {
   final StorageService _storage = StorageService();
@@ -273,22 +286,24 @@ class AppState extends ChangeNotifier {
   bool canLaunch(Game game) =>
       isInstalled(game.id) && emulatorForGame(game) != null;
 
-  /// Launches a game's ROM in its detected emulator.
-  Future<void> launchGame(Game game) async {
+  /// Launches a game's ROM in its detected emulator. Returns true if the ROM
+  /// was handed to the emulator.
+  Future<bool> launchGame(Game game) async {
     final rom = _installed[game.id];
     final d = emulatorForGame(game);
-    if (rom == null || d?.path == null) return;
-    await _emu.launch(d!.path!, rom);
+    if (rom == null || d?.path == null) return false;
+    return _emu.launch(d!.path!, rom);
   }
 
-  /// Re-scans emulators if needed, then launches. Returns true if it launched.
-  Future<bool> tryLaunchGame(Game game) async {
+  /// The emulator that would run [game], for user-facing messages.
+  String? emulatorNameFor(Game game) => emulatorForGame(game)?.emu.name;
+
+  /// Re-scans emulators if needed, then launches.
+  Future<LaunchOutcome> tryLaunchGame(Game game) async {
     if (!canLaunch(game)) await refreshEmulators();
-    if (canLaunch(game)) {
-      await launchGame(game);
-      return true;
-    }
-    return false;
+    if (!canLaunch(game)) return LaunchOutcome.noEmulator;
+    final ok = await launchGame(game);
+    return ok ? LaunchOutcome.launched : LaunchOutcome.handoffFailed;
   }
 
   /// Rescans the library so installed/removed ROMs are reflected. Each game's

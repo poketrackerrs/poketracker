@@ -118,35 +118,42 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /// Opens a ROM in the given emulator app; falls back to just launching it.
+    /// Opens a ROM in the given emulator app. Returns true only if the emulator
+    /// accepted the ROM; if it can't, opens the emulator so the user can load
+    /// the ROM manually and returns false.
     private fun launchRom(pkg: String?, path: String?): Boolean {
         if (pkg == null) return false
-        try {
-            if (path != null) {
+        // 1) Try to hand the ROM straight to the emulator.
+        if (path != null) {
+            try {
                 val file = File(path)
                 if (file.exists()) {
                     val uri = FileProvider.getUriForFile(
                         this, "$packageName.fileprovider", file
                     )
-                    val view = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "application/octet-stream")
-                        setPackage(pkg)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    try {
-                        startActivity(view)
-                        return true
-                    } catch (_: Exception) {
-                        // fall through to launching the app itself
+                    for (mime in listOf("application/octet-stream", "*/*")) {
+                        val view = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, mime)
+                            setPackage(pkg)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        if (view.resolveActivity(packageManager) != null) {
+                            try {
+                                startActivity(view)
+                                return true
+                            } catch (_: Exception) {}
+                        }
                     }
                 }
-            }
+            } catch (_: Exception) {}
+        }
+        // 2) Couldn't hand it off — open the emulator so the ROM can be loaded.
+        try {
             val launch = packageManager.getLaunchIntentForPackage(pkg)
             if (launch != null) {
                 launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(launch)
-                return true
             }
         } catch (_: Exception) {}
         return false

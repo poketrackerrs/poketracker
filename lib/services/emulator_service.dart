@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/services.dart' show MethodChannel;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/emulators.dart';
 
@@ -190,20 +191,55 @@ class EmulatorService {
 
   /// Launches an installed emulator, optionally opening a ROM file. On Android
   /// [emulatorPath] is the package id and launching goes through the channel.
-  Future<void> launch(String emulatorPath, [String? romPath]) async {
+  /// Returns true if the ROM was handed to the emulator (Windows: process
+  /// started; Android: the emulator accepted the ROM intent).
+  Future<bool> launch(String emulatorPath, [String? romPath]) async {
     if (Platform.isAndroid) {
+      // ROMs live in the app's documents dir, which the FileProvider can't
+      // share. Stage a copy into the cache dir (which it can) so the emulator
+      // can read it via a content:// URI.
+      final sharePath =
+          romPath != null ? await _stageForShare(romPath) : null;
       try {
-        await _channel.invokeMethod('launchRom', {
+        final ok = await _channel.invokeMethod<bool>('launchRom', {
           'package': emulatorPath,
-          'path': romPath,
+          'path': sharePath,
         });
-      } catch (_) {}
-      return;
+        return ok ?? false;
+      } catch (_) {
+        return false;
+      }
     }
-    await Process.start(
-      emulatorPath,
-      romPath != null ? [romPath] : const [],
-      mode: ProcessStartMode.detached,
-    );
+    try {
+      await Process.start(
+        emulatorPath,
+        romPath != null ? [romPath] : const [],
+        mode: ProcessStartMode.detached,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Copies a ROM into `cache/roms/` (a FileProvider-shareable location),
+  /// preserving the filename+extension. Skips the copy if an identical file is
+  /// already staged. Returns the staged path, or the original on failure.
+  Future<String> _stageForShare(String romPath) async {
+    try {
+      final cache = await getTemporaryDirectory();
+      final dir = Directory('${cache.path}${Platform.pathSeparator}roms');
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final name = romPath.split(RegExp(r'[\\/]')).last;
+      final dest = File('${dir.path}${Platform.pathSeparator}$name');
+      final src = File(romPath);
+      if (!await dest.exists() ||
+          await dest.length() != await src.length()) {
+        await src.copy(dest.path);
+      }
+      return dest.path;
+    } catch (_) {
+      return romPath;
+    }
   }
 }

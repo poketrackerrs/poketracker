@@ -1,6 +1,6 @@
 {
-  "version": "1.0.44",
-  "notes": "Box + shelf spines: calibrated the GBC and GBA spine cuts to their own banner positions (Game Boy Color / Advance), so those generations line up as cleanly as the Game Boy spines.",
+  "version": "1.0.45",
+  "notes": "Fixed Android game launching: ROMs are now staged into a shareable location so the emulator can actually receive them (this affected every Android launch). The launch also reports real success now, and if an emulator can't auto-load a ROM the app tells you and suggests mGBA — added to the Android emulator list as the most reliable one-tap launcher.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
