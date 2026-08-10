@@ -170,6 +170,38 @@ frames), `sfx/`, `config/`.
 
 ---
 
+## Built-in emulator (mGBA + melonDS) — Windows & Android
+
+The **Play** button runs games *inside the app* (no external handoff) on Windows and
+Android for Gen 1–5. `screens/emulator_screen.dart` drives a libretro core over
+`dart:ffi` (`services/gba_emulator.dart`, core-agnostic despite the name; bindings in
+`services/libretro.dart`). Cores ship bundled: **mGBA** (`mgba_libretro`, MPL-2.0)
+for GB/GBC/GBA; **melonDS DS** (`melondsds_libretro`, **GPLv3** → the distributed
+build is GPLv3; attribution in `assets/cores/LICENSE-melondsds.txt`) for Nintendo DS.
+Core is picked by generation (`gen ≥ 4 → melonDS`). Cores live in
+`assets/cores/*.dll` (Windows, copied out at runtime) and
+`android/app/src/main/jniLibs/{arm64-v8a,x86_64}/*.so` (`useLegacyPackaging = true`
+in `build.gradle.kts`). Features: remappable keyboard + gamepad
+(`services/emulator_controls.dart`), flutter_soloud audio, **time-boxed**
+fast-forward (a fixed step count freezes on the heavy DS core — see `_startLoop`),
+fullscreen, and battery-save write-back to the same `.sav` the auto-tracker reads.
+
+**DS encrypted-ROM / BIOS gotcha** (full details in the `ds-emulator-bios` memory):
+melonDS's built-in FreeBIOS direct-boots **decrypted** DS ROMs, but **encrypted**
+retail dumps need real DS BIOS — `bios7.bin` (16 KB), `bios9.bin` (4 KB),
+`firmware.bin` (128/256 KB) — placed in the core system dir (`<AppSupport>/cores`).
+The user imports them via **Settings → Built-in DS player → Nintendo DS BIOS**
+(`screens/ds_bios_screen.dart` + `services/emulator_bios.dart`, using
+**`file_selector`** — `file_picker` won't compile under Flutter 3.44's Built-in
+Kotlin). When all three exist AND are correctly sized, `init()` flips melonDS to
+`sysfile_mode=native` + `boot_mode=direct` (set via the `gVarOverrides` →
+GET_VARIABLE mechanism, which also hides the touch cursor with
+`melonds_show_cursor=disabled`), so encrypted ROMs decrypt and run — verified with
+Diamond. BIOS files are copyrighted: never committed, never shipped. Note:
+`boot9.bin`/`boot11.bin` (64 KB) are **3DS** bootroms — unrelated to DS BIOS.
+
+---
+
 ## Android emulator launching (hard-won — don't relearn it)
 
 The Play button hands a ROM to an emulator via `ACTION_VIEW` + a FileProvider
