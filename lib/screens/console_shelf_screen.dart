@@ -95,6 +95,55 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
     );
   }
 
+  /// A compact glance at the player's tracked progress for [game].
+  Widget _statsPreview(BuildContext context, AppState state, Game game) {
+    final prog = state.progressFor(game.id);
+    final baseCaught =
+        prog.caughtSpecies.where((id) => id < 10000).length;
+    final caught = baseCaught > 0 ? baseCaught : prog.dexCaught;
+    final pct = (state.completion(game) * 100).round();
+    final badgeLabels =
+        game.milestones.where((m) => m.contains('Badge')).toList();
+    final badges = badgeLabels.where((m) => prog.milestones[m] == true).length;
+    final tint = _tint(context, game);
+
+    Widget pill(String value, String label) => Container(
+          constraints: const BoxConstraints(minWidth: 72),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: tint.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(value,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700, color: tint)),
+              Text(label, style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 10,
+        runSpacing: 8,
+        children: [
+          pill('$pct%', 'Complete'),
+          pill('$caught/${game.dexTotal}', 'Caught'),
+          if (badgeLabels.isNotEmpty)
+            pill('$badges/${badgeLabels.length}', 'Badges'),
+          if (prog.team.isNotEmpty) pill('${prog.team.length}/6', 'Team'),
+          if (prog.shinyHunts.isNotEmpty)
+            pill('${prog.shinyHunts.where((h) => h.caught).length}', 'Shiny'),
+        ],
+      ),
+    );
+  }
+
   Widget _selectedPanel(BuildContext context, AppState state, Game game) {
     final installed = state.isInstalled(game.id);
     final canDownload = state.canDownload(game.id);
@@ -119,6 +168,7 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
               textAlign: TextAlign.center),
           Text('${game.region} • ${game.releaseYear}',
               style: Theme.of(context).textTheme.bodySmall),
+          _statsPreview(context, state, game),
           const SizedBox(height: 12),
           Wrap(
             alignment: WrapAlignment.center,

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.47",
-  "notes": "Built-in emulator (Windows): Game Boy, Color, and Advance games — Red through Emerald — now open and play right inside PokeTracker, no external app. Includes sound with a volume control, hardware controller support, fully remappable keyboard AND gamepad controls (fast-forward is bindable too), selectable fast-forward speeds (2x-16x), fullscreen, and battery saves written right next to your ROM. Save sync upgraded: it now shows your Trainer name, Trainer ID and hidden Secret ID, and caught/total, then auto-fills your Pokedex. Android is unchanged (still uses external emulators).",
+  "version": "1.0.48",
+  "notes": "New: the console shelf now shows a per-game stats preview — completion %, caught/total, badges, team, and shinies — right on the shelf panel. Also includes the built-in Windows emulator (play GB/GBC/GBA games in-app with sound + volume, controller support, remappable keyboard/gamepad controls, selectable fast-forward, and fullscreen; saves are written next to your ROM) and the upgraded save sync that shows Trainer name, Trainer ID + Secret ID, and caught/total, then auto-fills your Pokedex. Android still uses external emulators.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
