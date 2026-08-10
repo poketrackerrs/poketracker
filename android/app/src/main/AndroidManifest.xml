@@ -75,5 +75,9 @@
         <package android:name="com.swordfish.lemuroid"/>
         <package android:name="com.retroarch"/>
         <package android:name="com.retroarch.aarch64"/>
+        <package android:name="it.dbtecno.pizzaboygba"/>
+        <package android:name="it.dbtecno.pizzaboygbapro"/>
+        <package android:name="it.dbtecno.pizzaboygbc"/>
+        <package android:name="it.dbtecno.pizzaboygbcpro"/>
     </queries>
 </manifest>

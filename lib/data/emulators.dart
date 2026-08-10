@@ -77,6 +77,21 @@ const List<Emulator> kEmulators = [
     note: 'Android all-in-one; plays GB/GBC/GBA/DS.',
   ),
   Emulator(
+    name: 'Pizza Boy (GBA/GBC)',
+    systems: 'Game Boy · Color · Advance',
+    generations: [1, 2, 3],
+    exeNames: [],
+    hints: [],
+    androidPackages: [
+      'it.dbtecno.pizzaboygba',
+      'it.dbtecno.pizzaboygbapro',
+      'it.dbtecno.pizzaboygbc',
+      'it.dbtecno.pizzaboygbcpro',
+    ],
+    downloadUrl: 'https://play.google.com/store/apps/details?id=it.dbtecno.pizzaboygba',
+    note: 'Maintained Android GB/GBC/GBA emulator.',
+  ),
+  Emulator(
     name: 'RetroArch',
     systems: 'Multi-system (GB → DS)',
     generations: [1, 2, 3, 4, 5],

@@ -15,12 +15,12 @@ class _EmuLink {
   const _EmuLink(this.name, this.systems, this.url);
 }
 
-// Android → Google Play pages.
+// Android → Google Play pages (maintained, modern-Android compatible).
 const _androidEmus = [
   _EmuLink('Lemuroid', 'GB · GBC · GBA · DS · more',
       'https://play.google.com/store/apps/details?id=com.swordfish.lemuroid'),
-  _EmuLink('RetroArch Plus', 'GB · GBC · GBA · DS (via cores)',
-      'https://play.google.com/store/apps/details?id=com.retroarch.aarch64'),
+  _EmuLink('Pizza Boy (GBA)', 'Game Boy Advance',
+      'https://play.google.com/store/apps/details?id=it.dbtecno.pizzaboygba'),
 ];
 
 // iOS / iPadOS → App Store pages.
