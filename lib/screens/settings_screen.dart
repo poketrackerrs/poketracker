@@ -19,8 +19,8 @@ class _EmuLink {
 const _androidEmus = [
   _EmuLink('Lemuroid', 'GB · GBC · GBA · DS · more',
       'https://play.google.com/store/apps/details?id=com.swordfish.lemuroid'),
-  _EmuLink('RetroArch', 'GB · GBC · GBA · DS (via cores)',
-      'https://play.google.com/store/apps/details?id=com.retroarch'),
+  _EmuLink('RetroArch Plus', 'GB · GBC · GBA · DS (via cores)',
+      'https://play.google.com/store/apps/details?id=com.retroarch.aarch64'),
 ];
 
 // iOS / iPadOS → App Store pages.

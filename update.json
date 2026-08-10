@@ -1,6 +1,6 @@
 {
-  "version": "1.0.33",
-  "notes": "Real-3D launch: a pre-rendered animation where the cartridge comes out of the box and slides into the back of a straight Game Boy, which then turns to the front and powers on. No more tilt or flat-overlay look.",
+  "version": "1.0.34",
+  "notes": "Fixed the Android RetroArch link — the old com.retroarch listing is gone; it now points to RetroArch Plus (the current Play Store build).",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
