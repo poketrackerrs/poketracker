@@ -1,6 +1,8 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/emulator_bios.dart';
+import '../state/app_state.dart';
 
 /// Import screen for the Nintendo DS BIOS/firmware files. When all three are
 /// present, the built-in melonDS player can boot encrypted retail DS ROMs.
@@ -53,6 +55,24 @@ class _DsBiosScreenState extends State<DsBiosScreen> {
     await _refresh();
   }
 
+  Future<void> _fetchFromDrive() async {
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final n = await context.read<AppState>().fetchDsBiosFromDrive();
+      await _refresh();
+      messenger.showSnackBar(SnackBar(
+          content: Text(n == 0
+              ? 'No BIOS files found in your Drive folder.'
+              : 'Fetched $n/3 BIOS files from Drive.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text('$e'.replaceFirst('Exception: ', ''))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   bool _sizeOk(BiosSlot s, int? size) => size != null && s.sizes.contains(size);
 
   @override
@@ -98,11 +118,26 @@ class _DsBiosScreenState extends State<DsBiosScreen> {
             child: Text(
               'These are copyrighted Nintendo files and are NOT included with '
               'the app. Dump bios7.bin, bios9.bin and firmware.bin from your '
-              'own Nintendo DS (e.g. with a homebrew BIOS dumper), then import '
-              'each one here.',
+              'own Nintendo DS. Put them in a "BIOS" subfolder of your linked '
+              'Google Drive folder and tap Fetch below, or import each one '
+              'manually.',
               style: TextStyle(fontSize: 12, height: 1.4),
             ),
           ),
+          if (context.watch<AppState>().hasBiosDriveFolder)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: FilledButton.tonalIcon(
+                onPressed: _busy ? null : _fetchFromDrive,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.cloud_download),
+                label: const Text('Fetch from Google Drive'),
+              ),
+            ),
           for (final s in kNdsBiosSlots) _slotTile(s),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),

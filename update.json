@@ -1,6 +1,6 @@
 {
-  "version": "1.0.51",
-  "notes": "Built-in Nintendo DS player (Gen 4–5)! Diamond/Pearl/Platinum, HeartGold/SoulSilver and Black/White now run in the app on Windows and Android via the melonDS core — dual-screen layout with a real touch screen (mouse on desktop, stylus on phone), on-screen touch controls in portrait, remappable keyboard/controller input, audio and fast-forward. Encrypted retail DS ROMs need Nintendo DS BIOS files: import your own bios7/bios9/firmware under Settings → Built-in DS player → Nintendo DS BIOS (decrypted ROMs work without them). Also fixes a fast-forward freeze on the DS core.",
+  "version": "1.0.52",
+  "notes": "DS BIOS auto-fetch from your Drive: put your own bios7/bios9/firmware in a 'BIOS' subfolder of your linked Google Drive folder, and PokeTracker downloads them into place automatically (or tap Fetch under Settings → Built-in DS player → Nintendo DS BIOS) — so encrypted DS ROMs boot on your phone without manual file-picking. Also fixes the Updates screen: the Download button now stays pinned at the top so it's always reachable, even with long release notes (the notes scroll on their own).",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

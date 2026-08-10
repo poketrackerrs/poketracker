@@ -79,35 +79,25 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Icon(Icons.system_update, size: 64),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Center(
               child: Text(
-                r == null ? 'Current version: …' : 'Current version: ${r.currentVersion}',
+                r == null
+                    ? 'Current version: …'
+                    : 'Current version: ${r.currentVersion}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             if (_checking)
-              const Center(child: CircularProgressIndicator())
+              const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (r != null && r.hasUpdate) ...[
-              Card(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Update available: v${r.update!.version}',
-                          style: Theme.of(context).textTheme.titleMedium),
-                      if (r.update!.notes.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(r.update!.notes),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+              Text('Update available: v${r.update!.version}',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 16),
+              // The action stays at the top so it's always reachable, even when
+              // the release notes are long.
               if (_downloading) ...[
                 LinearProgressIndicator(value: _progress),
                 const SizedBox(height: 8),
@@ -118,24 +108,50 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                   icon: const Icon(Icons.download),
                   label: const Text('Download & install'),
                 ),
+              if (_message != null) ...[
+                const SizedBox(height: 12),
+                Text(_message!, textAlign: TextAlign.center),
+              ],
+              if (r.update!.notes.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Card(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: SingleChildScrollView(
+                        child: Text(r.update!.notes),
+                      ),
+                    ),
+                  ),
+                ),
+              ] else
+                const Spacer(),
             ] else if (r != null && r.error != null) ...[
-              Center(child: Text(r.error!, textAlign: TextAlign.center)),
+              Expanded(
+                child: Center(
+                    child: Text(r.error!, textAlign: TextAlign.center)),
+              ),
             ] else if (r != null) ...[
-              const Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.green, size: 40),
-                    SizedBox(height: 8),
-                    Text("You're on the latest version."),
-                  ],
+              const Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green, size: 40),
+                      SizedBox(height: 8),
+                      Text("You're on the latest version."),
+                    ],
+                  ),
                 ),
               ),
-            ],
-            if (_message != null) ...[
-              const SizedBox(height: 16),
-              Text(_message!, textAlign: TextAlign.center),
-            ],
-            const Spacer(),
+              if (_message != null) ...[
+                const SizedBox(height: 12),
+                Text(_message!, textAlign: TextAlign.center),
+              ],
+            ] else
+              const Spacer(),
+            const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _checking || _downloading ? null : _check,
               icon: const Icon(Icons.refresh),

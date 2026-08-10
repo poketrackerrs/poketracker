@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import '../models/game.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
 import '../services/storage_service.dart';
+import '../services/emulator_bios.dart';
 import '../services/library_service.dart';
 import '../services/emulator_service.dart';
 import '../services/save_service.dart';
@@ -78,7 +80,40 @@ class AppState extends ChangeNotifier {
     await _loadLibrary();
     _loaded = true;
     notifyListeners();
+    // Best-effort, off the critical path: pull the DS BIOS from the user's
+    // private Drive folder if it's linked and the files aren't here yet.
+    unawaited(_autoFetchBiosIfNeeded());
   }
+
+  /// Byte lengths that count as a valid file, keyed by target name (single
+  /// source of truth is EmulatorBios' slot list).
+  Map<String, List<int>> get _biosSizes =>
+      {for (final s in kNdsBiosSlots) s.fileName: s.sizes};
+
+  Future<void> _autoFetchBiosIfNeeded() async {
+    if (!(Platform.isWindows || Platform.isAndroid)) return;
+    try {
+      final bios = EmulatorBios();
+      if (await bios.hasAllNds()) return;
+      final cores = await bios.sysDirPath();
+      final got = await _library.fetchNdsBios(cores, _biosSizes);
+      if (got.isNotEmpty) notifyListeners();
+    } catch (_) {}
+  }
+
+  /// User-triggered BIOS fetch (from the DS BIOS screen). Returns how many of
+  /// the three files are present afterwards.
+  Future<int> fetchDsBiosFromDrive() async {
+    final bios = EmulatorBios();
+    final cores = await bios.sysDirPath();
+    final got = await _library.fetchNdsBios(cores, _biosSizes);
+    notifyListeners();
+    return got.length;
+  }
+
+  /// Whether a private BIOS Drive folder is linked (so the "Fetch from Drive"
+  /// action is worth offering).
+  bool get hasBiosDriveFolder => _driveFolders.containsKey(kBiosFolderKey);
 
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;

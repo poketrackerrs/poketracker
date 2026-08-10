@@ -6,6 +6,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/games_data.dart';
 
+/// Reserved key in the Drive folder map for the user's private BIOS subfolder.
+const String kBiosFolderKey = '__bios__';
+
 /// Manages the on-device games library folder and downloads user-supplied files
 /// into it. The app ships with NO sources — every download URL is provided by
 /// the user (e.g. a share link to their own Google Drive file).
@@ -127,15 +130,26 @@ class LibraryService {
     final valid = kGames.map((g) => g.id).toSet();
     const alias = {'arceus': 'legends-arceus', 'z-a': 'legends-z-a'};
     final map = <String, String>{};
+    var gameMatches = 0;
     for (var i = 0; i < ids.length && i < names.length; i++) {
       var norm = names[i]
           .toLowerCase()
           .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
           .replaceAll(RegExp(r'^-+|-+$'), '');
+      // A subfolder named for BIOS/firmware (e.g. "BIOS and Firmware") holds the
+      // DS system files, fetched separately into the core system dir (kept
+      // private — never bundled/shipped).
+      if (norm.contains('bios') || norm.contains('firmware')) {
+        map[kBiosFolderKey] = ids[i];
+        continue;
+      }
       final gid = alias[norm] ?? norm;
-      if (valid.contains(gid)) map[gid] = ids[i];
+      if (valid.contains(gid)) {
+        map[gid] = ids[i];
+        gameMatches++;
+      }
     }
-    if (map.isEmpty) {
+    if (gameMatches == 0) {
       throw Exception('No game folders matched. Is this the "Pokemon" folder '
           'with a subfolder per game?');
     }
@@ -173,6 +187,104 @@ class LibraryService {
     }
     final url = 'https://drive.google.com/uc?export=download&id=${file.id}';
     return download(gameId, url, onProgress, nameHint: file.name);
+  }
+
+  /// Lists every file (id + name) in a public Drive folder.
+  Future<List<({String id, String name})>> resolveDriveFiles(
+      String folderId) async {
+    final r = await http
+        .get(Uri.parse(
+            'https://drive.google.com/embeddedfolderview?id=$folderId#list'))
+        .timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) return const [];
+    final ids = RegExp(r'id="entry-([-\w]{20,})"')
+        .allMatches(r.body)
+        .map((m) => m.group(1)!)
+        .toList();
+    final names = RegExp(r'flip-entry-title">([^<]*)<')
+        .allMatches(r.body)
+        .map((m) => m.group(1)!)
+        .toList();
+    final out = <({String id, String name})>[];
+    for (var i = 0; i < ids.length && i < names.length; i++) {
+      out.add((id: ids[i], name: names[i]));
+    }
+    return out;
+  }
+
+  /// Downloads a single Drive file (by id) straight to [dest], reusing the
+  /// large-file confirm gate. Used for BIOS files (which go in the core system
+  /// dir, not the games library).
+  Future<void> downloadDriveFileTo(String fileId, File dest) async {
+    final url = 'https://drive.google.com/uc?export=download&id=$fileId';
+    final client = http.Client();
+    try {
+      var uri = _normalizeDrive(url);
+      var resp = await client.send(http.Request('GET', uri));
+      if (_isHtml(resp) && uri.host.contains('google.com')) {
+        final body = await resp.stream.bytesToString();
+        final retry = _driveRetryUri(uri, body);
+        if (retry == null) throw Exception('Drive did not return the file.');
+        uri = retry;
+        resp = await client.send(http.Request('GET', uri));
+        if (_isHtml(resp)) throw Exception('Drive blocked this download.');
+      }
+      if (resp.statusCode != 200) {
+        throw HttpException('Download failed: HTTP ${resp.statusCode}');
+      }
+      if (!await dest.parent.exists()) await dest.parent.create(recursive: true);
+      final tmp = File('${dest.path}.part');
+      final sink = tmp.openWrite();
+      await for (final chunk in resp.stream) {
+        sink.add(chunk);
+      }
+      await sink.close();
+      if (await dest.exists()) await dest.delete();
+      await tmp.rename(dest.path);
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Downloads the DS BIOS/firmware from the linked Drive's BIOS subfolder into
+  /// [coresDir], matching each file by name. Skips files already present with a
+  /// valid size. Returns the target filenames now present. [expectedSizes] maps
+  /// each target name to the byte lengths that count as a good file.
+  Future<List<String>> fetchNdsBios(
+    String coresDir,
+    Map<String, List<int>> expectedSizes,
+  ) async {
+    final folders = await loadDriveFolders();
+    final biosFolder = folders[kBiosFolderKey];
+    if (biosFolder == null) return const [];
+    final files = await resolveDriveFiles(biosFolder);
+    if (files.isEmpty) return const [];
+    // How to recognize each target file from its Drive name.
+    bool matches(String target, String name) {
+      final n = name.toLowerCase();
+      if (target == 'bios7.bin') return n.contains('bios7') || n.contains('arm7');
+      if (target == 'bios9.bin') return n.contains('bios9') || n.contains('arm9');
+      if (target == 'firmware.bin') return n.contains('firmware');
+      return false;
+    }
+
+    final present = <String>[];
+    for (final target in expectedSizes.keys) {
+      final dest = File('$coresDir${Platform.pathSeparator}$target');
+      final ok = expectedSizes[target] ?? const [];
+      if (dest.existsSync() && ok.contains(dest.lengthSync())) {
+        present.add(target);
+        continue;
+      }
+      final match = files.where((f) => matches(target, f.name)).firstOrNull;
+      if (match == null) continue;
+      await downloadDriveFileTo(match.id, dest);
+      // Only count it if it downloaded at a sane size.
+      if (dest.existsSync() && (ok.isEmpty || ok.contains(dest.lengthSync()))) {
+        present.add(target);
+      }
+    }
+    return present;
   }
 
   // ---- User-configured per-game source URLs ---------------------------
