@@ -47,8 +47,7 @@ class _WindowsModelViewState extends State<_WindowsModelView> {
   static const _html = '''<!doctype html><html><head><meta charset="utf-8">
 <style>html,body{margin:0;height:100%;background:#101013;overflow:hidden}
 model-viewer{width:100%;height:100vh}</style>
-<script type="module"
-  src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.0.0/dist/model-viewer.min.js"></script>
+<script type="module" src="/model-viewer.min.js" defer></script>
 </head><body>
 <model-viewer src="/model.glb" camera-controls auto-rotate touch-action="pan-y"
   shadow-intensity="1" exposure="1.1"></model-viewer>
@@ -62,14 +61,21 @@ model-viewer{width:100%;height:100vh}</style>
 
   Future<void> _start() async {
     try {
-      final data = await rootBundle.load(widget.assetPath);
-      final bytes = data.buffer.asUint8List();
+      final glb =
+          (await rootBundle.load(widget.assetPath)).buffer.asUint8List();
+      final lib = (await rootBundle.load('assets/web/model-viewer.min.js'))
+          .buffer
+          .asUint8List();
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((req) {
         final res = req.response;
         if (req.uri.path == '/model.glb') {
           res.headers.contentType = ContentType('model', 'gltf-binary');
-          res.add(bytes);
+          res.add(glb);
+        } else if (req.uri.path == '/model-viewer.min.js') {
+          res.headers.contentType =
+              ContentType('text', 'javascript', charset: 'utf-8');
+          res.add(lib);
         } else {
           res.headers.contentType = ContentType.html;
           res.write(_html);
