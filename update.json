@@ -1,6 +1,6 @@
 {
-  "version": "1.0.27",
-  "notes": "The 3D model viewers now float over the page like the box popout (drag to rotate, tap outside to close), and the Game Boy preview icon is now a render of the actual 3D model instead of the stylized drawing.",
+  "version": "1.0.28",
+  "notes": "The Windows 3D viewer is now fully transparent — the model floats over the dimmed page with no dark panel or border, matching the box popout.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

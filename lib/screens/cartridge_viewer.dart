@@ -24,13 +24,10 @@ Future<void> showModelViewerDialog(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: SizedBox(
-              width: side,
-              height: side,
-              child: ModelView(src: src, alt: title),
-            ),
+          SizedBox(
+            width: side,
+            height: side,
+            child: ModelView(src: src, alt: title),
           ),
           const SizedBox(height: 16),
           const Text('Drag to rotate · tap outside to close',
@@ -76,12 +73,13 @@ class _WindowsModelViewState extends State<_WindowsModelView> {
   String? _error;
 
   static const _html = '''<!doctype html><html><head><meta charset="utf-8">
-<style>html,body{margin:0;height:100%;background:#101013;overflow:hidden}
-model-viewer{width:100%;height:100vh}</style>
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+model-viewer{width:100%;height:100vh;--poster-color:transparent}</style>
 <script type="module" src="/model-viewer.min.js" defer></script>
 </head><body>
 <model-viewer src="/model.glb" camera-controls auto-rotate touch-action="pan-y"
-  shadow-intensity="1" exposure="1.1"></model-viewer>
+  style="background-color:transparent" shadow-intensity="1" exposure="1.1">
+</model-viewer>
 </body></html>''';
 
   @override
@@ -115,6 +113,7 @@ model-viewer{width:100%;height:100vh}</style>
       });
       _server = server;
       await _controller.initialize();
+      await _controller.setBackgroundColor(Colors.transparent);
       await _controller.loadUrl('http://127.0.0.1:${server.port}/');
       if (mounted) setState(() => _ready = true);
     } catch (e) {
