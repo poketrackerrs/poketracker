@@ -89,6 +89,22 @@ const WrapLayout _gbWrap = WrapLayout(
   spineSplit: 0.30,
 );
 
+// GBC wraps: the GAME BOY COLOR banner box spans 47.29–52.71%, bottom at 28.1%.
+const WrapLayout _gbcWrap = WrapLayout(
+  back: Rect.fromLTRB(0.0, 0.0, 0.4729, 1.0),
+  spine: Rect.fromLTRB(0.4729, 0.0, 0.5271, 1.0),
+  front: Rect.fromLTRB(0.5271, 0.0, 0.995, 1.0),
+  spineSplit: 0.281,
+);
+
+// GBA wraps: the GAME BOY ADVANCE banner box spans 47.29–52.71%, bottom 28.1%.
+const WrapLayout _gbaWrap = WrapLayout(
+  back: Rect.fromLTRB(0.0, 0.0, 0.4729, 1.0),
+  spine: Rect.fromLTRB(0.4729, 0.0, 0.5271, 1.0),
+  front: Rect.fromLTRB(0.5271, 0.0, 0.995, 1.0),
+  spineSplit: 0.281,
+);
+
 // DS full wraps: back content ends ~46.3% (then a white fold), spine 47.5–53%.
 const WrapLayout _dsWrap = WrapLayout(
   back: Rect.fromLTRB(0.0, 0.0, 0.463, 1.0),
@@ -108,9 +124,11 @@ const WrapLayout _n3dsWrap = WrapLayout(
 WrapLayout? _wrapLayoutFor(BoxPlatform p) {
   switch (p) {
     case BoxPlatform.gb:
-    case BoxPlatform.gbc:
-    case BoxPlatform.gba:
       return _gbWrap;
+    case BoxPlatform.gbc:
+      return _gbcWrap;
+    case BoxPlatform.gba:
+      return _gbaWrap;
     case BoxPlatform.ds:
       return _dsWrap;
     case BoxPlatform.n3ds:

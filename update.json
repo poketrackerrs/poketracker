@@ -1,6 +1,6 @@
 {
-  "version": "1.0.43",
-  "notes": "Console shelf: game spines now show the real box-spine artwork (matching the 3D boxes) instead of plain colored strips.",
+  "version": "1.0.44",
+  "notes": "Box + shelf spines: calibrated the GBC and GBA spine cuts to their own banner positions (Game Boy Color / Advance), so those generations line up as cleanly as the Game Boy spines.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
