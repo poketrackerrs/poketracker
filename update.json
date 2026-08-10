@@ -1,6 +1,6 @@
 {
-  "version": "1.0.22",
-  "notes": "Added a real 3D Game Boy console model — tap the Game Boy on its shelf to view and rotate the actual .glb, plus the 3D cartridge viewer (Android/iOS).",
+  "version": "1.0.23",
+  "notes": "The real 3D Game Boy and cartridge models now also render on Windows (via WebView2), not just mobile. Tap the Game Boy on its shelf, or 'View cartridge in 3D'.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

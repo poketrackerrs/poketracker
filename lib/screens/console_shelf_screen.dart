@@ -33,10 +33,10 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
     return state.regionTint ? regionColor(g.region, state.accent) : state.accent;
   }
 
-  /// The .glb is a Game Boy cartridge and renders via a webview, so offer it
-  /// only for the Game Boy family on mobile.
+  /// The .glb models are for the Game Boy family; the viewer works on mobile
+  /// (model_viewer_plus) and Windows (webview_windows / WebView2).
   bool get _show3dCartridge =>
-      (Platform.isAndroid || Platform.isIOS) &&
+      (Platform.isAndroid || Platform.isIOS || Platform.isWindows) &&
       (widget.platform == BoxPlatform.gb || widget.platform == BoxPlatform.gbc);
 
   @override
