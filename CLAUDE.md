@@ -25,12 +25,15 @@ CI (unsigned, sideloaded). It auto-updates from GitHub Releases.
   been declined multiple times. The app only manages the user's **own** legally
   dumped ROMs (they supply their own source URLs / Drive links). Box-art covers
   are the owner's own fair-use call for a private build.
-- **Never commit built binaries** (`*.apk`, `*.aab`, `*-Setup.exe`) — they bundle
-  copyrighted covers and the repo is public. `.gitignore` excludes them plus
-  `assets/games/*.png|jpg`, `wraps/`, `dielines/`. Covers/wraps/models live
-  **locally only** and are gitignored — they DO travel when you copy the project
-  folder, but a fresh `git clone` will lack them (the app falls back to styled
-  cards). Release binaries go **only** as GitHub Release assets.
+- **Never commit built binaries** (`*.apk`, `*.aab`, `*-Setup.exe`) — regenerable
+  and large; `.gitignore` excludes them. Release binaries go **only** as GitHub
+  Release assets, never into the repo tree.
+- **Box art IS committed.** The repo is private-use (never distributed), so the
+  covers/wraps/models/launch-frames (58 covers, 21 wraps, 3 `.glb`, 69 frames) are
+  all tracked. Only `assets/games/dielines/*` (intermediate working files) are
+  gitignored. **A plain `git clone` gives the complete, buildable project** — no
+  separate asset transfer needed. (If this repo is ever repackaged for
+  distribution, the covers are copyrighted — revisit then.)
 
 ---
 
