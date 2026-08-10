@@ -492,7 +492,7 @@ class _DownloadControl extends StatelessWidget {
                     content: Text(
                         'Opened $emu, but it won\'t load ${game.title} '
                         'automatically. Load it from inside $emu, or install '
-                        'mGBA for one-tap launch.'),
+                        'My Boy!/My OldBoy! for one-tap launch.'),
                     duration: const Duration(seconds: 7),
                     action: SnackBarAction(
                         label: 'Emulators', onPressed: toEmulators),

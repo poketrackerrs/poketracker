@@ -35,9 +35,32 @@ const List<Emulator> kEmulators = [
     generations: [1, 2, 3],
     exeNames: ['mGBA.exe'],
     hints: ['mGBA'],
-    androidPackages: ['io.mgba.android.emulator'],
+    // No official Android build exists; desktop only.
+    androidPackages: [],
     downloadUrl: 'https://mgba.io/downloads.html',
     note: 'Best for Gen 1–3 (.gb / .gbc / .gba).',
+  ),
+  Emulator(
+    name: 'My OldBoy!',
+    systems: 'Game Boy · Color',
+    generations: [1, 2],
+    exeNames: [],
+    hints: [],
+    androidPackages: ['com.fastemulator.gbcfree', 'com.fastemulator.gbc'],
+    downloadUrl:
+        'https://play.google.com/store/apps/details?id=com.fastemulator.gbcfree',
+    note: 'Android GB/GBC emulator; opens ROMs handed to it (one-tap launch).',
+  ),
+  Emulator(
+    name: 'My Boy!',
+    systems: 'Game Boy Advance',
+    generations: [3],
+    exeNames: [],
+    hints: [],
+    androidPackages: ['com.fastemulator.gbafree', 'com.fastemulator.gba'],
+    downloadUrl:
+        'https://play.google.com/store/apps/details?id=com.fastemulator.gbafree',
+    note: 'Android GBA emulator; opens ROMs handed to it (one-tap launch).',
   ),
   Emulator(
     name: 'melonDS',

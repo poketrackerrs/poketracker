@@ -19,10 +19,10 @@ class _EmuLink {
 // Launchers first (the Play button boots ROMs straight into these), then
 // Lemuroid, which is a library browser used via the folder sync below.
 const _androidEmus = [
-  _EmuLink('mGBA', 'Gen 1–3 · GB · GBC · GBA · best for one-tap launch',
-      'https://play.google.com/store/apps/details?id=io.mgba.android.emulator'),
-  _EmuLink('Pizza Boy (GBA)', 'Gen 3 · Game Boy Advance',
-      'https://play.google.com/store/apps/details?id=it.dbtecno.pizzaboygba'),
+  _EmuLink('My OldBoy! Lite', 'Gen 1–2 · GB · GBC · one-tap launch',
+      'https://play.google.com/store/apps/details?id=com.fastemulator.gbcfree'),
+  _EmuLink('My Boy! Lite', 'Gen 3 · Game Boy Advance · one-tap launch',
+      'https://play.google.com/store/apps/details?id=com.fastemulator.gbafree'),
   _EmuLink('melonDS', 'Gen 4–5 · Nintendo DS',
       'https://play.google.com/store/apps/details?id=me.magnum.melonds'),
   _EmuLink('Lemuroid', 'Library browser · GB → DS',

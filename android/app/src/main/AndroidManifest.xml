@@ -86,5 +86,9 @@
         <package android:name="it.dbtecno.pizzaboygbapro"/>
         <package android:name="it.dbtecno.pizzaboygbc"/>
         <package android:name="it.dbtecno.pizzaboygbcpro"/>
+        <package android:name="com.fastemulator.gbafree"/>
+        <package android:name="com.fastemulator.gba"/>
+        <package android:name="com.fastemulator.gbcfree"/>
+        <package android:name="com.fastemulator.gbc"/>
     </queries>
 </manifest>
