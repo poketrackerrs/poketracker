@@ -10,6 +10,7 @@ import '../widgets/console_art.dart';
 import '../widgets/game_box_art.dart';
 import 'cartridge_viewer.dart';
 import 'emulators_screen.dart';
+import 'emulator_screen.dart';
 import 'game_screen.dart';
 import 'launch3d.dart';
 
@@ -264,8 +265,12 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
     final state = context.read<AppState>();
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final builtInRom =
+        state.canPlayBuiltIn(game) ? state.builtInRomPath(game) : null;
     LaunchOutcome outcome = LaunchOutcome.noEmulator;
     Future<void> doLaunch() async {
+      // Built-in games open in-app after the animation; skip the hand-off.
+      if (builtInRom != null) return;
       outcome = await state.tryLaunchGame(game);
     }
 
@@ -286,6 +291,11 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       );
     }
     if (!mounted) return;
+    if (builtInRom != null) {
+      navigator.push(MaterialPageRoute(
+          builder: (_) => EmulatorScreen(game: game, romPath: builtInRom)));
+      return;
+    }
     void toEmulators() => navigator.push(
         MaterialPageRoute(builder: (_) => const EmulatorsScreen()));
     switch (outcome) {

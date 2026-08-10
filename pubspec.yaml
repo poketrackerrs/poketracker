@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.46+47
+version: 1.0.47+48
 
 environment:
   sdk: ^3.12.2
@@ -60,6 +60,13 @@ dependencies:
   model_viewer_plus: ^1.9.3
   webview_windows: ^0.4.0
   webview_flutter: ^4.10.0
+
+  # Built-in GBA emulator: FFI to the mGBA libretro core, low-latency PCM audio,
+  # native fullscreen, and hardware gamepad input.
+  ffi: ^2.1.0
+  flutter_soloud: ^4.1.7
+  window_manager: ^0.4.0
+  gamepads: ^0.1.10
 
 dev_dependencies:
   flutter_test:
@@ -126,6 +133,7 @@ flutter:
     - assets/models/
     - assets/web/
     - assets/launch/
+    - assets/cores/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -195,7 +195,9 @@ class SaveService {
     final ownedOfs = s0 + 0x28;
     final caught = _dexFromBitfield(b, ownedOfs, 386);
 
-    final tid = _u32(b, s0 + 0x0A) & 0xFFFF;
+    final idWord = _u32(b, s0 + 0x0A);
+    final tid = idWord & 0xFFFF;
+    final sid = (idWord >> 16) & 0xFFFF;
     final hours = _u16(b, s0 + 0x0E);
     final minutes = b[s0 + 0x10];
 
@@ -205,6 +207,7 @@ class SaveService {
       caughtDex: caught,
       trainerName: _decodeGen3Text(b, s0, 7),
       trainerId: tid,
+      secretId: sid,
       playTime: Duration(hours: hours, minutes: minutes),
       notes: const [
         'Gen 3 badges and team aren\'t read yet — coming next.',

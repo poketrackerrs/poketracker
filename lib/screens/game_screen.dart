@@ -1471,9 +1471,12 @@ class _SaveSyncDialogState extends State<_SaveSyncDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (d.trainerName != null && d.trainerName!.isNotEmpty)
+              Text('Trainer: ${d.trainerName}',
+                  style: Theme.of(context).textTheme.titleSmall),
+            if (d.trainerId != null)
               Text(
-                  'Trainer: ${d.trainerName}'
-                  '${d.trainerId != null ? '  (ID ${d.trainerId})' : ''}',
+                  'ID ${d.trainerId!.toString().padLeft(5, '0')}'
+                  '${d.secretId != null ? '   ·   Secret ID ${d.secretId!.toString().padLeft(5, '0')}' : ''}',
                   style: muted),
             if (d.playTime != null)
               Text('Play time: ${d.playTimeText}', style: muted),
@@ -1485,7 +1488,8 @@ class _SaveSyncDialogState extends State<_SaveSyncDialog> {
               onChanged: d.caughtCount == 0
                   ? null
                   : (v) => setState(() => _dex = v ?? false),
-              title: Text('Caught Pokedex — ${d.caughtCount} species'),
+              title: Text(
+                  'Caught Pokedex — ${d.caughtCount} / ${widget.game.dexTotal} species'),
               subtitle: d.seenCount > 0
                   ? Text('${d.seenCount} seen', style: muted)
                   : null,

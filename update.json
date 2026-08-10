@@ -1,6 +1,6 @@
 {
-  "version": "1.0.46",
-  "notes": "Android emulators: removed the mGBA entry (there is no mGBA on the Play Store) and Pizza Boy as a launcher (it only loads ROMs from its own browser). Recommends My OldBoy! (GB/GBC) and My Boy! (GBA) instead — these accept ROMs handed to them, so the Play button boots straight into your game.",
+  "version": "1.0.47",
+  "notes": "Built-in emulator (Windows): Game Boy, Color, and Advance games — Red through Emerald — now open and play right inside PokeTracker, no external app. Includes sound with a volume control, hardware controller support, fully remappable keyboard AND gamepad controls (fast-forward is bindable too), selectable fast-forward speeds (2x-16x), fullscreen, and battery saves written right next to your ROM. Save sync upgraded: it now shows your Trainer name, Trainer ID and hidden Secret ID, and caught/total, then auto-fills your Pokedex. Android is unchanged (still uses external emulators).",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

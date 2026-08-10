@@ -12,6 +12,7 @@ import 'game_screen.dart';
 import 'updates_screen.dart';
 import 'pokedex_list_screen.dart';
 import 'emulators_screen.dart';
+import 'emulator_screen.dart';
 import 'settings_screen.dart';
 
 /// Root scaffold with a bottom nav switching between the game tracker and the
@@ -478,6 +479,15 @@ class _DownloadControl extends StatelessWidget {
               final s = context.read<AppState>();
               final messenger = ScaffoldMessenger.of(context);
               final navigator = Navigator.of(context);
+              if (s.canPlayBuiltIn(game)) {
+                final rom = s.builtInRomPath(game);
+                if (rom != null) {
+                  navigator.push(MaterialPageRoute(
+                      builder: (_) =>
+                          EmulatorScreen(game: game, romPath: rom)));
+                  return;
+                }
+              }
               final outcome = await s.tryLaunchGame(game);
               void toEmulators() => navigator.push(MaterialPageRoute(
                   builder: (_) => const EmulatorsScreen()));

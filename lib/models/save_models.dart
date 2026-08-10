@@ -28,6 +28,9 @@ class SaveData {
 
   final String? trainerName;
   final int? trainerId;
+
+  /// Gen 3 hidden "secret ID" (null if not read for this format).
+  final int? secretId;
   final int? money;
   final Duration? playTime;
 
@@ -43,6 +46,7 @@ class SaveData {
     this.team = const [],
     this.trainerName,
     this.trainerId,
+    this.secretId,
     this.money,
     this.playTime,
     this.notes = const [],

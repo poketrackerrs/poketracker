@@ -44,6 +44,9 @@ tags: [poketracker, moc, home]
 - [[Gotchas]] — hard-won lessons, sharp edges, incomplete features
 - [[Constraints and Legal]] — personal-use rules and the ROM/copyright boundary
 
+## 🔬 Planning / research
+- [[Built-in Emulator — Feasibility (GBA + DS)]] — embedding mGBA + melonDS via libretro
+
 ---
 > [!tip] Using this vault
 > Open the `wiki/` folder as an Obsidian vault (**Open folder as vault**). Everything is plain Markdown with `[[wikilinks]]` — no plugins required. Try the **graph view** to see how the notes connect.

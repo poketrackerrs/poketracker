@@ -1,0 +1,14 @@
+mgba_libretro.dll — the mGBA emulator core, used by PokeTracker's built-in
+Game Boy Advance player.
+
+mGBA is Copyright © 2013–2026 Jeffrey Pfau and contributors, and is distributed
+under the Mozilla Public License, version 2.0 (MPL-2.0).
+
+Full license text: https://www.mozilla.org/en-US/MPL/2.0/
+Source code:        https://github.com/mgba-emu/mgba
+
+This binary is the unmodified libretro build of mGBA obtained from the libretro
+nightly buildbot (https://buildbot.libretro.com). Under MPL-2.0, the source for
+the MPL-covered files is available at the URLs above. PokeTracker bundles this
+core unmodified and links to it at runtime via the libretro C ABI; the rest of
+PokeTracker is not a derivative work of mGBA under MPL-2.0's file-level copyleft.
