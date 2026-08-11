@@ -54,19 +54,19 @@ class ConsoleArt extends StatelessWidget {
       platform == BoxPlatform.n3ds ||
       platform == BoxPlatform.nswitch;
 
+  /// Consoles that ship a rendered 3D-model photo as their preview icon
+  /// (grid + shelf header). Others fall back to the constructed vector art.
+  static const Map<BoxPlatform, String> _modelIcons = {
+    BoxPlatform.gb: 'assets/models/gameboy_icon.png',
+    BoxPlatform.gba: 'assets/models/gba_icon.png',
+    BoxPlatform.nswitch: 'assets/models/switch_icon.png',
+  };
+
   @override
   Widget build(BuildContext context) {
-    // The Game Boy: a photo of the real model as the preview icon, or the
-    // constructed 3D (used by the launch animation, which needs glow/rotation).
-    if (platform == BoxPlatform.gb) {
-      if (preview) {
-        return Image.asset(
-          'assets/models/gameboy_icon.png',
-          height: size,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => GameBoy3D(size: size),
-        );
-      }
+    // The Game Boy launch animation needs the constructed 3D (glow/rotation);
+    // everywhere else (preview) uses the rendered model photo.
+    if (platform == BoxPlatform.gb && !preview) {
       return GameBoy3D(
         size: size,
         glow: glow,
@@ -75,6 +75,19 @@ class ConsoleArt extends StatelessWidget {
         pitch: pitch,
       );
     }
+    final iconAsset = preview ? _modelIcons[platform] : null;
+    if (iconAsset != null) {
+      return Image.asset(
+        iconAsset,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => _vectorArt(),
+      );
+    }
+    return _vectorArt();
+  }
+
+  Widget _vectorArt() {
     final w = _landscape ? size : size * 0.72;
     final h = _landscape ? size * 0.72 : size;
     return SizedBox(

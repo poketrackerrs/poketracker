@@ -1,6 +1,6 @@
 {
-  "version": "1.0.55",
-  "notes": "New GBA launch animation: Game Boy Advance games now play a 3D Game Boy Advance SP sequence when you hit Play — the cartridge slots into the SP and the console flips open. Per-game shell colors (Ruby, Sapphire, Emerald, LeafGreen, FireRed), with the translucent shells showing a hint of the board inside.",
+  "version": "1.0.56",
+  "notes": "Nicer console icons on the Games grid: the Game Boy Advance and Nintendo Switch now show real 3D-model renders (matching the Game Boy) instead of the flat drawings. DS, 3DS and Game Boy Color are unchanged for now.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
