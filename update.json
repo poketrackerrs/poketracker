@@ -1,6 +1,6 @@
 {
-  "version": "1.0.54",
-  "notes": "3DS folder polish (Windows): the app's managed 3DS folder is now 'Documents\\PokeTracker\\3DS Firmware' so Fetch and Open point to the same place, and 'Open 3DS folder' opens straight to your CIAs (the updates subfolder) instead of an empty folder.",
+  "version": "1.0.55",
+  "notes": "New GBA launch animation: Game Boy Advance games now play a 3D Game Boy Advance SP sequence when you hit Play — the cartridge slots into the SP and the console flips open. Per-game shell colors (Ruby, Sapphire, Emerald, LeafGreen, FireRed), with the translucent shells showing a hint of the board inside.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

@@ -46,6 +46,13 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       (Platform.isAndroid || Platform.isIOS || Platform.isWindows) &&
       widget.platform == BoxPlatform.gb;
 
+  /// Which platforms get the cartridge slot-in launch animation: Game Boy (the
+  /// classic 3D frames) and GBA (the Game Boy Advance SP scene in launch3d.dart).
+  bool get _useLaunch3D =>
+      (Platform.isAndroid || Platform.isIOS || Platform.isWindows) &&
+      (widget.platform == BoxPlatform.gb ||
+          widget.platform == BoxPlatform.gba);
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -324,7 +331,7 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       outcome = await state.tryLaunchGame(game);
     }
 
-    if (_show3dConsole) {
+    if (_useLaunch3D) {
       // Real console + cartridge slot-in animation.
       await showLaunch3D(context, game: game, onLaunch: doLaunch);
     } else {
