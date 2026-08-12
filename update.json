@@ -1,6 +1,6 @@
 {
-  "version": "1.0.59",
-  "notes": "Simplified the FireRed launch: dropped the bookshelf intro and go straight to the box — the FireRed box comes in, opens, the cartridge rises out and drops into the Game Boy Advance SP, which folds open and powers on, ending on a push-in to the screen. Other GBA games keep their current launch for now.",
+  "version": "1.0.60",
+  "notes": "Play launches straight into the game now — the launch animations are turned off for now. New on each game page: a 'Cartridge 3D' button that opens the game's cartridge as a real drag-to-rotate 3D model (right next to the existing tap-to-rotate box). Available for the Game Boy, Game Boy Color and Game Boy Advance games.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

@@ -10,6 +10,7 @@ import '../models/progress.dart';
 import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../state/app_state.dart';
+import 'cartridge_viewer.dart';
 import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
 import 'pokemon_detail_screen.dart';
@@ -88,24 +89,38 @@ class _GameHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          GestureDetector(
-            onTap: () => _showBoxPopout(context, game),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GameBoxArt(game: game, height: 118),
-                const SizedBox(height: 3),
-                const Row(
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () => _showBoxPopout(context, game),
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.zoom_out_map, size: 11, color: Colors.white70),
-                    SizedBox(width: 3),
-                    Text('Tap to rotate',
-                        style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    GameBoxArt(game: game, height: 118),
+                    const SizedBox(height: 3),
+                    const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.zoom_out_map,
+                            size: 11, color: Colors.white70),
+                        SizedBox(width: 3),
+                        Text('Tap to rotate',
+                            style:
+                                TextStyle(color: Colors.white70, fontSize: 11)),
+                      ],
+                    ),
                   ],
                 ),
+              ),
+              if (_cartAsset(game) != null) ...[
+                const SizedBox(height: 6),
+                _CartButton(
+                  onTap: () => showModelViewerDialog(context,
+                      src: _cartAsset(game)!, title: '${game.title} cartridge'),
+                ),
               ],
-            ),
+            ],
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -154,6 +169,44 @@ class _HeaderChip extends StatelessWidget {
       ),
       child: Text(text,
           style: const TextStyle(color: Colors.white, fontSize: 12)),
+    );
+  }
+}
+
+/// Games with a baked 3D cartridge model (GB/GBC/GBA — where a labelled
+/// cartridge exists). Add ids as more carts are baked.
+const _cartGames = {
+  'red', 'blue', 'yellow', 'gold', 'silver', 'crystal',
+  'ruby', 'sapphire', 'emerald', 'firered', 'leafgreen',
+};
+String? _cartAsset(Game game) =>
+    _cartGames.contains(game.id) ? 'assets/models/carts/${game.id}.glb' : null;
+
+/// Small tappable that opens the game's 3D cartridge in the model viewer.
+class _CartButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CartButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.videogame_asset, size: 13, color: Colors.white),
+            SizedBox(width: 5),
+            Text('Cartridge 3D',
+                style: TextStyle(color: Colors.white, fontSize: 11)),
+          ],
+        ),
+      ),
     );
   }
 }

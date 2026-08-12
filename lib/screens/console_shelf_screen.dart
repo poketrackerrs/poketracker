@@ -48,6 +48,10 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
 
   /// Which platforms get the cartridge slot-in launch animation: Game Boy (the
   /// classic 3D frames) and GBA (the Game Boy Advance SP scene in launch3d.dart).
+  // Master switch for the Play launch animations. Off for now — Play launches
+  // straight into the game. Return true to bring the animations back.
+  bool get _launchAnimations => false;
+
   bool get _useLaunch3D =>
       (Platform.isAndroid || Platform.isIOS || Platform.isWindows) &&
       (widget.platform == BoxPlatform.gb ||
@@ -331,21 +335,26 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
       outcome = await state.tryLaunchGame(game);
     }
 
-    if (_useLaunch3D) {
-      // Real console + cartridge slot-in animation.
-      await showLaunch3D(context, game: game, onLaunch: doLaunch);
+    if (_launchAnimations) {
+      if (_useLaunch3D) {
+        // Real console + cartridge slot-in animation.
+        await showLaunch3D(context, game: game, onLaunch: doLaunch);
+      } else {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          barrierColor: Colors.black.withValues(alpha: 0.9),
+          builder: (ctx) => _LaunchSequence(
+            game: game,
+            platform: widget.platform,
+            tint: _tint(context, game),
+            onLaunch: doLaunch,
+          ),
+        );
+      }
     } else {
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        barrierColor: Colors.black.withValues(alpha: 0.9),
-        builder: (ctx) => _LaunchSequence(
-          game: game,
-          platform: widget.platform,
-          tint: _tint(context, game),
-          onLaunch: doLaunch,
-        ),
-      );
+      // Launch animations are turned off for now — launch straight away.
+      await doLaunch();
     }
     if (!mounted) return;
     if (builtInRom != null) {
