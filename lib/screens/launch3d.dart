@@ -21,6 +21,7 @@ Future<void> showLaunch3D(
 
 const _frameCount = 68; // assets/launch/f00.png .. f67.png
 const _sp3dFrames = 60; // assets/launch/sp3d/<game>/f00.png .. f59.png
+const _fullFrames = 64; // assets/launch/full/<game>/f00.webp .. f63.webp (box→SP full flow)
 
 class _Launch3D extends StatefulWidget {
   final Game game;
@@ -41,11 +42,18 @@ class _Launch3DState extends State<_Launch3D>
   // Advance SP's front slot and the screen powers on. Others use the frame set.
   bool get _isGba => widget.game.generation == 3;
 
+  // Games with the new pre-rendered box→SP full-flow launch (real box art, boot
+  // screen baked in). Other GBA games fall back to the older per-game SP sequence
+  // until their box scans are cut and rendered. Add ids here as games are baked.
+  static const _fullFlowGames = {'firered'};
+  bool get _isFullFlow => _fullFlowGames.contains(widget.game.id);
+
   @override
   void initState() {
     super.initState();
     _c = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 2500))
+        vsync: this,
+        duration: Duration(milliseconds: _isFullFlow ? 4600 : 2500))
       ..addListener(_sounds)
       ..addStatusListener((s) async {
         if (s == AnimationStatus.completed) {
@@ -67,7 +75,15 @@ class _Launch3DState extends State<_Launch3D>
         await precacheImage(AssetImage(widget.game.boxArtAsset), context)
             .catchError((_) {});
       }
-      if (_isGba) {
+      if (_isFullFlow) {
+        for (var i = 0; i < _fullFrames; i++) {
+          if (!mounted) return;
+          await precacheImage(
+              AssetImage('assets/launch/full/${widget.game.id}/'
+                  'f${i.toString().padLeft(2, '0')}.webp'),
+              context);
+        }
+      } else if (_isGba) {
         for (var i = 0; i < _sp3dFrames; i++) {
           if (!mounted) return;
           await precacheImage(
@@ -89,11 +105,13 @@ class _Launch3DState extends State<_Launch3D>
 
   void _sounds() {
     final t = _c.value;
-    if (!_insert && t >= (_isGba ? 0.56 : 0.6)) {
+    final insertT = _isFullFlow ? 0.60 : (_isGba ? 0.56 : 0.6);
+    final powerT = _isFullFlow ? 0.80 : (_isGba ? 0.94 : 0.85);
+    if (!_insert && t >= insertT) {
       _insert = true;
       _play('sfx/insert.wav');
     }
-    if (!_power && t >= (_isGba ? 0.94 : 0.85)) {
+    if (!_power && t >= powerT) {
       _power = true;
       _play('sfx/poweron.wav');
     }
@@ -117,6 +135,13 @@ class _Launch3DState extends State<_Launch3D>
   // out; 0.30–0.38 crossfade to the 3D scene; 0.38–0.84 insertion + turn;
   // 0.84–1.0 power-on.
   String _label(double t) {
+    if (_isFullFlow) {
+      if (t < 0.30) return 'Opening the box…';
+      if (t < 0.50) return 'Taking out the cartridge…';
+      if (t < 0.72) return 'Inserting cartridge…';
+      if (t < 0.84) return 'Powering on…';
+      return 'Now loading ${widget.game.title.replaceFirst(RegExp(r'^Pok[eé]mon\s+'), '')}…';
+    }
     if (_isGba) {
       if (t < 0.58) return 'Inserting cartridge…';
       if (t < 0.94) return 'Powering on…';
@@ -283,6 +308,25 @@ class _Launch3DState extends State<_Launch3D>
     );
   }
 
+  // The full box→SP launch: one pre-rendered sequence (box pull → open → cart out →
+  // SP rises → insert → screen reveal → zoom). Boot screen is baked into the frames,
+  // so no power-on glow overlay here. Frames are portrait 640×800 (.webp).
+  Widget _fullScene(double t) {
+    final idx = (t * (_fullFrames - 1)).round().clamp(0, _fullFrames - 1);
+    return Center(
+      child: AspectRatio(
+        aspectRatio: 640 / 800,
+        child: Image.asset(
+          'assets/launch/full/${widget.game.id}/'
+          'f${idx.toString().padLeft(2, '0')}.webp',
+          gaplessPlayback: true,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -297,6 +341,19 @@ class _Launch3DState extends State<_Launch3D>
         animation: _c,
         builder: (context, _) {
           final t = _c.value;
+          if (_isFullFlow) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                    width: side, height: side * 1.25, child: _fullScene(t)),
+                const SizedBox(height: 12),
+                Text(_label(t),
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 15)),
+              ],
+            );
+          }
           if (_isGba) {
             return Column(
               mainAxisSize: MainAxisSize.min,

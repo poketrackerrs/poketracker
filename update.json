@@ -1,6 +1,6 @@
 {
-  "version": "1.0.56",
-  "notes": "Nicer console icons on the Games grid: the Game Boy Advance and Nintendo Switch now show real 3D-model renders (matching the Game Boy) instead of the flat drawings. DS, 3DS and Game Boy Color are unchanged for now.",
+  "version": "1.0.57",
+  "notes": "New FireRed launch animation: the game box is pulled from the shelf, opens, the Game Boy Advance cartridge rises out, the box fades as a Game Boy Advance SP rises up, the cart drops into the SP, it folds open, and the screen powers on — all real 3D with the actual FireRed box art. Other GBA games keep their current launch for now.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
