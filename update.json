@@ -1,6 +1,6 @@
 {
-  "version": "1.0.58",
-  "notes": "FireRed launch now starts on a bookshelf: your GBA games (Ruby, Sapphire, FireRed, Emerald, LeafGreen) stand spine-out on a shelf, and the FireRed box is pulled forward out of the row before it opens, the cartridge rises out, and it drops into the Game Boy Advance SP that folds open and powers on. Other GBA games keep their current launch for now.",
+  "version": "1.0.59",
+  "notes": "Simplified the FireRed launch: dropped the bookshelf intro and go straight to the box — the FireRed box comes in, opens, the cartridge rises out and drops into the Game Boy Advance SP, which folds open and powers on, ending on a push-in to the screen. Other GBA games keep their current launch for now.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
