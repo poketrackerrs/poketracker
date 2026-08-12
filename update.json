@@ -1,6 +1,6 @@
 {
-  "version": "1.0.57",
-  "notes": "New FireRed launch animation: the game box is pulled from the shelf, opens, the Game Boy Advance cartridge rises out, the box fades as a Game Boy Advance SP rises up, the cart drops into the SP, it folds open, and the screen powers on — all real 3D with the actual FireRed box art. Other GBA games keep their current launch for now.",
+  "version": "1.0.58",
+  "notes": "FireRed launch now starts on a bookshelf: your GBA games (Ruby, Sapphire, FireRed, Emerald, LeafGreen) stand spine-out on a shelf, and the FireRed box is pulled forward out of the row before it opens, the cartridge rises out, and it drops into the Game Boy Advance SP that folds open and powers on. Other GBA games keep their current launch for now.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
