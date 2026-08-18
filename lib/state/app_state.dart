@@ -13,6 +13,7 @@ import '../services/emulator_bios.dart';
 import '../services/library_service.dart';
 import '../services/emulator_service.dart';
 import '../services/save_service.dart';
+import '../services/gen3_save_editor.dart';
 import '../services/pokedex_service.dart';
 import '../services/lemuroid_sync.dart';
 
@@ -303,6 +304,53 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
     }
     return data;
+  }
+
+  // ------------------------------------------------ Gen 3 save editor (write)
+  /// Current editable Gen 3 values, or null if there's no valid Gen 3 save.
+  Future<({int money, int caught})?> readGen3Save(Game game) async {
+    if (game.generation != 3) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e =
+          Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+      if (!e.verifyChecksums().ok) return null;
+      return (money: e.getMoney(game.version), caught: e.caughtCount);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Applies Gen 3 edits and writes the save back, backing up the original
+  /// first. Refuses to write unless checksums are valid before AND after the
+  /// edit. Returns a human-readable status message.
+  Future<String> writeGen3Save(Game game,
+      {int? money, bool completeDex = false}) async {
+    if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    final Gen3SaveEditor e;
+    try {
+      e = Gen3SaveEditor.load(raw);
+    } catch (err) {
+      return 'Not a readable GBA save.';
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Save checksums look wrong — refusing to edit it.';
+    }
+    if (money != null) e.setMoney(game.version, money);
+    if (completeDex) e.markAllCaught(game.version);
+    if (!e.verifyChecksums().ok) {
+      return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+    }
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final bak = File('${file.path}.bak-$stamp');
+    await bak.writeAsBytes(raw, flush: true); // original, untouched
+    await file.writeAsBytes(e.toBytes(), flush: true); // edited copy
+    return 'Saved. Backup written next to the save '
+        '(${bak.uri.pathSegments.last}). Reload it in your emulator to check.';
   }
 
   /// Writes selected fields of a parsed save into a game's progress. Caught

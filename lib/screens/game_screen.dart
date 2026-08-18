@@ -32,6 +32,12 @@ class GameScreen extends StatelessWidget {
           foregroundColor: Colors.white,
           title: Text(game.title),
           actions: [
+            if (game.generation == 3)
+              IconButton(
+                tooltip: 'Edit save file',
+                icon: const Icon(Icons.tune),
+                onPressed: () => _showSaveEditor(context, game),
+              ),
             IconButton(
               tooltip: 'Sync from save file',
               icon: const Icon(Icons.sync),
@@ -233,6 +239,127 @@ void _showBoxPopout(BuildContext context, Game game) {
       ),
     ),
   );
+}
+
+/// Gen 3 save editor (step 1): money + complete-Pokedex, written back to the
+/// .sav with an automatic backup. Refuses to touch a save whose checksums
+/// don't validate.
+void _showSaveEditor(BuildContext context, Game game) {
+  showDialog(
+    context: context,
+    builder: (_) => _SaveEditorDialog(game: game),
+  );
+}
+
+class _SaveEditorDialog extends StatefulWidget {
+  final Game game;
+  const _SaveEditorDialog({required this.game});
+  @override
+  State<_SaveEditorDialog> createState() => _SaveEditorDialogState();
+}
+
+class _SaveEditorDialogState extends State<_SaveEditorDialog> {
+  final _money = TextEditingController();
+  bool _loading = true, _busy = false, _completeDex = false;
+  int? _caught;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final data = await context.read<AppState>().readGen3Save(widget.game);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (data == null) {
+        _error = 'No editable save found. Play and save in-game once, then '
+            'set the save path in the Sync dialog if needed.';
+      } else {
+        _money.text = '${data.money}';
+        _caught = data.caught;
+      }
+    });
+  }
+
+  Future<void> _apply() async {
+    setState(() => _busy = true);
+    final money = int.tryParse(_money.text.trim());
+    final msg = await context.read<AppState>().writeGen3Save(
+          widget.game,
+          money: money,
+          completeDex: _completeDex,
+        );
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+  }
+
+  @override
+  void dispose() {
+    _money.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit save'),
+      content: _loading
+          ? const SizedBox(
+              height: 60, child: Center(child: CircularProgressIndicator()))
+          : _error != null
+              ? Text(_error!)
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: _money,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Money',
+                        helperText: '0 – 999999',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Complete Pokédex'),
+                      subtitle: Text('Currently caught: ${_caught ?? '—'} / 386'),
+                      value: _completeDex,
+                      onChanged: (v) => setState(() => _completeDex = v),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'The original save is backed up first. Reload it in your '
+                      'emulator to confirm.',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        if (_error == null && !_loading)
+          FilledButton(
+            onPressed: _busy ? null : _apply,
+            child: _busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Apply'),
+          ),
+      ],
+    );
+  }
 }
 
 // --------------------------------------------------------------- Badges

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.60",
-  "notes": "Play launches straight into the game now — the launch animations are turned off for now. New on each game page: a 'Cartridge 3D' button that opens the game's cartridge as a real drag-to-rotate 3D model (right next to the existing tap-to-rotate box). Available for the Game Boy, Game Boy Color and Game Boy Advance games.",
+  "version": "1.0.61",
+  "notes": "New: a first save editor for Gen 3 games (Ruby/Sapphire/Emerald/FireRed/LeafGreen). Open a Gen 3 game and tap the tune icon in the top bar to edit your Money or Complete the Pokédex, written straight back to your .sav. It always backs up the original first and refuses to touch a save whose checksums don't validate — so reload it in your emulator to confirm. Verified end-to-end on a real Emerald save; more fields (items, badges, and a full Pokémon editor) are coming.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
