@@ -204,6 +204,84 @@ class Gen3SaveEditor {
     fixChecksum(o.seen3Sec);
   }
 
+  // Gen 3 SaveBlock1 (trainer/game data) is logically contiguous but stored
+  // across sections 1..4 (0xF80 usable bytes each). Map a logical SaveBlock1
+  // offset to the physical byte offset (and to its section, for the checksum).
+  int _secForLogical(int l) => 1 + (l ~/ 0xF80);
+  int _logical(int l) => _s(_secForLogical(l)) + (l % 0xF80);
+
+  // Key Items pocket: (logical offset, slots) per game. Item quantities are
+  // XOR'd with the low 16 bits of the security key on E/FRLG (RS: key 0).
+  ({int ofs, int slots}) _keyPocket(String v) {
+    switch (v) {
+      case 'emerald':
+        return (ofs: 0x05D8, slots: 30);
+      case 'firered':
+      case 'leafgreen':
+        return (ofs: 0x03B8, slots: 30);
+      default: // ruby / sapphire
+        return (ofs: 0x05B0, slots: 20);
+    }
+  }
+
+  int _eventFlagBlock(String v) {
+    switch (v) {
+      case 'emerald':
+        return 0x139C;
+      case 'firered':
+      case 'leafgreen':
+        return 0x0EE0;
+      default:
+        return 0x1220; // ruby / sapphire
+    }
+  }
+
+  /// Add a key item (id) to the Key Items pocket. Returns false if full.
+  bool addKeyItem(String versionId, int itemId) {
+    final pk = _keyPocket(versionId);
+    final key = _securityKey(_ofsFor(versionId)) & 0xFFFF;
+    for (var i = 0; i < pk.slots; i++) {
+      final o = _logical(pk.ofs + i * 4);
+      final id = _u16(bytes, o);
+      if (id == itemId || id == 0) {
+        _setU16(o, itemId);
+        _setU16(o + 2, (1 ^ key) & 0xFFFF); // quantity 1
+        fixChecksum(_secForLogical(pk.ofs + i * 4));
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Set an event flag (by number) in the SaveBlock1 flag array.
+  void setEventFlag(String versionId, int flag) {
+    final l = _eventFlagBlock(versionId) + (flag >> 3);
+    bytes[_logical(l)] |= (1 << (flag & 7));
+    fixChecksum(_secForLogical(l));
+  }
+
+  /// Give an event ticket: adds the key item AND sets its enable flag so the
+  /// ferry offers the destination. Ticket ids/flags below are per-game; flags
+  /// are the part to confirm by testing in the emulator.
+  void giveTicket(String versionId, Gen3Ticket t) {
+    final def = _ticketDefs[t]!;
+    if (!def.games.contains(_family(versionId))) return;
+    addKeyItem(versionId, def.itemId);
+    final flag = def.flags[_family(versionId)];
+    if (flag != null) setEventFlag(versionId, flag);
+  }
+
+  static String _family(String v) => switch (v) {
+        'emerald' => 'e',
+        'firered' || 'leafgreen' => 'frlg',
+        _ => 'rs',
+      };
+
+  /// Tickets available in this game (for the editor UI).
+  static List<Gen3Ticket> ticketsFor(String versionId) => Gen3Ticket.values
+      .where((t) => _ticketDefs[t]!.games.contains(_family(versionId)))
+      .toList();
+
   /// Recompute and store a section's checksum. MUST be called after any edit to
   /// that section or the game rejects the save.
   void fixChecksum(int sectionId) =>
@@ -212,6 +290,34 @@ class Gen3SaveEditor {
   /// The edited save bytes (edits are applied in place on the loaded copy).
   Uint8List toBytes() => bytes;
 }
+
+/// Gen 3 event tickets — each unlocks a ferry to an event-Pokémon island.
+enum Gen3Ticket {
+  eon('Eon Ticket', 'Southern Island — Latios / Latias'),
+  mystic('Mystic Ticket', 'Navel Rock — Lugia & Ho-Oh'),
+  aurora('Aurora Ticket', 'Birth Island — Deoxys'),
+  oldSeaMap('Old Sea Map', 'Faraway Island — Mew');
+
+  final String label;
+  final String unlocks;
+  const Gen3Ticket(this.label, this.unlocks);
+}
+
+class _TicketDef {
+  final int itemId;
+  final Set<String> games; // families that have this ticket: 'rs','e','frlg'
+  final Map<String, int> flags; // family -> enable flag (verify by testing)
+  const _TicketDef(this.itemId, this.games, this.flags);
+}
+
+// Item ids: Eon 275, Mystic 276, Aurora 277, Old Sea Map 278. Enable flags are
+// set for Emerald (the game we can test); FRLG/RS add the item only for now.
+const _ticketDefs = <Gen3Ticket, _TicketDef>{
+  Gen3Ticket.eon: _TicketDef(275, {'rs', 'e'}, {'e': 0x2D3}),
+  Gen3Ticket.mystic: _TicketDef(276, {'frlg', 'e'}, {'e': 0x2D1}),
+  Gen3Ticket.aurora: _TicketDef(277, {'frlg', 'e'}, {'e': 0x2D2}),
+  Gen3Ticket.oldSeaMap: _TicketDef(278, {'e'}, {'e': 0x2D0}),
+};
 
 class _Gen3Offsets {
   final int keyOfs; // security key offset in section 0 (-1 = none, RS)

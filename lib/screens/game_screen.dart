@@ -9,6 +9,7 @@ import '../models/pokedex_models.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
+import '../services/gen3_save_editor.dart';
 import '../state/app_state.dart';
 import 'cartridge_viewer.dart';
 import '../widgets/completion_ring.dart';
@@ -261,6 +262,7 @@ class _SaveEditorDialog extends StatefulWidget {
 class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   final _money = TextEditingController();
   bool _loading = true, _busy = false, _completeDex = false;
+  final Set<Gen3Ticket> _tickets = {};
   int? _caught;
   String? _error;
 
@@ -292,6 +294,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
           widget.game,
           money: money,
           completeDex: _completeDex,
+          tickets: _tickets.toList(),
         );
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -314,7 +317,8 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
               height: 60, child: Center(child: CircularProgressIndicator()))
           : _error != null
               ? Text(_error!)
-              : Column(
+              : SingleChildScrollView(
+                  child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -334,14 +338,30 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                       value: _completeDex,
                       onChanged: (v) => setState(() => _completeDex = v),
                     ),
+                    const Divider(),
+                    const Text('Event tickets',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    ...Gen3SaveEditor.ticketsFor(widget.game.version).map(
+                      (t) => CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(t.label),
+                        subtitle: Text(t.unlocks,
+                            style: const TextStyle(fontSize: 11)),
+                        value: _tickets.contains(t),
+                        onChanged: (v) => setState(() =>
+                            v == true ? _tickets.add(t) : _tickets.remove(t)),
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     const Text(
                       'The original save is backed up first. Reload it in your '
-                      'emulator to confirm.',
+                      'emulator to confirm the ferry appears.',
                       style: TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ],
-                ),
+                )),
       actions: [
         TextButton(
           onPressed: _busy ? null : () => Navigator.of(context).pop(),

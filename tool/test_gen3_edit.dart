@@ -27,8 +27,15 @@ void main(List<String> args) {
   final v2 = e.verifyChecksums();
   print('after dex fill: caught=${e.caughtCount}  checksums ok=${v2.ok} ${v2.mismatches}');
 
+  for (final t in Gen3SaveEditor.ticketsFor('emerald')) {
+    e.giveTicket('emerald', t);
+  }
+  final v3 = e.verifyChecksums();
+  print('after ${Gen3SaveEditor.ticketsFor('emerald').length} tickets: '
+      'checksums ok=${v3.ok} ${v3.mismatches}');
+
   // prove ONLY intended sections changed structurally: re-load original & diff sizes
-  final pass = v0.ok && v1.ok && v2.ok &&
+  final pass = v0.ok && v1.ok && v2.ok && v3.ok &&
       e.getMoney('emerald') == 123456 && e.caughtCount == 386;
   print(pass ? '\nPASS ✓ edits applied, checksums round-trip' : '\nFAIL ✗');
   exitCode = pass ? 0 : 1;

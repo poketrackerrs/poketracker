@@ -1,6 +1,6 @@
 {
-  "version": "1.0.61",
-  "notes": "New: a first save editor for Gen 3 games (Ruby/Sapphire/Emerald/FireRed/LeafGreen). Open a Gen 3 game and tap the tune icon in the top bar to edit your Money or Complete the Pokédex, written straight back to your .sav. It always backs up the original first and refuses to touch a save whose checksums don't validate — so reload it in your emulator to confirm. Verified end-to-end on a real Emerald save; more fields (items, badges, and a full Pokémon editor) are coming.",
+  "version": "1.0.62",
+  "notes": "Save editor now does event tickets (Gen 3). In a Gen 3 game's Edit save dialog you can hand yourself the Eon Ticket (Latios/Latias), Mystic Ticket (Lugia & Ho-Oh), Aurora Ticket (Deoxys) and Old Sea Map (Mew) — Emerald gets all four, Ruby/Sapphire get Eon, FireRed/LeafGreen get Mystic + Aurora. It adds the key item and sets the enable flag, backing up your save first. TEST IT: reload in your emulator and check the ferry offers the trip — if it doesn't, tell me and I'll fix the flag (your .sav.bak backup is right next to the save).",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

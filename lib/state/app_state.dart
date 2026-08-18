@@ -326,7 +326,9 @@ class AppState extends ChangeNotifier {
   /// first. Refuses to write unless checksums are valid before AND after the
   /// edit. Returns a human-readable status message.
   Future<String> writeGen3Save(Game game,
-      {int? money, bool completeDex = false}) async {
+      {int? money,
+      bool completeDex = false,
+      List<Gen3Ticket> tickets = const []}) async {
     if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
@@ -342,6 +344,9 @@ class AppState extends ChangeNotifier {
     }
     if (money != null) e.setMoney(game.version, money);
     if (completeDex) e.markAllCaught(game.version);
+    for (final t in tickets) {
+      e.giveTicket(game.version, t);
+    }
     if (!e.verifyChecksums().ok) {
       return 'Edit produced bad checksums — aborted, your save was NOT changed.';
     }
