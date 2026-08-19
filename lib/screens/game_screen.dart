@@ -266,6 +266,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   final Set<Gen3Ticket> _tickets = {};
   int? _caught;
   List<Gen3PartyMon>? _party;
+  final Map<int, bool> _partyShiny = {};
   String? _error;
 
   @override
@@ -281,6 +282,11 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     if (!mounted) return;
     setState(() {
       _party = party;
+      if (party != null) {
+        for (final m in party) {
+          _partyShiny[m.slot] = m.shiny;
+        }
+      }
       _loading = false;
       if (data == null) {
         _error = 'No editable save found. Play and save in-game once, then '
@@ -300,6 +306,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
           money: money,
           completeDex: _completeDex,
           tickets: _tickets.toList(),
+          partyShiny: _partyShiny,
         );
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -361,27 +368,37 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                     ),
                     if (_party != null && _party!.isNotEmpty) ...[
                       const Divider(),
-                      const Text('Party',
+                      const Text('Party  ·  tap ★ to make shiny',
                           style: TextStyle(fontWeight: FontWeight.w600)),
-                      ..._party!.map((m) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                Text('Lv${m.level}  ',
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600)),
-                                Expanded(
-                                  child: Text(
-                                    '${m.name ?? '#${m.dex}'}'
-                                    '${m.shiny ? ' ★' : ''}  ·  ${m.natureName}'
-                                    '  ·  IV ${m.ivs.join('/')}',
-                                    style: const TextStyle(fontSize: 12),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                      ..._party!.map((m) => Row(
+                            children: [
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                iconSize: 18,
+                                icon: Icon(
+                                  (_partyShiny[m.slot] ?? m.shiny)
+                                      ? Icons.star
+                                      : Icons.star_border,
+                                  color: (_partyShiny[m.slot] ?? m.shiny)
+                                      ? Colors.amber
+                                      : Colors.grey,
                                 ),
-                              ],
-                            ),
+                                onPressed: () => setState(() => _partyShiny[
+                                    m.slot] = !(_partyShiny[m.slot] ?? m.shiny)),
+                              ),
+                              Text('Lv${m.level}  ',
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
+                              Expanded(
+                                child: Text(
+                                  '${m.name ?? '#${m.dex}'}  ·  ${m.natureName}'
+                                  '  ·  IV ${m.ivs.join('/')}',
+                                  style: const TextStyle(fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           )),
                     ],
                     const SizedBox(height: 4),

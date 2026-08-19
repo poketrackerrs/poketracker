@@ -46,8 +46,21 @@ void main(List<String> args) {
   print('party mon0: species=${mon.species} ivs=${mon.ivs} shiny=${mon.isShiny}'
       '  checksum match=$csumMatch  re-encode identical=$identical');
 
+  // shiny toggle: make it shiny, encode, decode fresh, confirm it stuck + stays legal
+  final mon2 = Pk3.decode(e2.partyBlock('emerald', 0));
+  final natBefore = mon2.nature, ivsBefore = mon2.ivs.join('/');
+  mon2.setShiny(true);
+  final again = Pk3.decode(mon2.encode());
+  final shinyOk = again.isShiny &&
+      again.computeChecksum() == again.storedChecksum &&
+      again.species == mon2.species &&
+      again.ivs.join('/') == ivsBefore;
+  print('shiny toggle: nowShiny=${again.isShiny} species=${again.species} '
+      'ivs=${again.ivs.join('/')} natureKept=${again.nature == natBefore} '
+      'checksumOk=${again.computeChecksum() == again.storedChecksum}');
+
   final pass = v0.ok && v1.ok && v2.ok && v3.ok && csumMatch && identical &&
-      mon.species == 283 &&
+      shinyOk && mon.species == 283 &&
       e.getMoney('emerald') == 123456 && e.caughtCount == 386;
   print(pass ? '\nPASS ✓ edits + PK3 codec round-trip' : '\nFAIL ✗');
   exitCode = pass ? 0 : 1;

@@ -364,7 +364,8 @@ class AppState extends ChangeNotifier {
   Future<String> writeGen3Save(Game game,
       {int? money,
       bool completeDex = false,
-      List<Gen3Ticket> tickets = const []}) async {
+      List<Gen3Ticket> tickets = const [],
+      Map<int, bool> partyShiny = const {}}) async {
     if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
@@ -383,6 +384,12 @@ class AppState extends ChangeNotifier {
     for (final t in tickets) {
       e.giveTicket(game.version, t);
     }
+    partyShiny.forEach((slot, want) {
+      final m = Pk3.decode(e.partyBlock(game.version, slot));
+      if (m.isEmpty) return;
+      m.setShiny(want);
+      e.writePartyBlock(game.version, slot, m.encode());
+    });
     if (!e.verifyChecksums().ok) {
       return 'Edit produced bad checksums — aborted, your save was NOT changed.';
     }

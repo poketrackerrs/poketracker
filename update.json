@@ -1,6 +1,6 @@
 {
-  "version": "1.0.63",
-  "notes": "Pokémon editor groundwork: the Gen 3 Edit save dialog now shows your Party — each Pokémon's level, name, shiny star, nature and IVs, read straight from the (decrypted) save. This is the read side of the new Pokémon editor; editing (shiny/IVs/moves, kept legal) and one-tap event Pokémon build on it next. The decryption was verified byte-exact against a real Emerald save.",
+  "version": "1.0.64",
+  "notes": "Pokémon editor — first edit: make party Pokémon shiny. In a Gen 3 game's Edit save dialog, your Party now shows a ★ next to each Pokémon — tap it and Apply to make that Pokémon shiny (or not). It's done legally: only the shininess changes, the species, nature, gender, ability and IVs are kept, and the save is backed up first. Verified on a real Emerald save. Next: IV/EV and move editing, then one-tap event Pokémon.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

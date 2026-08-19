@@ -40,7 +40,7 @@ class Gen3PartyMon {
 class Pk3 {
   final Uint8List raw; // 80 or 100 bytes (kept; header + tail preserved)
   final Uint8List data; // 48-byte DECRYPTED data block
-  final String order; // substructure order, e.g. "GAEM"
+  String order; // substructure order, e.g. "GAEM" (changes if PID changes)
 
   Pk3._(this.raw, this.data, this.order);
 
@@ -132,6 +132,51 @@ class Pk3 {
     for (var k = 0; k < 4; k++) {
       _sU16(data, _sub('A') + k * 2, k < mv.length ? mv[k] : 0);
     }
+  }
+
+  // Changing the PID also changes the sub-block shuffle order (PID%24) and the
+  // XOR key (PID^OTID); re-order the decrypted blocks so fields stay put. The
+  // block checksum is order-independent (same 24 words), so it's unaffected.
+  void _setPid(int newPid) {
+    final blocks = <String, List<int>>{
+      for (var i = 0; i < 4; i++) order[i]: data.sublist(i * 12, i * 12 + 12)
+    };
+    final newOrder = _orders[newPid % 24];
+    for (var i = 0; i < 4; i++) {
+      data.setRange(i * 12, i * 12 + 12, blocks[newOrder[i]]!);
+    }
+    order = newOrder;
+    _sU32(raw, 0x00, newPid & 0xFFFFFFFF);
+  }
+
+  /// Make the Pokémon shiny (or not) legally: keep the low 16 bits of the PID
+  /// (gender + ability), pick new high bits for the desired shininess, and
+  /// prefer a PID that preserves the current nature.
+  void setShiny(bool wantShiny) {
+    if (isShiny == wantShiny) return;
+    final lo = pid & 0xFFFF;
+    final tid = otid & 0xFFFF, sid = otid >> 16;
+    final targetNature = nature;
+    int chosen = (tid ^ sid ^ lo) & 0xFFFF; // hi=this -> XOR 0 -> shiny
+    if (wantShiny) {
+      for (var v = 0; v < 8; v++) {
+        final h = (chosen ^ v) & 0xFFFF;
+        if ((((h << 16) | lo) & 0xFFFFFFFF) % 25 == targetNature) {
+          chosen = h;
+          break;
+        }
+      }
+    } else {
+      chosen = (chosen ^ 0x10) & 0xFFFF; // XOR>=8 -> not shiny
+      for (var h = 0; h <= 0xFFFF; h++) {
+        if ((tid ^ sid ^ h ^ lo) >= 8 &&
+            (((h << 16) | lo) & 0xFFFFFFFF) % 25 == targetNature) {
+          chosen = h;
+          break;
+        }
+      }
+    }
+    _setPid(((chosen << 16) | lo) & 0xFFFFFFFF);
   }
 
   /// Re-encrypt and return the block bytes (with a fresh block checksum),
