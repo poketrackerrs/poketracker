@@ -344,6 +344,7 @@ class AppState extends ChangeNotifier {
           shiny: m.isShiny,
           nature: m.nature,
           ivs: m.ivs,
+          evs: m.evs,
         ));
       }
       try {
@@ -365,7 +366,7 @@ class AppState extends ChangeNotifier {
       {int? money,
       bool completeDex = false,
       List<Gen3Ticket> tickets = const [],
-      Map<int, bool> partyShiny = const {}}) async {
+      Map<int, PartyEdit> partyEdits = const {}}) async {
     if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
@@ -384,12 +385,25 @@ class AppState extends ChangeNotifier {
     for (final t in tickets) {
       e.giveTicket(game.version, t);
     }
-    partyShiny.forEach((slot, want) {
-      final m = Pk3.decode(e.partyBlock(game.version, slot));
-      if (m.isEmpty) return;
-      m.setShiny(want);
-      e.writePartyBlock(game.version, slot, m.encode());
-    });
+    for (final entry in partyEdits.entries) {
+      final ed = entry.value;
+      final m = Pk3.decode(e.partyBlock(game.version, entry.key));
+      if (m.isEmpty) continue;
+      if (ed.shiny != null) m.setShiny(ed.shiny!);
+      if (ed.ivs != null) m.setIVs(ed.ivs!);
+      if (ed.evs != null) m.setEVs(ed.evs!);
+      if (ed.changesStats) {
+        try {
+          final st = (await _pokedex.fetchDetail(m.species)).stats;
+          int g(String k) => st[k] ?? 50;
+          m.recomputeStats([
+            g('hp'), g('attack'), g('defense'),
+            g('speed'), g('special-attack'), g('special-defense'),
+          ]);
+        } catch (_) {/* offline: stats stay as-is, IV/EV still applied */}
+      }
+      e.writePartyBlock(game.version, entry.key, m.encode());
+    }
     if (!e.verifyChecksums().ok) {
       return 'Edit produced bad checksums — aborted, your save was NOT changed.';
     }

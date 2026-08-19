@@ -59,8 +59,20 @@ void main(List<String> args) {
       'ivs=${again.ivs.join('/')} natureKept=${again.nature == natBefore} '
       'checksumOk=${again.computeChecksum() == again.storedChecksum}');
 
+  // IV/EV + stat recompute (Surskit base stats, Gen3 order HP/Atk/Def/Spe/SpA/SpD)
+  final mon3 = Pk3.decode(e2.partyBlock('emerald', 0));
+  mon3.setIVs([31, 31, 31, 31, 31, 31]);
+  mon3.setEVs([252, 0, 0, 252, 0, 6]);
+  mon3.recomputeStats([40, 30, 32, 65, 50, 52]);
+  final mon3b = Pk3.decode(mon3.encode());
+  final ivevOk = mon3b.ivs.every((v) => v == 31) &&
+      mon3b.evs[0] == 252 &&
+      mon3b.computeChecksum() == mon3b.storedChecksum;
+  print('IV/EV edit: ivs=${mon3b.ivs.join('/')} evs=${mon3b.evs.join('/')} '
+      'checksumOk=${mon3b.computeChecksum() == mon3b.storedChecksum}');
+
   final pass = v0.ok && v1.ok && v2.ok && v3.ok && csumMatch && identical &&
-      shinyOk && mon.species == 283 &&
+      shinyOk && ivevOk && mon.species == 283 &&
       e.getMoney('emerald') == 123456 && e.caughtCount == 386;
   print(pass ? '\nPASS ✓ edits + PK3 codec round-trip' : '\nFAIL ✗');
   exitCode = pass ? 0 : 1;

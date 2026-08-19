@@ -16,6 +16,7 @@ class Gen3PartyMon {
   final bool shiny;
   final int nature; // 0..24
   final List<int> ivs; // HP, Atk, Def, Spe, SpA, SpD
+  final List<int> evs; // same order
   String? name; // resolved from the Pokédex index
   Gen3PartyMon({
     required this.slot,
@@ -24,9 +25,19 @@ class Gen3PartyMon {
     required this.shiny,
     required this.nature,
     required this.ivs,
+    required this.evs,
     this.name,
   });
   String get natureName => kNatures[nature % 25];
+}
+
+/// A pending edit to one party Pokémon (from the editor UI).
+class PartyEdit {
+  final bool? shiny;
+  final List<int>? ivs; // HP, Atk, Def, Spe, SpA, SpD (0..31)
+  final List<int>? evs; // same order (0..255, total <= 510)
+  const PartyEdit({this.shiny, this.ivs, this.evs});
+  bool get changesStats => ivs != null || evs != null;
 }
 
 /// A single Gen 3 Pokémon (PK3). Decrypts the 48-byte data block (4 sub-blocks
@@ -177,6 +188,33 @@ class Pk3 {
       }
     }
     _setPid(((chosen << 16) | lo) & 0xFFFFFFFF);
+  }
+
+  /// Recompute the party stats (HP/Atk/Def/Spe/SpA/SpD) from IVs, EVs, level,
+  /// nature and base stats, then heal to full. [baseGen3] is in Gen 3 stat order
+  /// (HP, Atk, Def, Spe, SpA, SpD). Only meaningful on a 100-byte party block.
+  void recomputeStats(List<int> baseGen3) {
+    if (raw.length <= 0x62) return;
+    final lvl = level, iv = ivs, ev = evs;
+    final up = nature ~/ 5, down = nature % 5; // 0=Atk,1=Def,2=Spe,3=SpA,4=SpD
+    final hp =
+        (2 * baseGen3[0] + iv[0] + ev[0] ~/ 4) * lvl ~/ 100 + lvl + 10;
+    final out = <int>[hp];
+    for (var s = 0; s < 5; s++) {
+      var v = (2 * baseGen3[s + 1] + iv[s + 1] + ev[s + 1] ~/ 4) * lvl ~/ 100 + 5;
+      if (up != down) {
+        if (up == s) v = v * 110 ~/ 100;
+        if (down == s) v = v * 90 ~/ 100;
+      }
+      out.add(v);
+    }
+    _sU16(raw, 0x56, out[0]); // current HP (healed)
+    _sU16(raw, 0x58, out[0]); // max HP
+    _sU16(raw, 0x5A, out[1]); // Atk
+    _sU16(raw, 0x5C, out[2]); // Def
+    _sU16(raw, 0x5E, out[3]); // Spe
+    _sU16(raw, 0x60, out[4]); // SpA
+    _sU16(raw, 0x62, out[5]); // SpD
   }
 
   /// Re-encrypt and return the block bytes (with a fresh block checksum),

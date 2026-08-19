@@ -266,7 +266,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   final Set<Gen3Ticket> _tickets = {};
   int? _caught;
   List<Gen3PartyMon>? _party;
-  final Map<int, bool> _partyShiny = {};
+  final Map<int, PartyEdit> _partyEdits = {};
   String? _error;
 
   @override
@@ -282,11 +282,6 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     if (!mounted) return;
     setState(() {
       _party = party;
-      if (party != null) {
-        for (final m in party) {
-          _partyShiny[m.slot] = m.shiny;
-        }
-      }
       _loading = false;
       if (data == null) {
         _error = 'No editable save found. Play and save in-game once, then '
@@ -306,12 +301,22 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
           money: money,
           completeDex: _completeDex,
           tickets: _tickets.toList(),
-          partyShiny: _partyShiny,
+          partyEdits: _partyEdits,
         );
     if (!mounted) return;
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+  }
+
+  Future<void> _editMon(Gen3PartyMon m) async {
+    final result = await showDialog<PartyEdit>(
+      context: context,
+      builder: (_) => _MonEditor(mon: m, initial: _partyEdits[m.slot]),
+    );
+    if (result != null && mounted) {
+      setState(() => _partyEdits[m.slot] = result);
+    }
   }
 
   @override
@@ -368,38 +373,41 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                     ),
                     if (_party != null && _party!.isNotEmpty) ...[
                       const Divider(),
-                      const Text('Party  ·  tap ★ to make shiny',
+                      const Text('Party  ·  tap a Pokémon to edit',
                           style: TextStyle(fontWeight: FontWeight.w600)),
-                      ..._party!.map((m) => Row(
-                            children: [
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                iconSize: 18,
-                                icon: Icon(
-                                  (_partyShiny[m.slot] ?? m.shiny)
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  color: (_partyShiny[m.slot] ?? m.shiny)
-                                      ? Colors.amber
-                                      : Colors.grey,
+                      ..._party!.map((m) {
+                        final ed = _partyEdits[m.slot];
+                        final shiny = ed?.shiny ?? m.shiny;
+                        return InkWell(
+                          onTap: () => _editMon(m),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              children: [
+                                Icon(shiny ? Icons.star : Icons.star_border,
+                                    size: 16,
+                                    color:
+                                        shiny ? Colors.amber : Colors.grey),
+                                const SizedBox(width: 6),
+                                Text('Lv${m.level}  ',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600)),
+                                Expanded(
+                                  child: Text(
+                                    '${m.name ?? '#${m.dex}'}  ·  '
+                                    '${m.natureName}${ed != null ? '  · edited' : ''}',
+                                    style: const TextStyle(fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                onPressed: () => setState(() => _partyShiny[
-                                    m.slot] = !(_partyShiny[m.slot] ?? m.shiny)),
-                              ),
-                              Text('Lv${m.level}  ',
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600)),
-                              Expanded(
-                                child: Text(
-                                  '${m.name ?? '#${m.dex}'}  ·  ${m.natureName}'
-                                  '  ·  IV ${m.ivs.join('/')}',
-                                  style: const TextStyle(fontSize: 12),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          )),
+                                const Icon(Icons.chevron_right,
+                                    size: 16, color: Colors.grey),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
                     ],
                     const SizedBox(height: 4),
                     const Text(
@@ -424,6 +432,140 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('Apply'),
           ),
+      ],
+    );
+  }
+}
+
+/// Per-Pokémon editor: shiny + IVs + EVs, kept legal (IV 0–31, EV 0–255 / 510).
+class _MonEditor extends StatefulWidget {
+  final Gen3PartyMon mon;
+  final PartyEdit? initial;
+  const _MonEditor({required this.mon, this.initial});
+  @override
+  State<_MonEditor> createState() => _MonEditorState();
+}
+
+class _MonEditorState extends State<_MonEditor> {
+  static const _labels = ['HP', 'Atk', 'Def', 'Spe', 'SpA', 'SpD'];
+  late bool _shiny;
+  late List<TextEditingController> _iv, _ev;
+
+  @override
+  void initState() {
+    super.initState();
+    final i = widget.initial;
+    _shiny = i?.shiny ?? widget.mon.shiny;
+    final ivs = i?.ivs ?? widget.mon.ivs;
+    final evs = i?.evs ?? widget.mon.evs;
+    _iv = [for (final v in ivs) TextEditingController(text: '$v')];
+    _ev = [for (final v in evs) TextEditingController(text: '$v')];
+  }
+
+  @override
+  void dispose() {
+    for (final c in [..._iv, ..._ev]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  List<int> _read(List<TextEditingController> cs, int max) =>
+      [for (final c in cs) (int.tryParse(c.text.trim()) ?? 0).clamp(0, max)];
+
+  int get _evTotal => _read(_ev, 255).fold(0, (a, b) => a + b);
+
+  Widget _statRow(String title, List<TextEditingController> cs, int max) => Row(
+        children: [
+          SizedBox(
+              width: 30,
+              child: Text(title, style: const TextStyle(fontSize: 11))),
+          for (var k = 0; k < 6; k++)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Column(
+                  children: [
+                    Text(_labels[k], style: const TextStyle(fontSize: 9)),
+                    TextField(
+                      controller: cs[k],
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(fontSize: 12),
+                      decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 6)),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final over = _evTotal > 510;
+    return AlertDialog(
+      title: Text('${widget.mon.name ?? '#${widget.mon.dex}'}  Lv${widget.mon.level}'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Shiny'),
+              value: _shiny,
+              onChanged: (v) => setState(() => _shiny = v),
+            ),
+            Row(
+              children: [
+                const Text('IVs', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => setState(() {
+                    for (final c in _iv) {
+                      c.text = '31';
+                    }
+                  }),
+                  child: const Text('Max'),
+                ),
+              ],
+            ),
+            _statRow('', _iv, 31),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('EVs', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Text('total $_evTotal / 510',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: over ? Colors.red : Colors.grey)),
+              ],
+            ),
+            _statRow('', _ev, 255),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        FilledButton(
+          onPressed: over
+              ? null
+              : () => Navigator.pop(
+                  context,
+                  PartyEdit(
+                    shiny: _shiny,
+                    ivs: _read(_iv, 31),
+                    evs: _read(_ev, 255),
+                  )),
+          child: const Text('Done'),
+        ),
       ],
     );
   }
