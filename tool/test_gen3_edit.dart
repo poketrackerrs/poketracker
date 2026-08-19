@@ -4,6 +4,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import '../lib/services/gen3_save_editor.dart';
+import '../lib/services/pk3.dart';
 
 void main(List<String> args) {
   final path = args.isNotEmpty
@@ -35,8 +36,27 @@ void main(List<String> args) {
       'checksums ok=${v3.ok} ${v3.mismatches}');
 
   // prove ONLY intended sections changed structurally: re-load original & diff sizes
-  final pass = v0.ok && v1.ok && v2.ok && v3.ok &&
+  // PK3 codec round-trip on the real party Pokémon
+  final e2 = Gen3SaveEditor.load(raw); // fresh (unedited) copy
+  final blk = e2.partyBlock('emerald', 0);
+  final mon = Pk3.decode(blk);
+  final csumMatch = mon.computeChecksum() == mon.storedChecksum;
+  final reEnc = mon.encode();
+  final identical = _eq(reEnc, blk);
+  print('party mon0: species=${mon.species} ivs=${mon.ivs} shiny=${mon.isShiny}'
+      '  checksum match=$csumMatch  re-encode identical=$identical');
+
+  final pass = v0.ok && v1.ok && v2.ok && v3.ok && csumMatch && identical &&
+      mon.species == 283 &&
       e.getMoney('emerald') == 123456 && e.caughtCount == 386;
-  print(pass ? '\nPASS ✓ edits applied, checksums round-trip' : '\nFAIL ✗');
+  print(pass ? '\nPASS ✓ edits + PK3 codec round-trip' : '\nFAIL ✗');
   exitCode = pass ? 0 : 1;
+}
+
+bool _eq(Uint8List a, Uint8List b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
 }

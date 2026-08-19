@@ -282,6 +282,22 @@ class Gen3SaveEditor {
       .where((t) => _ticketDefs[t]!.games.contains(_family(versionId)))
       .toList();
 
+  // party: count @ logical 0x0234 (RSE) / 0x0034 (FRLG), then 6 x 100-byte mons
+  int _partyOfs(String v) =>
+      (v == 'firered' || v == 'leafgreen') ? 0x0034 : 0x0234;
+  int partyCount(String versionId) =>
+      _u32(bytes, _logical(_partyOfs(versionId)));
+  Uint8List partyBlock(String versionId, int i) {
+    final o = _logical(_partyOfs(versionId) + 4 + i * 100);
+    return Uint8List.fromList(bytes.sublist(o, o + 100));
+  }
+
+  void writePartyBlock(String versionId, int i, Uint8List block) {
+    final logical = _partyOfs(versionId) + 4 + i * 100;
+    bytes.setRange(_logical(logical), _logical(logical) + 100, block);
+    fixChecksum(_secForLogical(logical));
+  }
+
   /// Recompute and store a section's checksum. MUST be called after any edit to
   /// that section or the game rejects the save.
   void fixChecksum(int sectionId) =>
