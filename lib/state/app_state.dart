@@ -14,6 +14,7 @@ import '../services/library_service.dart';
 import '../services/emulator_service.dart';
 import '../services/save_service.dart';
 import '../services/gen3_save_editor.dart';
+import '../services/pk3.dart';
 import '../services/pokedex_service.dart';
 import '../services/lemuroid_sync.dart';
 
@@ -317,6 +318,41 @@ class AppState extends ChangeNotifier {
           Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
       if (!e.verifyChecksums().ok) return null;
       return (money: e.getMoney(game.version), caught: e.caughtCount);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reads a Gen 3 party (decrypting each PK3) for the editor's Pokémon view.
+  Future<List<Gen3PartyMon>?> readGen3Party(Game game) async {
+    if (game.generation != 3) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e =
+          Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+      if (!e.verifyChecksums().ok) return null;
+      final out = <Gen3PartyMon>[];
+      final n = e.partyCount(game.version).clamp(0, 6);
+      for (var i = 0; i < n; i++) {
+        final m = Pk3.decode(e.partyBlock(game.version, i));
+        if (m.isEmpty) continue;
+        out.add(Gen3PartyMon(
+          slot: i,
+          dex: m.species,
+          level: m.level,
+          shiny: m.isShiny,
+          nature: m.nature,
+          ivs: m.ivs,
+        ));
+      }
+      try {
+        final byId = {for (final s in await _pokedex.loadIndex()) s.id: s.name};
+        for (final m in out) {
+          m.name = byId[m.dex];
+        }
+      } catch (_) {}
+      return out;
     } catch (_) {
       return null;
     }

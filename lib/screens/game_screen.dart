@@ -10,6 +10,7 @@ import '../models/progress.dart';
 import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../services/gen3_save_editor.dart';
+import '../services/pk3.dart';
 import '../state/app_state.dart';
 import 'cartridge_viewer.dart';
 import '../widgets/completion_ring.dart';
@@ -264,6 +265,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   bool _loading = true, _busy = false, _completeDex = false;
   final Set<Gen3Ticket> _tickets = {};
   int? _caught;
+  List<Gen3PartyMon>? _party;
   String? _error;
 
   @override
@@ -273,9 +275,12 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   }
 
   Future<void> _load() async {
-    final data = await context.read<AppState>().readGen3Save(widget.game);
+    final state = context.read<AppState>();
+    final data = await state.readGen3Save(widget.game);
+    final party = await state.readGen3Party(widget.game);
     if (!mounted) return;
     setState(() {
+      _party = party;
       _loading = false;
       if (data == null) {
         _error = 'No editable save found. Play and save in-game once, then '
@@ -354,6 +359,31 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                             v == true ? _tickets.add(t) : _tickets.remove(t)),
                       ),
                     ),
+                    if (_party != null && _party!.isNotEmpty) ...[
+                      const Divider(),
+                      const Text('Party',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      ..._party!.map((m) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              children: [
+                                Text('Lv${m.level}  ',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600)),
+                                Expanded(
+                                  child: Text(
+                                    '${m.name ?? '#${m.dex}'}'
+                                    '${m.shiny ? ' ★' : ''}  ·  ${m.natureName}'
+                                    '  ·  IV ${m.ivs.join('/')}',
+                                    style: const TextStyle(fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )),
+                    ],
                     const SizedBox(height: 4),
                     const Text(
                       'The original save is backed up first. Reload it in your '

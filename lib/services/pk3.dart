@@ -1,5 +1,34 @@
 import 'dart:typed_data';
 
+/// The 25 Gen 3 natures, in PID%25 order.
+const kNatures = [
+  'Hardy', 'Lonely', 'Brave', 'Adamant', 'Naughty', 'Bold', 'Docile',
+  'Relaxed', 'Impish', 'Lax', 'Timid', 'Hasty', 'Serious', 'Jolly', 'Naive',
+  'Modest', 'Mild', 'Quiet', 'Bashful', 'Rash', 'Calm', 'Gentle', 'Sassy',
+  'Careful', 'Quirky',
+];
+
+/// A read-only summary of a party Pokémon for the editor UI.
+class Gen3PartyMon {
+  final int slot; // party index 0..5
+  final int dex; // national dex number
+  final int level;
+  final bool shiny;
+  final int nature; // 0..24
+  final List<int> ivs; // HP, Atk, Def, Spe, SpA, SpD
+  String? name; // resolved from the Pokédex index
+  Gen3PartyMon({
+    required this.slot,
+    required this.dex,
+    required this.level,
+    required this.shiny,
+    required this.nature,
+    required this.ivs,
+    this.name,
+  });
+  String get natureName => kNatures[nature % 25];
+}
+
 /// A single Gen 3 Pokémon (PK3). Decrypts the 48-byte data block (4 sub-blocks
 /// shuffled by PID%24, XOR-encrypted with OTID^PID), exposes editable fields,
 /// and re-encrypts with a fresh block checksum. Verified byte-exact round-trip
@@ -40,6 +69,8 @@ class Pk3 {
   int get pid => _u32(raw, 0x00);
   int get otid => _u32(raw, 0x04);
   bool get isEmpty => pid == 0 && otid == 0;
+  // party blocks (100 bytes) store the current level at 0x54.
+  int get level => raw.length > 0x54 ? raw[0x54] : 0;
 
   /// Decode a PK3 from its (still-encrypted) block.
   factory Pk3.decode(Uint8List block) {
