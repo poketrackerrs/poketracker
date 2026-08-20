@@ -345,6 +345,7 @@ class AppState extends ChangeNotifier {
           nature: m.nature,
           ivs: m.ivs,
           evs: m.evs,
+          moves: m.moves,
         ));
       }
       try {
@@ -356,6 +357,24 @@ class AppState extends ChangeNotifier {
       return out;
     } catch (_) {
       return null;
+    }
+  }
+
+  /// The moves a species can legally know in Gen 3 (any RSE/FRLG method),
+  /// as (id, name), deduped + sorted. For the move-editor dropdowns.
+  Future<List<({int id, String name})>> gen3Learnset(int dex) async {
+    try {
+      final d = await _pokedex.fetchDetail(dex);
+      final seen = <int>{};
+      final out = <({int id, String name})>[];
+      for (final mv in d.moves) {
+        if (mv.generation != 3 || mv.id == 0 || !seen.add(mv.id)) continue;
+        out.add((id: mv.id, name: mv.name));
+      }
+      out.sort((a, b) => a.name.compareTo(b.name));
+      return out;
+    } catch (_) {
+      return [];
     }
   }
 
@@ -392,6 +411,13 @@ class AppState extends ChangeNotifier {
       if (ed.shiny != null) m.setShiny(ed.shiny!);
       if (ed.ivs != null) m.setIVs(ed.ivs!);
       if (ed.evs != null) m.setEVs(ed.evs!);
+      if (ed.moves != null) {
+        m.setMoves(ed.moves!);
+        for (var k = 0; k < 4; k++) {
+          final id = k < ed.moves!.length ? ed.moves![k] : 0;
+          m.setPP(k, id == 0 ? 0 : await _pokedex.movePP(id));
+        }
+      }
       if (ed.changesStats) {
         try {
           final st = (await _pokedex.fetchDetail(m.species)).stats;

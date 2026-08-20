@@ -17,6 +17,7 @@ class Gen3PartyMon {
   final int nature; // 0..24
   final List<int> ivs; // HP, Atk, Def, Spe, SpA, SpD
   final List<int> evs; // same order
+  final List<int> moves; // 4 move ids
   String? name; // resolved from the Pokédex index
   Gen3PartyMon({
     required this.slot,
@@ -26,6 +27,7 @@ class Gen3PartyMon {
     required this.nature,
     required this.ivs,
     required this.evs,
+    required this.moves,
     this.name,
   });
   String get natureName => kNatures[nature % 25];
@@ -36,7 +38,8 @@ class PartyEdit {
   final bool? shiny;
   final List<int>? ivs; // HP, Atk, Def, Spe, SpA, SpD (0..31)
   final List<int>? evs; // same order (0..255, total <= 510)
-  const PartyEdit({this.shiny, this.ivs, this.evs});
+  final List<int>? moves; // 4 move ids (0 = empty slot)
+  const PartyEdit({this.shiny, this.ivs, this.evs, this.moves});
   bool get changesStats => ivs != null || evs != null;
 }
 
@@ -102,6 +105,9 @@ class Pk3 {
   int get heldItem => _u16(data, _sub('G') + 0x02);
   List<int> get moves =>
       [for (var k = 0; k < 4; k++) _u16(data, _sub('A') + k * 2)];
+  List<int> get pp => [for (var k = 0; k < 4; k++) data[_sub('A') + 8 + k]];
+  void setPP(int index, int value) =>
+      data[_sub('A') + 8 + index] = value.clamp(0, 255);
   List<int> get evs =>
       [for (var k = 0; k < 6; k++) data[_sub('E') + k]];
   int get _ivWord => _u32(data, _sub('M') + 0x04);

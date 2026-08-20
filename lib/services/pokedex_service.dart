@@ -193,6 +193,16 @@ class PokedexService {
     }
   }
 
+  /// Base PP of a move — to set a freshly-taught move to full (legal) PP. Cached.
+  Future<int> movePP(int moveId) async {
+    try {
+      final j = await _cachedGet('$_base/move/$moveId');
+      return (j['pp'] as int?) ?? 5;
+    } catch (_) {
+      return 5;
+    }
+  }
+
   Future<PokemonDetail> fetchDetail(int id) async {
     if (_memCache.containsKey(id)) return _memCache[id]!;
 
@@ -294,11 +304,13 @@ class PokedexService {
     final moves = <MoveEntry>[];
     for (final m in (pokemon['moves'] as List)) {
       final moveName = m['move']['name'] as String;
+      final moveId = _idFromUrl(m['move']['url'] as String) ?? 0;
       for (final d in (m['version_group_details'] as List)) {
         final vg = d['version_group']['name'] as String;
         final gen = kVersionGroupToGen[vg];
         if (gen == null) continue;
         moves.add(MoveEntry(
+          id: moveId,
           name: moveName,
           method: d['move_learn_method']['name'] as String,
           level: (d['level_learned_at'] as int?) ?? 0,

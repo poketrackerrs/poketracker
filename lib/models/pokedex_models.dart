@@ -46,11 +46,13 @@ class ObtainInfo {
 
 /// One way a Pokemon learns a move, within one generation.
 class MoveEntry {
+  final int id; // national move number (== Gen 3 move index for gens 1-3)
   final String name;
   final String method; // level-up, machine, egg, tutor
   final int level; // 0 when not applicable
   final int generation;
   const MoveEntry({
+    required this.id,
     required this.name,
     required this.method,
     required this.level,

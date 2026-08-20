@@ -450,6 +450,9 @@ class _MonEditorState extends State<_MonEditor> {
   static const _labels = ['HP', 'Atk', 'Def', 'Spe', 'SpA', 'SpD'];
   late bool _shiny;
   late List<TextEditingController> _iv, _ev;
+  late List<int> _moves;
+  List<({int id, String name})>? _legal; // learnset, null while loading
+  final Map<int, String> _nameById = {};
 
   @override
   void initState() {
@@ -458,8 +461,46 @@ class _MonEditorState extends State<_MonEditor> {
     _shiny = i?.shiny ?? widget.mon.shiny;
     final ivs = i?.ivs ?? widget.mon.ivs;
     final evs = i?.evs ?? widget.mon.evs;
+    _moves = List<int>.from(i?.moves ?? widget.mon.moves);
     _iv = [for (final v in ivs) TextEditingController(text: '$v')];
     _ev = [for (final v in evs) TextEditingController(text: '$v')];
+    _loadMoves();
+  }
+
+  Future<void> _loadMoves() async {
+    final legal = await context.read<AppState>().gen3Learnset(widget.mon.dex);
+    if (!mounted) return;
+    setState(() {
+      _legal = legal;
+      for (final m in legal) {
+        _nameById[m.id] = m.name;
+      }
+    });
+  }
+
+  String _moveName(int id) => id == 0
+      ? '—'
+      : (_nameById[id] ?? '#$id').replaceAll('-', ' ');
+
+  List<DropdownMenuItem<int>> _moveItems(int current) {
+    final items = <DropdownMenuItem<int>>[
+      const DropdownMenuItem(
+          value: 0, child: Text('—', style: TextStyle(fontSize: 12))),
+    ];
+    for (final m in (_legal ?? const [])) {
+      items.add(DropdownMenuItem(
+          value: m.id,
+          child: Text(m.name.replaceAll('-', ' '),
+              style: const TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis)));
+    }
+    if (current != 0 && !items.any((it) => it.value == current)) {
+      items.add(DropdownMenuItem(
+          value: current,
+          child:
+              Text(_moveName(current), style: const TextStyle(fontSize: 12))));
+    }
+    return items;
   }
 
   @override
@@ -547,6 +588,39 @@ class _MonEditorState extends State<_MonEditor> {
               ],
             ),
             _statRow('', _ev, 255),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('Moves',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                if (_legal == null) ...[
+                  const SizedBox(width: 8),
+                  const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                ],
+              ],
+            ),
+            for (var k = 0; k < 4; k++)
+              Row(
+                children: [
+                  SizedBox(
+                      width: 18,
+                      child: Text('${k + 1}',
+                          style: const TextStyle(fontSize: 11))),
+                  Expanded(
+                    child: DropdownButton<int>(
+                      isExpanded: true,
+                      isDense: true,
+                      value: _moves[k],
+                      style: const TextStyle(fontSize: 12, color: Colors.black),
+                      items: _moveItems(_moves[k]),
+                      onChanged: (v) => setState(() => _moves[k] = v ?? 0),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -563,6 +637,7 @@ class _MonEditorState extends State<_MonEditor> {
                     shiny: _shiny,
                     ivs: _read(_iv, 31),
                     evs: _read(_ev, 255),
+                    moves: _moves,
                   )),
           child: const Text('Done'),
         ),
