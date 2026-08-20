@@ -349,6 +349,14 @@ class AppState extends ChangeNotifier {
           nickname: m.nickname,
           otName: m.otName,
           friendship: m.friendship,
+          ball: m.ball,
+          metLevel: m.metLevel,
+          metLocation: m.metLocation,
+          otGender: m.otGender,
+          language: m.language,
+          markings: m.markings,
+          pokerus: m.pokerus,
+          contest: m.contest,
         ));
       }
       try {
@@ -392,6 +400,14 @@ class AppState extends ChangeNotifier {
           otName: m.otName,
           friendship: m.friendship,
           exp: m.exp,
+          ball: m.ball,
+          metLevel: m.metLevel,
+          metLocation: m.metLocation,
+          otGender: m.otGender,
+          language: m.language,
+          markings: m.markings,
+          pokerus: m.pokerus,
+          contest: m.contest,
         ));
       }
       try {
@@ -513,6 +529,15 @@ class AppState extends ChangeNotifier {
       if (ed.ivs != null) m.setIVs(ed.ivs!);
       if (ed.evs != null) m.setEVs(ed.evs!);
       if (ed.friendship != null) m.setFriendship(ed.friendship!);
+      if (ed.otName != null) m.setOtName(ed.otName!);
+      if (ed.ball != null) m.setBall(ed.ball!);
+      if (ed.metLevel != null) m.setMetLevel(ed.metLevel!);
+      if (ed.metLocation != null) m.setMetLocation(ed.metLocation!);
+      if (ed.otGender != null) m.setOtGender(ed.otGender!);
+      if (ed.language != null) m.setLanguage(ed.language!);
+      if (ed.markings != null) m.setMarkings(ed.markings!);
+      if (ed.pokerus != null) m.setPokerus(ed.pokerus!);
+      if (ed.contest != null) m.setContest(ed.contest!);
       // Moves: an explicit list wins; a species change without one resets to a
       // legal moveset (the old moves are illegal on the new species).
       var newMoves = ed.moves;

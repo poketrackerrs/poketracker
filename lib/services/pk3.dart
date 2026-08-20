@@ -41,6 +41,15 @@ int gen3LevelFromExp(String growthRate, int exp) {
   return lvl;
 }
 
+/// Gen 3 Poké Balls, indexed by ball id (0 = none/unknown).
+const kGen3Balls = [
+  '—', 'Master', 'Ultra', 'Great', 'Poké', 'Safari', 'Net', 'Dive', 'Nest',
+  'Repeat', 'Timer', 'Luxury', 'Premier',
+];
+
+/// Gen 3 language codes → name (6 = Korean, unused in the Western games).
+const kGen3Languages = {1: 'JPN', 2: 'ENG', 3: 'FRE', 4: 'ITA', 5: 'GER', 7: 'SPA'};
+
 /// The 25 Gen 3 natures, in PID%25 order.
 const kNatures = [
   'Hardy', 'Lonely', 'Brave', 'Adamant', 'Naughty', 'Bold', 'Docile',
@@ -117,6 +126,14 @@ class Gen3PartyMon {
   final String otName; // original trainer name
   final int friendship; // 0..255
   final int exp; // total experience (box mons derive level from this)
+  final int ball; // Poké Ball id
+  final int metLevel; // level met (0..100)
+  final int metLocation; // location id
+  final int otGender; // 0 male, 1 female
+  final int language; // Gen 3 language code
+  final int markings; // 4-bit marking flags
+  final int pokerus; // Pokérus byte
+  final List<int> contest; // cool, beauty, cute, smart, tough, sheen
   final int? boxSlot; // global PC slot 0..419, or null for a party mon
   String? name; // species name, resolved from the Pokédex index
   Gen3PartyMon({
@@ -132,6 +149,14 @@ class Gen3PartyMon {
     this.otName = '',
     this.friendship = 0,
     this.exp = 0,
+    this.ball = 0,
+    this.metLevel = 0,
+    this.metLocation = 0,
+    this.otGender = 0,
+    this.language = 2,
+    this.markings = 0,
+    this.pokerus = 0,
+    this.contest = const [0, 0, 0, 0, 0, 0],
     this.boxSlot,
     this.name,
   });
@@ -149,6 +174,14 @@ class Gen3PartyMon {
         otName: otName,
         friendship: friendship,
         exp: exp,
+        ball: ball,
+        metLevel: metLevel,
+        metLocation: metLocation,
+        otGender: otGender,
+        language: language,
+        markings: markings,
+        pokerus: pokerus,
+        contest: contest,
         boxSlot: boxSlot,
         name: name,
       );
@@ -166,6 +199,15 @@ class PartyEdit {
   final int? species; // National dex; changing it re-derives stats + moves
   final String? nickname; // stored nickname
   final int? friendship; // 0..255
+  final String? otName; // original trainer name
+  final int? ball; // Poké Ball id
+  final int? metLevel; // 0..100
+  final int? metLocation; // location id
+  final int? otGender; // 0 male, 1 female
+  final int? language; // Gen 3 language code
+  final int? markings; // 4-bit marking flags
+  final int? pokerus; // Pokérus byte
+  final List<int>? contest; // cool, beauty, cute, smart, tough, sheen
   const PartyEdit(
       {this.shiny,
       this.ivs,
@@ -175,7 +217,16 @@ class PartyEdit {
       this.level,
       this.species,
       this.nickname,
-      this.friendship});
+      this.friendship,
+      this.otName,
+      this.ball,
+      this.metLevel,
+      this.metLocation,
+      this.otGender,
+      this.language,
+      this.markings,
+      this.pokerus,
+      this.contest});
   bool get changesStats =>
       ivs != null ||
       evs != null ||
@@ -252,6 +303,19 @@ class Pk3 {
   // checksum (only the enclosing section checksum, recomputed on save).
   String get nickname => gen3DecodeText(raw, 0x08, 10);
   String get otName => gen3DecodeText(raw, 0x14, 7);
+  int get language => raw[0x12];
+  int get markings => raw[0x1B]; // 4 bits: circle/square/triangle/heart
+  // "Origins" word (M+0x02): met level (0-6), game of origin (7-10), Poké Ball
+  // (11-14), OT gender (bit 15).
+  int get _origins => _u16(data, _sub('M') + 0x02);
+  int get metLevel => _origins & 0x7F;
+  int get gameOfOrigin => (_origins >> 7) & 0xF;
+  int get ball => (_origins >> 11) & 0xF;
+  int get otGender => (_origins >> 15) & 1; // 0 = male, 1 = female
+  int get metLocation => data[_sub('M') + 0x01];
+  int get ribbons => _u32(data, _sub('M') + 0x08);
+  // Contest condition (E+0x06..0x0B): cool, beauty, cute, smart, tough, sheen.
+  List<int> get contest => [for (var k = 0; k < 6; k++) data[_sub('E') + 6 + k]];
   List<int> get moves =>
       [for (var k = 0; k < 4; k++) _u16(data, _sub('A') + k * 2)];
   List<int> get pp => [for (var k = 0; k < 4; k++) data[_sub('A') + 8 + k]];
@@ -319,6 +383,24 @@ class Pk3 {
   void setFriendship(int v) => data[_sub('G') + 0x09] = v.clamp(0, 255);
   void setPokerus(int v) => data[_sub('M') + 0x00] = v & 0xFF;
   void setNickname(String name) => gen3EncodeText(raw, 0x08, 10, name);
+  void setOtName(String name) => gen3EncodeText(raw, 0x14, 7, name);
+  void setLanguage(int v) => raw[0x12] = v & 0xFF;
+  void setMarkings(int v) => raw[0x1B] = v & 0xF;
+  void setMetLocation(int v) => data[_sub('M') + 0x01] = v & 0xFF;
+  void _setOrigins(int v) => _sU16(data, _sub('M') + 0x02, v & 0xFFFF);
+  void setMetLevel(int v) =>
+      _setOrigins((_origins & ~0x7F) | (v.clamp(0, 100) & 0x7F));
+  void setGameOfOrigin(int v) =>
+      _setOrigins((_origins & ~(0xF << 7)) | ((v & 0xF) << 7));
+  void setBall(int v) =>
+      _setOrigins((_origins & ~(0xF << 11)) | ((v.clamp(0, 12) & 0xF) << 11));
+  void setOtGender(int g) =>
+      _setOrigins((_origins & ~(1 << 15)) | ((g & 1) << 15));
+  void setContest(List<int> v) {
+    for (var k = 0; k < 6; k++) {
+      data[_sub('E') + 6 + k] = v[k].clamp(0, 255);
+    }
+  }
 
   /// Change the species to National-dex [nat]. Legality (stats, learnset-legal
   /// moves, EXP for the new growth rate, dex flag) is finished by the caller,

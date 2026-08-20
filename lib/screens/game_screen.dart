@@ -595,6 +595,11 @@ class _MonEditorState extends State<_MonEditor> {
   late List<int> _moves;
   late int _speciesDex; // National dex; may change in the editor
   late int _friendship;
+  late TextEditingController _otName;
+  late int _ball, _metLevel, _otGender, _language, _markings, _pokerus;
+  late List<TextEditingController> _contest;
+  static const _contestLabels = ['Cool', 'Beauty', 'Cute', 'Smart', 'Tough', 'Sheen'];
+  static const _markGlyphs = ['●', '■', '▲', '♥'];
   List<({int id, String name})>? _legal; // learnset, null while loading
   final Map<int, String> _nameById = {};
   List<({int id, String name})> _allSpecies = const []; // for the picker
@@ -615,6 +620,16 @@ class _MonEditorState extends State<_MonEditor> {
     _moves = List<int>.from(i?.moves ?? widget.mon.moves);
     _iv = [for (final v in ivs) TextEditingController(text: '$v')];
     _ev = [for (final v in evs) TextEditingController(text: '$v')];
+    final mon = widget.mon;
+    _otName = TextEditingController(text: i?.otName ?? mon.otName);
+    _ball = i?.ball ?? mon.ball;
+    _metLevel = i?.metLevel ?? mon.metLevel;
+    _otGender = i?.otGender ?? mon.otGender;
+    _language = i?.language ?? mon.language;
+    _markings = i?.markings ?? mon.markings;
+    _pokerus = i?.pokerus ?? mon.pokerus;
+    final contest = i?.contest ?? mon.contest;
+    _contest = [for (final v in contest) TextEditingController(text: '$v')];
     _loadMoves();
     _loadSpecies();
   }
@@ -686,7 +701,7 @@ class _MonEditorState extends State<_MonEditor> {
 
   @override
   void dispose() {
-    for (final c in [_level, _nickname, ..._iv, ..._ev]) {
+    for (final c in [_level, _nickname, _otName, ..._iv, ..._ev, ..._contest]) {
       c.dispose();
     }
     super.dispose();
@@ -738,6 +753,141 @@ class _MonEditorState extends State<_MonEditor> {
                 ),
               ),
             ),
+        ],
+      );
+
+  // Advanced fields — OT, ball, met, language, Pokérus, markings, contest.
+  Widget _moreSection() => ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        title: const Text('More', style: TextStyle(fontWeight: FontWeight.w600)),
+        children: [
+          Row(
+            children: [
+              const Text('OT  ', style: TextStyle(fontWeight: FontWeight.w600)),
+              Expanded(
+                child: TextField(
+                  controller: _otName,
+                  maxLength: 7,
+                  style: const TextStyle(fontSize: 13),
+                  decoration:
+                      const InputDecoration(isDense: true, counterText: ''),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ToggleButtons(
+                isSelected: [_otGender == 0, _otGender == 1],
+                onPressed: (i) => setState(() => _otGender = i),
+                constraints:
+                    const BoxConstraints(minWidth: 34, minHeight: 30),
+                children: const [Text('♂'), Text('♀')],
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              const Text('Ball  ',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              Expanded(
+                child: DropdownButton<int>(
+                  isExpanded: true,
+                  isDense: true,
+                  value: _ball.clamp(0, kGen3Balls.length - 1),
+                  style: const TextStyle(fontSize: 13, color: Colors.black),
+                  items: [
+                    for (var b = 0; b < kGen3Balls.length; b++)
+                      DropdownMenuItem(value: b, child: Text(kGen3Balls[b])),
+                  ],
+                  onChanged: (v) => setState(() => _ball = v ?? _ball),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text('Lang  ',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              DropdownButton<int>(
+                isDense: true,
+                value: kGen3Languages.containsKey(_language) ? _language : 2,
+                style: const TextStyle(fontSize: 13, color: Colors.black),
+                items: [
+                  for (final e in kGen3Languages.entries)
+                    DropdownMenuItem(value: e.key, child: Text(e.value)),
+                ],
+                onChanged: (v) => setState(() => _language = v ?? _language),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              const Text('Met level  ',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              SizedBox(
+                width: 48,
+                child: TextField(
+                  controller:
+                      TextEditingController(text: '$_metLevel'),
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(isDense: true),
+                  onChanged: (v) =>
+                      _metLevel = (int.tryParse(v) ?? _metLevel).clamp(0, 100),
+                ),
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  for (var b = 0; b < 4; b++)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: FilterChip(
+                        label: Text(_markGlyphs[b]),
+                        visualDensity: VisualDensity.compact,
+                        selected: (_markings & (1 << b)) != 0,
+                        onSelected: (s) => setState(() => _markings =
+                            s ? _markings | (1 << b) : _markings & ~(1 << b)),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Pokérus (immune)'),
+            value: _pokerus != 0,
+            onChanged: (v) => setState(() => _pokerus = v ? 0x40 : 0),
+          ),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Contest', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          Row(
+            children: [
+              for (var k = 0; k < 6; k++)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      children: [
+                        Text(_contestLabels[k],
+                            style: const TextStyle(fontSize: 8)),
+                        TextField(
+                          controller: _contest[k],
+                          textAlign: TextAlign.center,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(fontSize: 12),
+                          decoration: const InputDecoration(
+                              isDense: true,
+                              contentPadding:
+                                  EdgeInsets.symmetric(vertical: 6)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       );
 
@@ -919,6 +1069,7 @@ class _MonEditorState extends State<_MonEditor> {
                   ),
                 ],
               ),
+            _moreSection(),
           ],
         ),
       ),
@@ -945,6 +1096,16 @@ class _MonEditorState extends State<_MonEditor> {
                         ? null
                         : _nickname.text.trim(),
                     friendship: _friendship,
+                    otName: _otName.text.trim().isEmpty
+                        ? null
+                        : _otName.text.trim(),
+                    ball: _ball,
+                    metLevel: _metLevel,
+                    otGender: _otGender,
+                    language: _language,
+                    markings: _markings,
+                    pokerus: _pokerus,
+                    contest: _read(_contest, 255),
                   )),
           child: const Text('Done'),
         ),
