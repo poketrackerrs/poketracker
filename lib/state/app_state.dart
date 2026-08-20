@@ -93,7 +93,7 @@ class AppState extends ChangeNotifier {
       {for (final s in kNdsBiosSlots) s.fileName: s.sizes};
 
   Future<void> _autoFetchBiosIfNeeded() async {
-    if (!(Platform.isWindows || Platform.isAndroid)) return;
+    if (!(Platform.isWindows || Platform.isAndroid || Platform.isIOS)) return;
     try {
       final bios = EmulatorBios();
       if (await bios.hasAllNds()) return;
@@ -501,7 +501,7 @@ class AppState extends ChangeNotifier {
   /// True if [game] can run in the **built-in** player: mGBA for the Game Boy
   /// family (GB/GBC/GBA = gens 1–3) and melonDS for Nintendo DS (gens 4–5).
   bool canPlayBuiltIn(Game game) =>
-      (Platform.isWindows || Platform.isAndroid) &&
+      (Platform.isWindows || Platform.isAndroid || Platform.isIOS) &&
       game.generation >= 1 &&
       game.generation <= 5 &&
       isInstalled(game.id);

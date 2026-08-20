@@ -204,6 +204,15 @@ class GbaEmulator {
     if (Platform.isAndroid) {
       return ('lib$coreBase.so', coresPath);
     }
+    if (Platform.isIOS) {
+      // iOS forbids dlopen of a lib written outside the signed bundle, so the
+      // core ships as an embedded, code-signed framework in Runner.app/
+      // Frameworks/<coreBase>.framework/<coreBase>. Load it in place; the
+      // system dir (BIOS etc.) still lives in the writable support dir.
+      final fwks = File(Platform.resolvedExecutable).parent.path;
+      final core = '$fwks/Frameworks/$coreBase.framework/$coreBase';
+      return (core, coresPath);
+    }
     final dll = File('$coresPath/$coreBase.dll');
     final data = await rootBundle.load('assets/cores/$coreBase.dll');
     final bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
