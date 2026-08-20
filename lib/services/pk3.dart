@@ -34,6 +34,60 @@ const kNatures = [
   'Careful', 'Quirky',
 ];
 
+/// Gen 3 stores its own internal species order: #1–251 match the National dex
+/// 1:1, then 25 unused slots, then Hoenn (#252–386) sits at internal 277–411
+/// (National + 25). These convert between the two.
+int gen3InternalToNational(int internal) {
+  if (internal <= 251) return internal;
+  if (internal >= 277 && internal <= 411) return internal - 25;
+  return 0; // an unused/glitch internal slot
+}
+
+int gen3NationalToInternal(int national) =>
+    national <= 251 ? national : national + 25;
+
+/// Gen 3 (Western) character table ⇄ ASCII, for nicknames and OT names. Only the
+/// printable letters/digits/space/common punctuation are mapped; 0xFF ends a
+/// string. Unmapped bytes decode to '' and unmappable chars encode to space.
+const _kGen3Terminator = 0xFF;
+final Map<int, String> _gen3ToChar = () {
+  final m = <int, String>{0x00: ' ', 0xAE: '-', 0xAD: '.', 0xBA: '/', 0xB8: ','};
+  for (var i = 0; i < 10; i++) {
+    m[0xA1 + i] = '$i'; // 0xA1..0xAA = 0-9
+  }
+  for (var i = 0; i < 26; i++) {
+    m[0xBB + i] = String.fromCharCode(65 + i); // A-Z
+  }
+  for (var i = 0; i < 26; i++) {
+    m[0xD5 + i] = String.fromCharCode(97 + i); // a-z
+  }
+  return m;
+}();
+final Map<String, int> _charToGen3 = {
+  for (final e in _gen3ToChar.entries) e.value: e.key
+};
+
+String gen3DecodeText(Uint8List bytes, int start, int len) {
+  final sb = StringBuffer();
+  for (var i = 0; i < len; i++) {
+    final b = bytes[start + i];
+    if (b == _kGen3Terminator) break;
+    sb.write(_gen3ToChar[b] ?? '');
+  }
+  return sb.toString().trimRight();
+}
+
+/// Encode [text] into [len] Gen 3 bytes at [start] (padded/terminated with 0xFF).
+void gen3EncodeText(Uint8List bytes, int start, int len, String text) {
+  for (var i = 0; i < len; i++) {
+    if (i < text.length) {
+      bytes[start + i] = _charToGen3[text[i]] ?? _charToGen3[' ']!;
+    } else {
+      bytes[start + i] = _kGen3Terminator;
+    }
+  }
+}
+
 /// A read-only summary of a party Pokémon for the editor UI.
 class Gen3PartyMon {
   final int slot; // party index 0..5
@@ -44,7 +98,10 @@ class Gen3PartyMon {
   final List<int> ivs; // HP, Atk, Def, Spe, SpA, SpD
   final List<int> evs; // same order
   final List<int> moves; // 4 move ids
-  String? name; // resolved from the Pokédex index
+  final String nickname; // stored nickname (may differ from species name)
+  final String otName; // original trainer name
+  final int friendship; // 0..255
+  String? name; // species name, resolved from the Pokédex index
   Gen3PartyMon({
     required this.slot,
     required this.dex,
@@ -54,6 +111,9 @@ class Gen3PartyMon {
     required this.ivs,
     required this.evs,
     required this.moves,
+    this.nickname = '',
+    this.otName = '',
+    this.friendship = 0,
     this.name,
   });
   String get natureName => kNatures[nature % 25];
@@ -67,10 +127,25 @@ class PartyEdit {
   final List<int>? moves; // 4 move ids (0 = empty slot)
   final int? nature; // 0..24
   final int? level; // 1..100
+  final int? species; // National dex; changing it re-derives stats + moves
+  final String? nickname; // stored nickname
+  final int? friendship; // 0..255
   const PartyEdit(
-      {this.shiny, this.ivs, this.evs, this.moves, this.nature, this.level});
+      {this.shiny,
+      this.ivs,
+      this.evs,
+      this.moves,
+      this.nature,
+      this.level,
+      this.species,
+      this.nickname,
+      this.friendship});
   bool get changesStats =>
-      ivs != null || evs != null || nature != null || level != null;
+      ivs != null ||
+      evs != null ||
+      nature != null ||
+      level != null ||
+      species != null;
 }
 
 /// A single Gen 3 Pokémon (PK3). Decrypts the 48-byte data block (4 sub-blocks
@@ -131,8 +206,16 @@ class Pk3 {
   // sub-block base offset within the decrypted 48-byte data
   int _sub(String letter) => order.indexOf(letter) * 12;
 
-  int get species => _u16(data, _sub('G') + 0x00);
+  int get species => _u16(data, _sub('G') + 0x00); // Gen 3 internal index
+  int get nationalDex => gen3InternalToNational(species);
   int get heldItem => _u16(data, _sub('G') + 0x02);
+  int get friendship => data[_sub('G') + 0x09];
+  int get pokerus => data[_sub('M') + 0x00];
+  // Nickname (10 bytes @ 0x08) and OT name (7 bytes @ 0x14) live in the raw
+  // header, outside the encrypted 48-byte block — so they don't touch the block
+  // checksum (only the enclosing section checksum, recomputed on save).
+  String get nickname => gen3DecodeText(raw, 0x08, 10);
+  String get otName => gen3DecodeText(raw, 0x14, 7);
   List<int> get moves =>
       [for (var k = 0; k < 4; k++) _u16(data, _sub('A') + k * 2)];
   List<int> get pp => [for (var k = 0; k < 4; k++) data[_sub('A') + 8 + k]];
@@ -197,6 +280,15 @@ class Pk3 {
   }
 
   void setHeldItem(int itemId) => _sU16(data, _sub('G') + 0x02, itemId);
+  void setFriendship(int v) => data[_sub('G') + 0x09] = v.clamp(0, 255);
+  void setPokerus(int v) => data[_sub('M') + 0x00] = v & 0xFF;
+  void setNickname(String name) => gen3EncodeText(raw, 0x08, 10, name);
+
+  /// Change the species to National-dex [nat]. Legality (stats, learnset-legal
+  /// moves, EXP for the new growth rate, dex flag) is finished by the caller,
+  /// which has the PokeAPI data; this just writes the internal species index.
+  void setSpeciesNational(int nat) =>
+      _sU16(data, _sub('G') + 0x00, gen3NationalToInternal(nat));
   int get exp => _u32(data, _sub('G') + 0x04);
   void setLevel(int level, int exp) {
     if (raw.length > 0x54) raw[0x54] = level.clamp(1, 100);

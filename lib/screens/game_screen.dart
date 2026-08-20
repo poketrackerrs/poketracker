@@ -451,10 +451,14 @@ class _MonEditorState extends State<_MonEditor> {
   late bool _shiny;
   late int _nature;
   late TextEditingController _level;
+  late TextEditingController _nickname;
   late List<TextEditingController> _iv, _ev;
   late List<int> _moves;
+  late int _speciesDex; // National dex; may change in the editor
+  late int _friendship;
   List<({int id, String name})>? _legal; // learnset, null while loading
   final Map<int, String> _nameById = {};
+  List<({int id, String name})> _allSpecies = const []; // for the picker
 
   @override
   void initState() {
@@ -462,22 +466,56 @@ class _MonEditorState extends State<_MonEditor> {
     final i = widget.initial;
     _shiny = i?.shiny ?? widget.mon.shiny;
     _nature = i?.nature ?? widget.mon.nature;
+    _speciesDex = i?.species ?? widget.mon.dex;
+    _friendship = i?.friendship ?? widget.mon.friendship;
     _level = TextEditingController(text: '${i?.level ?? widget.mon.level}');
+    _nickname = TextEditingController(
+        text: i?.nickname ?? widget.mon.nickname);
     final ivs = i?.ivs ?? widget.mon.ivs;
     final evs = i?.evs ?? widget.mon.evs;
     _moves = List<int>.from(i?.moves ?? widget.mon.moves);
     _iv = [for (final v in ivs) TextEditingController(text: '$v')];
     _ev = [for (final v in evs) TextEditingController(text: '$v')];
     _loadMoves();
+    _loadSpecies();
+  }
+
+  Future<void> _loadSpecies() async {
+    final list = await context.read<AppState>().allSpeciesForPicker();
+    if (!mounted) return;
+    setState(() => _allSpecies = list);
   }
 
   Future<void> _loadMoves() async {
-    final legal = await context.read<AppState>().gen3Learnset(widget.mon.dex);
+    final legal = await context.read<AppState>().gen3Learnset(_speciesDex);
     if (!mounted) return;
     setState(() {
       _legal = legal;
+      _nameById.clear();
       for (final m in legal) {
         _nameById[m.id] = m.name;
+      }
+    });
+  }
+
+  // Switching species invalidates the old moves (illegal on the new species):
+  // reload the new learnset and seed the four slots with its first legal moves.
+  Future<void> _changeSpecies(int dex, String name) async {
+    setState(() {
+      _speciesDex = dex;
+      _nickname.text = name.toUpperCase();
+      _legal = null;
+      _moves = [0, 0, 0, 0];
+    });
+    final legal = await context.read<AppState>().gen3Learnset(dex);
+    if (!mounted) return;
+    setState(() {
+      _legal = legal;
+      _nameById
+        ..clear()
+        ..addEntries(legal.map((m) => MapEntry(m.id, m.name)));
+      for (var k = 0; k < 4 && k < legal.length; k++) {
+        _moves[k] = legal[k].id;
       }
     });
   }
@@ -509,7 +547,7 @@ class _MonEditorState extends State<_MonEditor> {
 
   @override
   void dispose() {
-    for (final c in [_level, ..._iv, ..._ev]) {
+    for (final c in [_level, _nickname, ..._iv, ..._ev]) {
       c.dispose();
     }
     super.dispose();
@@ -519,6 +557,21 @@ class _MonEditorState extends State<_MonEditor> {
       [for (final c in cs) (int.tryParse(c.text.trim()) ?? 0).clamp(0, max)];
 
   int get _evTotal => _read(_ev, 255).fold(0, (a, b) => a + b);
+
+  String get _speciesName {
+    for (final s in _allSpecies) {
+      if (s.id == _speciesDex) return _pretty(s.name);
+    }
+    return '#$_speciesDex';
+  }
+
+  static String _pretty(String n) => n.isEmpty
+      ? n
+      : n
+          .replaceAll('-', ' ')
+          .split(' ')
+          .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+          .join(' ');
 
   Widget _statRow(String title, List<TextEditingController> cs, int max) => Row(
         children: [
@@ -559,6 +612,55 @@ class _MonEditorState extends State<_MonEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Species picker — changing it re-derives stats, legal moves,
+            // growth-rate EXP, and the default nickname (kept legal).
+            Row(
+              children: [
+                const Text('Species  ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: Text(_speciesName,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+            Autocomplete<({int id, String name})>(
+              optionsBuilder: (v) {
+                final q = v.text.trim().toLowerCase();
+                if (q.isEmpty) return const Iterable.empty();
+                return _allSpecies
+                    .where((s) => s.name.toLowerCase().contains(q))
+                    .take(40);
+              },
+              displayStringForOption: (o) => _pretty(o.name),
+              onSelected: (o) => _changeSpecies(o.id, o.name),
+              fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
+                controller: ctrl,
+                focusNode: focus,
+                style: const TextStyle(fontSize: 13),
+                decoration: const InputDecoration(
+                    isDense: true,
+                    prefixIcon: Icon(Icons.search, size: 18),
+                    hintText: 'Change species…'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Text('Nickname  ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: TextField(
+                    controller: _nickname,
+                    maxLength: 10,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: const InputDecoration(
+                        isDense: true, counterText: ''),
+                  ),
+                ),
+              ],
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Shiny'),
@@ -598,6 +700,22 @@ class _MonEditorState extends State<_MonEditor> {
                         DropdownMenuItem(value: n, child: Text(kNatures[n])),
                     ],
                     onChanged: (v) => setState(() => _nature = v ?? _nature),
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                const Text('Friendship  ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Text('$_friendship',
+                    style: const TextStyle(fontSize: 12)),
+                Expanded(
+                  child: Slider(
+                    value: _friendship.toDouble(),
+                    min: 0,
+                    max: 255,
+                    onChanged: (v) => setState(() => _friendship = v.round()),
                   ),
                 ),
               ],
@@ -682,6 +800,12 @@ class _MonEditorState extends State<_MonEditor> {
                     ivs: _read(_iv, 31),
                     evs: _read(_ev, 255),
                     moves: _moves,
+                    species:
+                        _speciesDex == widget.mon.dex ? null : _speciesDex,
+                    nickname: _nickname.text.trim().isEmpty
+                        ? null
+                        : _nickname.text.trim(),
+                    friendship: _friendship,
                   )),
           child: const Text('Done'),
         ),

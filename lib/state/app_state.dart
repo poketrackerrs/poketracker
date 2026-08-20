@@ -339,13 +339,16 @@ class AppState extends ChangeNotifier {
         if (m.isEmpty) continue;
         out.add(Gen3PartyMon(
           slot: i,
-          dex: m.species,
+          dex: m.nationalDex,
           level: m.level,
           shiny: m.isShiny,
           nature: m.nature,
           ivs: m.ivs,
           evs: m.evs,
           moves: m.moves,
+          nickname: m.nickname,
+          otName: m.otName,
+          friendship: m.friendship,
         ));
       }
       try {
@@ -362,6 +365,19 @@ class AppState extends ChangeNotifier {
 
   /// The moves a species can legally know in Gen 3 (any RSE/FRLG method),
   /// as (id, name), deduped + sorted. For the move-editor dropdowns.
+  /// All species (National dex id + name), sorted by dex, for the editor's
+  /// species picker.
+  Future<List<({int id, String name})>> allSpeciesForPicker() async {
+    try {
+      final idx = await _pokedex.loadIndex();
+      final out = [for (final s in idx) (id: s.id, name: s.name)];
+      out.sort((a, b) => a.id.compareTo(b.id));
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<List<({int id, String name})>> gen3Learnset(int dex) async {
     try {
       final d = await _pokedex.fetchDetail(dex);
@@ -408,24 +424,53 @@ class AppState extends ChangeNotifier {
       final ed = entry.value;
       final m = Pk3.decode(e.partyBlock(game.version, entry.key));
       if (m.isEmpty) continue;
-      if (ed.level != null) {
-        final rate = await _pokedex.growthRate(m.species);
-        m.setLevel(ed.level!, gen3Exp(rate, ed.level!));
+      // All PokeAPI lookups use the National dex; on a species change [dex] is
+      // the NEW species so stats/moves/growth are derived for what it becomes.
+      final speciesChanged = ed.species != null && ed.species != m.nationalDex;
+      final dex = ed.species ?? m.nationalDex;
+      if (ed.species != null) m.setSpeciesNational(ed.species!);
+      // EXP must be re-derived when the level changes or the species changes
+      // (a new species may have a different growth rate).
+      final targetLevel = ed.level ?? m.level;
+      if (ed.level != null || speciesChanged) {
+        final rate = await _pokedex.growthRate(dex);
+        m.setLevel(targetLevel, gen3Exp(rate, targetLevel));
       }
       if (ed.nature != null) m.setNature(ed.nature!);
       if (ed.shiny != null) m.setShiny(ed.shiny!);
       if (ed.ivs != null) m.setIVs(ed.ivs!);
       if (ed.evs != null) m.setEVs(ed.evs!);
-      if (ed.moves != null) {
-        m.setMoves(ed.moves!);
+      if (ed.friendship != null) m.setFriendship(ed.friendship!);
+      // Moves: an explicit list wins; a species change without one resets to a
+      // legal moveset (the old moves are illegal on the new species).
+      var newMoves = ed.moves;
+      if (newMoves == null && speciesChanged) {
+        newMoves = [for (final mv in (await gen3Learnset(dex)).take(4)) mv.id];
+      }
+      if (newMoves != null) {
+        m.setMoves(newMoves);
         for (var k = 0; k < 4; k++) {
-          final id = k < ed.moves!.length ? ed.moves![k] : 0;
+          final id = k < newMoves.length ? newMoves[k] : 0;
           m.setPP(k, id == 0 ? 0 : await _pokedex.movePP(id));
         }
       }
+      // Nickname: explicit wins; a species change renames to the new species
+      // (Gen 3 default nicknames are the species name in caps).
+      if (ed.nickname != null) {
+        m.setNickname(ed.nickname!);
+      } else if (speciesChanged) {
+        var name = '';
+        for (final s in await _pokedex.loadIndex()) {
+          if (s.id == dex) {
+            name = s.name;
+            break;
+          }
+        }
+        if (name.isNotEmpty) m.setNickname(name.toUpperCase());
+      }
       if (ed.changesStats) {
         try {
-          final st = (await _pokedex.fetchDetail(m.species)).stats;
+          final st = (await _pokedex.fetchDetail(dex)).stats;
           int g(String k) => st[k] ?? 50;
           m.recomputeStats([
             g('hp'), g('attack'), g('defense'),
@@ -433,6 +478,7 @@ class AppState extends ChangeNotifier {
           ]);
         } catch (_) {/* offline: stats stay as-is, IV/EV still applied */}
       }
+      if (speciesChanged) e.markCaught(game.version, dex);
       e.writePartyBlock(game.version, entry.key, m.encode());
     }
     if (!e.verifyChecksums().ok) {
