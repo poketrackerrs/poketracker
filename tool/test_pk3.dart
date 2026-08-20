@@ -47,5 +47,22 @@ void main() {
   print('after shiny: shiny=${s2.isShiny} movesKept=${s2.moves.toString() == '[33, 45, 14, 7]'} '
       'ivsKept=${s2.ivs.toString() == '[31, 30, 31, 30, 31, 31]'}');
 
-  print(ok && shinyOk ? '\nPASS ✓ PK3 edit round-trip' : '\nFAIL ✗');
+  // nature + held item edit (nature preserves gender/ability via low16; item is a plain field)
+  final n = Pk3.decode(p.encode());
+  final genderBitBefore = n.pid & 0xFF, abilityBitBefore = n.pid & 1;
+  n.setNature(3); // Adamant
+  n.setHeldItem(13); // some item id
+  final n2 = Pk3.decode(n.encode());
+  final natureOk = n2.nature == 3 &&
+      (n2.pid & 0xFF) == genderBitBefore &&
+      (n2.pid & 1) == abilityBitBefore &&
+      n2.heldItem == 13 &&
+      n2.computeChecksum() == n2.storedChecksum;
+  print('nature edit: nature=${n2.nature} (want 3) genderKept='
+      '${(n2.pid & 0xFF) == genderBitBefore} item=${n2.heldItem}');
+
+  print('flags: ok=$ok shinyOk=$shinyOk natureOk=$natureOk '
+      '| abilityKept=${(n2.pid & 1) == abilityBitBefore} '
+      'checksumOk=${n2.computeChecksum() == n2.storedChecksum}');
+  print(ok && shinyOk && natureOk ? '\nPASS ✓ PK3 edit round-trip' : '\nFAIL ✗');
 }

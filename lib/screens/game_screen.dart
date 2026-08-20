@@ -449,6 +449,7 @@ class _MonEditor extends StatefulWidget {
 class _MonEditorState extends State<_MonEditor> {
   static const _labels = ['HP', 'Atk', 'Def', 'Spe', 'SpA', 'SpD'];
   late bool _shiny;
+  late int _nature;
   late List<TextEditingController> _iv, _ev;
   late List<int> _moves;
   List<({int id, String name})>? _legal; // learnset, null while loading
@@ -459,6 +460,7 @@ class _MonEditorState extends State<_MonEditor> {
     super.initState();
     final i = widget.initial;
     _shiny = i?.shiny ?? widget.mon.shiny;
+    _nature = i?.nature ?? widget.mon.nature;
     final ivs = i?.ivs ?? widget.mon.ivs;
     final evs = i?.evs ?? widget.mon.evs;
     _moves = List<int>.from(i?.moves ?? widget.mon.moves);
@@ -563,6 +565,26 @@ class _MonEditorState extends State<_MonEditor> {
             ),
             Row(
               children: [
+                const Text('Nature  ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: DropdownButton<int>(
+                    isExpanded: true,
+                    isDense: true,
+                    value: _nature,
+                    style:
+                        const TextStyle(fontSize: 13, color: Colors.black),
+                    items: [
+                      for (var n = 0; n < kNatures.length; n++)
+                        DropdownMenuItem(value: n, child: Text(kNatures[n])),
+                    ],
+                    onChanged: (v) => setState(() => _nature = v ?? _nature),
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
                 const Text('IVs', style: TextStyle(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 TextButton(
@@ -635,6 +657,7 @@ class _MonEditorState extends State<_MonEditor> {
                   context,
                   PartyEdit(
                     shiny: _shiny,
+                    nature: _nature,
                     ivs: _read(_iv, 31),
                     evs: _read(_ev, 255),
                     moves: _moves,

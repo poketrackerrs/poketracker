@@ -39,8 +39,9 @@ class PartyEdit {
   final List<int>? ivs; // HP, Atk, Def, Spe, SpA, SpD (0..31)
   final List<int>? evs; // same order (0..255, total <= 510)
   final List<int>? moves; // 4 move ids (0 = empty slot)
-  const PartyEdit({this.shiny, this.ivs, this.evs, this.moves});
-  bool get changesStats => ivs != null || evs != null;
+  final int? nature; // 0..24
+  const PartyEdit({this.shiny, this.ivs, this.evs, this.moves, this.nature});
+  bool get changesStats => ivs != null || evs != null || nature != null;
 }
 
 /// A single Gen 3 Pokémon (PK3). Decrypts the 48-byte data block (4 sub-blocks
@@ -166,34 +167,48 @@ class Pk3 {
     _sU32(raw, 0x00, newPid & 0xFFFFFFFF);
   }
 
-  /// Make the Pokémon shiny (or not) legally: keep the low 16 bits of the PID
-  /// (gender + ability), pick new high bits for the desired shininess, and
-  /// prefer a PID that preserves the current nature.
-  void setShiny(bool wantShiny) {
-    if (isShiny == wantShiny) return;
+  void setHeldItem(int itemId) => _sU16(data, _sub('G') + 0x02, itemId);
+
+  /// Regenerate the PID keeping the low 16 bits (gender + ability), searching
+  /// the high bits to hit the desired nature and shininess (whichever is left
+  /// null is preserved). Falls back to matching nature alone if the exact
+  /// nature+shiny combo isn't reachable without changing gender/ability.
+  void _regenPid({int? targetNature, bool? targetShiny, bool primaryShiny = false}) {
     final lo = pid & 0xFFFF;
     final tid = otid & 0xFFFF, sid = otid >> 16;
-    final targetNature = nature;
-    int chosen = (tid ^ sid ^ lo) & 0xFFFF; // hi=this -> XOR 0 -> shiny
-    if (wantShiny) {
-      for (var v = 0; v < 8; v++) {
-        final h = (chosen ^ v) & 0xFFFF;
-        if ((((h << 16) | lo) & 0xFFFFFFFF) % 25 == targetNature) {
-          chosen = h;
-          break;
-        }
+    final wantNature = targetNature ?? nature;
+    final wantShiny = targetShiny ?? isShiny;
+    int? both, shinyOnly, natureOnly;
+    for (var h = 0; h <= 0xFFFF; h++) {
+      final full = ((h << 16) | lo) & 0xFFFFFFFF;
+      final natOk = full % 25 == wantNature;
+      final shOk = ((tid ^ sid ^ h ^ lo) < 8) == wantShiny;
+      if (natOk && shOk) {
+        both = full;
+        break;
       }
-    } else {
-      chosen = (chosen ^ 0x10) & 0xFFFF; // XOR>=8 -> not shiny
-      for (var h = 0; h <= 0xFFFF; h++) {
-        if ((tid ^ sid ^ h ^ lo) >= 8 &&
-            (((h << 16) | lo) & 0xFFFFFFFF) % 25 == targetNature) {
-          chosen = h;
-          break;
-        }
-      }
+      if (shOk) shinyOnly ??= full;
+      if (natOk) natureOnly ??= full;
     }
-    _setPid(((chosen << 16) | lo) & 0xFFFFFFFF);
+    // both if reachable; else honour the caller's primary field (gender+ability
+    // stay fixed via the low 16 bits either way).
+    final chosen = both ??
+        (primaryShiny ? (shinyOnly ?? natureOnly) : (natureOnly ?? shinyOnly));
+    if (chosen != null) _setPid(chosen);
+  }
+
+  /// Make shiny (or not) legally — preserves gender + ability; keeps nature when
+  /// possible, otherwise shininess wins.
+  void setShiny(bool wantShiny) {
+    if (isShiny != wantShiny) {
+      _regenPid(targetShiny: wantShiny, primaryShiny: true);
+    }
+  }
+
+  /// Change nature legally — preserves gender + ability; keeps shininess when
+  /// possible, otherwise the nature wins.
+  void setNature(int newNature) {
+    if (nature != newNature) _regenPid(targetNature: newNature % 25);
   }
 
   /// Recompute the party stats (HP/Atk/Def/Spe/SpA/SpD) from IVs, EVs, level,
