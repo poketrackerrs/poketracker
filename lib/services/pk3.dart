@@ -26,6 +26,21 @@ int gen3Exp(String growthRate, int level) {
   }
 }
 
+/// The level for a given total [exp] under [growthRate] — the highest level
+/// whose EXP threshold is still ≤ exp. Boxed Pokémon store no level byte, so it
+/// is derived from EXP this way.
+int gen3LevelFromExp(String growthRate, int exp) {
+  var lvl = 1;
+  for (var l = 2; l <= 100; l++) {
+    if (gen3Exp(growthRate, l) <= exp) {
+      lvl = l;
+    } else {
+      break;
+    }
+  }
+  return lvl;
+}
+
 /// The 25 Gen 3 natures, in PID%25 order.
 const kNatures = [
   'Hardy', 'Lonely', 'Brave', 'Adamant', 'Naughty', 'Bold', 'Docile',
@@ -101,6 +116,8 @@ class Gen3PartyMon {
   final String nickname; // stored nickname (may differ from species name)
   final String otName; // original trainer name
   final int friendship; // 0..255
+  final int exp; // total experience (box mons derive level from this)
+  final int? boxSlot; // global PC slot 0..419, or null for a party mon
   String? name; // species name, resolved from the Pokédex index
   Gen3PartyMon({
     required this.slot,
@@ -114,8 +131,27 @@ class Gen3PartyMon {
     this.nickname = '',
     this.otName = '',
     this.friendship = 0,
+    this.exp = 0,
+    this.boxSlot,
     this.name,
   });
+  bool get isBoxed => boxSlot != null;
+  Gen3PartyMon copyWith({int? level}) => Gen3PartyMon(
+        slot: slot,
+        dex: dex,
+        level: level ?? this.level,
+        shiny: shiny,
+        nature: nature,
+        ivs: ivs,
+        evs: evs,
+        moves: moves,
+        nickname: nickname,
+        otName: otName,
+        friendship: friendship,
+        exp: exp,
+        boxSlot: boxSlot,
+        name: name,
+      );
   String get natureName => kNatures[nature % 25];
 }
 

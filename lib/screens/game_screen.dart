@@ -267,6 +267,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   int? _caught;
   List<Gen3PartyMon>? _party;
   final Map<int, PartyEdit> _partyEdits = {};
+  final Map<int, PartyEdit> _boxEdits = {}; // keyed by global PC slot 0..419
   String? _error;
 
   @override
@@ -302,6 +303,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
           completeDex: _completeDex,
           tickets: _tickets.toList(),
           partyEdits: _partyEdits,
+          boxEdits: _boxEdits,
         );
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -409,10 +411,27 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                         );
                       }),
                     ],
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.inventory_2_outlined),
+                      title: const Text('PC Boxes'),
+                      subtitle: Text(_boxEdits.isEmpty
+                          ? 'Browse & edit stored Pokémon'
+                          : '${_boxEdits.length} edited'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        await Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => _BoxBrowser(
+                              game: widget.game, edits: _boxEdits),
+                        ));
+                        if (mounted) setState(() {});
+                      },
+                    ),
                     const SizedBox(height: 4),
                     const Text(
                       'The original save is backed up first. Reload it in your '
-                      'emulator to confirm the ferry appears.',
+                      'emulator to confirm the changes.',
                       style: TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ],
@@ -433,6 +452,126 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                 : const Text('Apply'),
           ),
       ],
+    );
+  }
+}
+
+/// Browses the PC boxes (14×30) and edits stored Pokémon through the same
+/// per-mon editor as the party. Mutates the parent's [edits] map (keyed by
+/// global PC slot 0..419) so the changes ride along on the save's Apply.
+class _BoxBrowser extends StatefulWidget {
+  final Game game;
+  final Map<int, PartyEdit> edits;
+  const _BoxBrowser({required this.game, required this.edits});
+  @override
+  State<_BoxBrowser> createState() => _BoxBrowserState();
+}
+
+class _BoxBrowserState extends State<_BoxBrowser> {
+  List<Gen3PartyMon>? _mons; // occupied slots only, boxSlot = global index
+  int _box = 0; // selected box 0..13
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final mons = await context.read<AppState>().readGen3Boxes(widget.game);
+    if (!mounted) return;
+    setState(() {
+      _mons = mons ?? [];
+      _loading = false;
+      // Land on the first box that actually has Pokémon.
+      if (_mons!.isNotEmpty) _box = _mons!.first.boxSlot! ~/ 30;
+    });
+  }
+
+  Future<void> _edit(Gen3PartyMon m) async {
+    final state = context.read<AppState>();
+    // Boxed mons store no level byte — derive it from EXP for the editor.
+    final lvl = await state.gen3LevelForExp(m.dex, m.exp);
+    if (!mounted) return;
+    final result = await showDialog<PartyEdit>(
+      context: context,
+      builder: (_) =>
+          _MonEditor(mon: m.copyWith(level: lvl), initial: widget.edits[m.boxSlot]),
+    );
+    if (result != null && mounted) {
+      setState(() => widget.edits[m.boxSlot!] = result);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mons = _mons ?? const <Gen3PartyMon>[];
+    final counts = <int, int>{};
+    for (final m in mons) {
+      final b = m.boxSlot! ~/ 30;
+      counts[b] = (counts[b] ?? 0) + 1;
+    }
+    final inBox = mons.where((m) => m.boxSlot! ~/ 30 == _box).toList()
+      ..sort((a, b) => a.boxSlot!.compareTo(b.boxSlot!));
+    return Scaffold(
+      appBar: AppBar(title: const Text('PC Boxes')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : mons.isEmpty
+              ? const Center(child: Text('No Pokémon in the PC.'))
+              : Column(
+                  children: [
+                    // Box selector
+                    SizedBox(
+                      height: 46,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        children: [
+                          for (var b = 0; b < Gen3SaveEditor.pcBoxCount; b++)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 3, vertical: 6),
+                              child: ChoiceChip(
+                                label: Text('Box ${b + 1}'
+                                    '${counts[b] != null ? ' (${counts[b]})' : ''}'),
+                                selected: _box == b,
+                                onSelected: (_) => setState(() => _box = b),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: inBox.isEmpty
+                          ? const Center(child: Text('This box is empty.'))
+                          : ListView(
+                              children: [
+                                for (final m in inBox)
+                                  _boxRow(m),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _boxRow(Gen3PartyMon m) {
+    final ed = widget.edits[m.boxSlot];
+    final shiny = ed?.shiny ?? m.shiny;
+    return ListTile(
+      dense: true,
+      leading: Icon(shiny ? Icons.star : Icons.star_border,
+          color: shiny ? Colors.amber : Colors.grey, size: 18),
+      title: Text('${m.name ?? '#${m.dex}'}  ·  ${m.natureName}'),
+      subtitle: Text('Slot ${(m.boxSlot! % 30) + 1}'
+          '${ed != null ? '  ·  edited' : ''}',
+          style: const TextStyle(fontSize: 11)),
+      trailing: const Icon(Icons.chevron_right, size: 18),
+      onTap: () => _edit(m),
     );
   }
 }

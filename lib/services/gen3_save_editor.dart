@@ -303,6 +303,36 @@ class Gen3SaveEditor {
   void fixChecksum(int sectionId) =>
       _setU16(_s(sectionId) + 0xFF6, computeChecksum(sectionId));
 
+  // ---- PC box storage (SaveBlock2) ----
+  // The PC buffer (a 4-byte current-box header, then 14*30 = 420 slots of 80
+  // bytes) is logically contiguous but stored across sections 5..13 (0xF80
+  // usable each; section 13 short but never reached by the box data). An 80-byte
+  // slot routinely straddles a section boundary, so box I/O is byte-wise.
+  static const int pcBoxCount = 14;
+  static const int pcPerBox = 30;
+  int _pcLogical(int l) => _s(5 + (l ~/ 0xF80)) + (l % 0xF80);
+
+  /// Read PC box slot [index] (0..419) as its 80-byte PK3 block.
+  Uint8List boxSlot(int index) {
+    final base = 4 + index * 80;
+    return Uint8List.fromList(
+        [for (var i = 0; i < 80; i++) bytes[_pcLogical(base + i)]]);
+  }
+
+  /// Write PC box slot [index], fixing the checksum of every section it touches.
+  void writeBoxSlot(int index, Uint8List block) {
+    final base = 4 + index * 80;
+    final touched = <int>{};
+    for (var i = 0; i < 80; i++) {
+      final l = base + i;
+      bytes[_pcLogical(l)] = block[i];
+      touched.add(5 + (l ~/ 0xF80));
+    }
+    for (final s in touched) {
+      fixChecksum(s);
+    }
+  }
+
   /// The edited save bytes (edits are applied in place on the loaded copy).
   Uint8List toBytes() => bytes;
 }

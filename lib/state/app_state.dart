@@ -363,8 +363,55 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Reads the PC boxes (14×30 = 420 slots) for the editor's box view. Returns
+  /// only occupied slots, each tagged with its global slot index (0..419).
+  Future<List<Gen3PartyMon>?> readGen3Boxes(Game game) async {
+    if (game.generation != 3) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e =
+          Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+      if (!e.verifyChecksums().ok) return null;
+      final out = <Gen3PartyMon>[];
+      final total = Gen3SaveEditor.pcBoxCount * Gen3SaveEditor.pcPerBox;
+      for (var g = 0; g < total; g++) {
+        final m = Pk3.decode(e.boxSlot(g));
+        if (m.isEmpty) continue;
+        out.add(Gen3PartyMon(
+          slot: g % Gen3SaveEditor.pcPerBox,
+          boxSlot: g,
+          dex: m.nationalDex,
+          level: 0, // derived from exp when opened for editing
+          shiny: m.isShiny,
+          nature: m.nature,
+          ivs: m.ivs,
+          evs: m.evs,
+          moves: m.moves,
+          nickname: m.nickname,
+          otName: m.otName,
+          friendship: m.friendship,
+          exp: m.exp,
+        ));
+      }
+      try {
+        final byId = {for (final s in await _pokedex.loadIndex()) s.id: s.name};
+        for (final m in out) {
+          m.name = byId[m.dex];
+        }
+      } catch (_) {}
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The moves a species can legally know in Gen 3 (any RSE/FRLG method),
   /// as (id, name), deduped + sorted. For the move-editor dropdowns.
+  /// The level a boxed Pokémon of [dex] with [exp] total experience is at.
+  Future<int> gen3LevelForExp(int dex, int exp) async =>
+      gen3LevelFromExp(await _pokedex.growthRate(dex), exp);
+
   /// All species (National dex id + name), sorted by dex, for the editor's
   /// species picker.
   Future<List<({int id, String name})>> allSpeciesForPicker() async {
@@ -401,7 +448,8 @@ class AppState extends ChangeNotifier {
       {int? money,
       bool completeDex = false,
       List<Gen3Ticket> tickets = const [],
-      Map<int, PartyEdit> partyEdits = const {}}) async {
+      Map<int, PartyEdit> partyEdits = const {},
+      Map<int, PartyEdit> boxEdits = const {}}) async {
     if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
@@ -421,9 +469,33 @@ class AppState extends ChangeNotifier {
       e.giveTicket(game.version, t);
     }
     for (final entry in partyEdits.entries) {
-      final ed = entry.value;
       final m = Pk3.decode(e.partyBlock(game.version, entry.key));
       if (m.isEmpty) continue;
+      await _applyGen3MonEdit(m, entry.value, game, e);
+      e.writePartyBlock(game.version, entry.key, m.encode());
+    }
+    for (final entry in boxEdits.entries) {
+      final m = Pk3.decode(e.boxSlot(entry.key));
+      if (m.isEmpty) continue;
+      await _applyGen3MonEdit(m, entry.value, game, e);
+      e.writeBoxSlot(entry.key, m.encode());
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+    }
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final bak = File('${file.path}.bak-$stamp');
+    await bak.writeAsBytes(raw, flush: true); // original, untouched
+    await file.writeAsBytes(e.toBytes(), flush: true); // edited copy
+    return 'Saved. Backup written next to the save '
+        '(${bak.uri.pathSegments.last}). Reload it in your emulator to check.';
+  }
+
+  /// Applies one PartyEdit to a decoded PK3 in place (shared by party + box).
+  /// Legal-by-construction: a species change re-derives EXP, stats, moves and
+  /// the default nickname; all PokeAPI lookups use National dex.
+  Future<void> _applyGen3MonEdit(
+      Pk3 m, PartyEdit ed, Game game, Gen3SaveEditor e) async {
       // All PokeAPI lookups use the National dex; on a species change [dex] is
       // the NEW species so stats/moves/growth are derived for what it becomes.
       final speciesChanged = ed.species != null && ed.species != m.nationalDex;
@@ -479,17 +551,6 @@ class AppState extends ChangeNotifier {
         } catch (_) {/* offline: stats stay as-is, IV/EV still applied */}
       }
       if (speciesChanged) e.markCaught(game.version, dex);
-      e.writePartyBlock(game.version, entry.key, m.encode());
-    }
-    if (!e.verifyChecksums().ok) {
-      return 'Edit produced bad checksums — aborted, your save was NOT changed.';
-    }
-    final stamp = DateTime.now().millisecondsSinceEpoch;
-    final bak = File('${file.path}.bak-$stamp');
-    await bak.writeAsBytes(raw, flush: true); // original, untouched
-    await file.writeAsBytes(e.toBytes(), flush: true); // edited copy
-    return 'Saved. Backup written next to the save '
-        '(${bak.uri.pathSegments.last}). Reload it in your emulator to check.';
   }
 
   /// Writes selected fields of a parsed save into a game's progress. Caught
