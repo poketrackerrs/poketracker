@@ -424,6 +424,39 @@ class AppState extends ChangeNotifier {
 
   /// The moves a species can legally know in Gen 3 (any RSE/FRLG method),
   /// as (id, name), deduped + sorted. For the move-editor dropdowns.
+  /// Reads the trainer card (name/gender/ID/playtime) for the editor.
+  Future<Gen3Trainer?> readGen3Trainer(Game game) async {
+    if (game.generation != 3) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e =
+          Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+      if (!e.verifyChecksums().ok) return null;
+      return e.trainer();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reads the five bag pockets for the editor. Keyed by pocket.
+  Future<Map<Gen3Pocket, List<({int id, int qty})>>?> readGen3Bag(
+      Game game) async {
+    if (game.generation != 3) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e =
+          Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+      if (!e.verifyChecksums().ok) return null;
+      return {
+        for (final p in Gen3Pocket.values) p: e.pocketItems(game.version, p),
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The level a boxed Pokémon of [dex] with [exp] total experience is at.
   Future<int> gen3LevelForExp(int dex, int exp) async =>
       gen3LevelFromExp(await _pokedex.growthRate(dex), exp);
@@ -465,7 +498,9 @@ class AppState extends ChangeNotifier {
       bool completeDex = false,
       List<Gen3Ticket> tickets = const [],
       Map<int, PartyEdit> partyEdits = const {},
-      Map<int, PartyEdit> boxEdits = const {}}) async {
+      Map<int, PartyEdit> boxEdits = const {},
+      Gen3Trainer? trainer,
+      Map<Gen3Pocket, List<({int id, int qty})>>? bag}) async {
     if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
@@ -481,6 +516,12 @@ class AppState extends ChangeNotifier {
     }
     if (money != null) e.setMoney(game.version, money);
     if (completeDex) e.markAllCaught(game.version);
+    if (trainer != null) e.setTrainer(trainer);
+    if (bag != null) {
+      for (final entry in bag.entries) {
+        e.setPocket(game.version, entry.key, entry.value);
+      }
+    }
     for (final t in tickets) {
       e.giveTicket(game.version, t);
     }

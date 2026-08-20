@@ -9,6 +9,7 @@ import '../models/pokedex_models.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
+import '../data/gen3_items.dart';
 import '../services/gen3_save_editor.dart';
 import '../services/pk3.dart';
 import '../state/app_state.dart';
@@ -268,6 +269,15 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   List<Gen3PartyMon>? _party;
   final Map<int, PartyEdit> _partyEdits = {};
   final Map<int, PartyEdit> _boxEdits = {}; // keyed by global PC slot 0..419
+  // Trainer card
+  final _otName = TextEditingController();
+  final _tid = TextEditingController();
+  final _sid = TextEditingController();
+  final _hours = TextEditingController();
+  int _gender = 0, _minutes = 0;
+  bool _trainerLoaded = false;
+  // Bag: pockets the user edited (empty = leave the bag untouched)
+  final Map<Gen3Pocket, List<({int id, int qty})>> _bagEdits = {};
   String? _error;
 
   @override
@@ -280,10 +290,20 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     final state = context.read<AppState>();
     final data = await state.readGen3Save(widget.game);
     final party = await state.readGen3Party(widget.game);
+    final trainer = await state.readGen3Trainer(widget.game);
     if (!mounted) return;
     setState(() {
       _party = party;
       _loading = false;
+      if (trainer != null) {
+        _otName.text = trainer.name;
+        _tid.text = '${trainer.tid}';
+        _sid.text = '${trainer.sid}';
+        _hours.text = '${trainer.hours}';
+        _gender = trainer.gender;
+        _minutes = trainer.minutes;
+        _trainerLoaded = true;
+      }
       if (data == null) {
         _error = 'No editable save found. Play and save in-game once, then '
             'set the save path in the Sync dialog if needed.';
@@ -304,6 +324,17 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
           tickets: _tickets.toList(),
           partyEdits: _partyEdits,
           boxEdits: _boxEdits,
+          trainer: _trainerLoaded
+              ? Gen3Trainer(
+                  name: _otName.text.trim(),
+                  gender: _gender,
+                  tid: int.tryParse(_tid.text.trim()) ?? 0,
+                  sid: int.tryParse(_sid.text.trim()) ?? 0,
+                  hours: int.tryParse(_hours.text.trim()) ?? 0,
+                  minutes: _minutes,
+                )
+              : null,
+          bag: _bagEdits.isEmpty ? null : _bagEdits,
         );
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -323,7 +354,9 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
 
   @override
   void dispose() {
-    _money.dispose();
+    for (final c in [_money, _otName, _tid, _sid, _hours]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -349,6 +382,64 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                         helperText: '0 – 999999',
                       ),
                     ),
+                    if (_trainerLoaded) ...[
+                      const SizedBox(height: 10),
+                      const Text('Trainer',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _otName,
+                              maxLength: 7,
+                              decoration: const InputDecoration(
+                                  isDense: true,
+                                  labelText: 'Name',
+                                  counterText: ''),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ToggleButtons(
+                            isSelected: [_gender == 0, _gender == 1],
+                            onPressed: (i) => setState(() => _gender = i),
+                            constraints: const BoxConstraints(
+                                minWidth: 34, minHeight: 30),
+                            children: const [Text('♂'), Text('♀')],
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _tid,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  isDense: true, labelText: 'ID'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: _sid,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  isDense: true, labelText: 'Secret ID'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            width: 64,
+                            child: TextField(
+                              controller: _hours,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                  isDense: true, labelText: 'Hours'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
@@ -424,6 +515,22 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                         await Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => _BoxBrowser(
                               game: widget.game, edits: _boxEdits),
+                        ));
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.backpack_outlined),
+                      title: const Text('Bag'),
+                      subtitle: Text(_bagEdits.isEmpty
+                          ? 'Items, balls, TMs, berries'
+                          : '${_bagEdits.length} pocket(s) edited'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        await Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => _BagEditor(
+                              game: widget.game, edits: _bagEdits),
                         ));
                         if (mounted) setState(() {});
                       },
@@ -572,6 +679,198 @@ class _BoxBrowserState extends State<_BoxBrowser> {
           style: const TextStyle(fontSize: 11)),
       trailing: const Icon(Icons.chevron_right, size: 18),
       onTap: () => _edit(m),
+    );
+  }
+}
+
+/// Bag editor — the five Gen 3 pockets, with quantity edits and add/remove.
+/// Mutates the parent's [edits] map (only pockets the user touches are written).
+class _BagEditor extends StatefulWidget {
+  final Game game;
+  final Map<Gen3Pocket, List<({int id, int qty})>> edits;
+  const _BagEditor({required this.game, required this.edits});
+  @override
+  State<_BagEditor> createState() => _BagEditorState();
+}
+
+class _BagEditorState extends State<_BagEditor> {
+  static const _pocketNames = {
+    Gen3Pocket.items: 'Items',
+    Gen3Pocket.keyItems: 'Key',
+    Gen3Pocket.balls: 'Balls',
+    Gen3Pocket.tmHm: 'TMs/HMs',
+    Gen3Pocket.berries: 'Berries',
+  };
+  final Map<Gen3Pocket, List<({int id, int qty})>> _local = {};
+  Gen3Pocket _pocket = Gen3Pocket.items;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final bag = await context.read<AppState>().readGen3Bag(widget.game);
+    if (!mounted) return;
+    setState(() {
+      for (final p in Gen3Pocket.values) {
+        // Prefer any in-progress edit for this pocket, else the file's contents.
+        _local[p] = List.of(widget.edits[p] ?? bag?[p] ?? const []);
+      }
+      _loading = false;
+    });
+  }
+
+  void _commit() =>
+      setState(() => widget.edits[_pocket] = List.of(_local[_pocket]!));
+
+  Future<void> _editQty(int index) async {
+    final cur = _local[_pocket]![index];
+    final ctrl = TextEditingController(text: '${cur.qty}');
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(gen3ItemName(cur.id)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Quantity (1–999)'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, -1),
+              child: const Text('Remove',
+                  style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx,
+                  (int.tryParse(ctrl.text.trim()) ?? cur.qty).clamp(1, 999)),
+              child: const Text('OK')),
+        ],
+      ),
+    );
+    if (result == null) return;
+    setState(() {
+      if (result < 0) {
+        _local[_pocket]!.removeAt(index);
+      } else {
+        _local[_pocket]![index] = (id: cur.id, qty: result);
+      }
+    });
+    _commit();
+  }
+
+  Future<void> _addItem() async {
+    final all = gen3ItemPicker();
+    int? pickedId;
+    final qty = TextEditingController(text: '1');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => AlertDialog(
+          title: const Text('Add item'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Autocomplete<({int id, String name})>(
+                optionsBuilder: (v) {
+                  final q = v.text.trim().toLowerCase();
+                  if (q.isEmpty) return const Iterable.empty();
+                  return all
+                      .where((e) => e.name.toLowerCase().contains(q))
+                      .take(40);
+                },
+                displayStringForOption: (o) => o.name,
+                onSelected: (o) => setSheet(() => pickedId = o.id),
+                fieldViewBuilder: (c, ctrl, focus, onSub) => TextField(
+                  controller: ctrl,
+                  focusNode: focus,
+                  decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search), hintText: 'Item name'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: qty,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Quantity'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            TextButton(
+                onPressed: pickedId == null
+                    ? null
+                    : () => Navigator.pop(ctx, true),
+                child: const Text('Add')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && pickedId != null) {
+      setState(() => _local[_pocket]!.add((
+            id: pickedId!,
+            qty: (int.tryParse(qty.text.trim()) ?? 1).clamp(1, 999),
+          )));
+      _commit();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = _local[_pocket] ?? const <({int id, int qty})>[];
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bag')),
+      floatingActionButton: _loading
+          ? null
+          : FloatingActionButton(
+              onPressed: _addItem, child: const Icon(Icons.add)),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                SizedBox(
+                  height: 46,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    children: [
+                      for (final p in Gen3Pocket.values)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 3, vertical: 6),
+                          child: ChoiceChip(
+                            label: Text(_pocketNames[p]!),
+                            selected: _pocket == p,
+                            onSelected: (_) => setState(() => _pocket = p),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: list.isEmpty
+                      ? const Center(child: Text('Empty pocket. Tap + to add.'))
+                      : ListView.builder(
+                          itemCount: list.length,
+                          itemBuilder: (_, i) => ListTile(
+                            dense: true,
+                            title: Text(gen3ItemName(list[i].id)),
+                            trailing: Text('×${list[i].qty}',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                            onTap: () => _editQty(i),
+                          ),
+                        ),
+                ),
+              ],
+            ),
     );
   }
 }

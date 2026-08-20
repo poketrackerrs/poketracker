@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'pk3.dart' show gen3DecodeText, gen3EncodeText;
+
 /// Read/write access to a Gen 3 (RSE / FRLG / Emerald) `.sav`.
 ///
 /// This is the foundation of the in-app save editor. It maps the rotated
@@ -151,6 +153,28 @@ class Gen3SaveEditor {
     fixChecksum(1);
   }
 
+  // ---- Trainer info (section 0; offsets are the same across RSE/FRLG) ----
+  // name @0x00 (7), gender @0x08 (0=M/1=F), TID @0x0A, SID @0x0C,
+  // playtime hours @0x0E (u16), minutes @0x10, seconds @0x11.
+  Gen3Trainer trainer() => Gen3Trainer(
+        name: gen3DecodeText(bytes, _s(0) + 0x00, 7),
+        gender: bytes[_s(0) + 0x08] & 1,
+        tid: _u16(bytes, _s(0) + 0x0A),
+        sid: _u16(bytes, _s(0) + 0x0C),
+        hours: _u16(bytes, _s(0) + 0x0E),
+        minutes: bytes[_s(0) + 0x10],
+      );
+
+  void setTrainer(Gen3Trainer t) {
+    gen3EncodeText(bytes, _s(0) + 0x00, 7, t.name);
+    bytes[_s(0) + 0x08] = t.gender & 1;
+    _setU16(_s(0) + 0x0A, t.tid & 0xFFFF);
+    _setU16(_s(0) + 0x0C, t.sid & 0xFFFF);
+    _setU16(_s(0) + 0x0E, t.hours.clamp(0, 999) & 0xFFFF);
+    bytes[_s(0) + 0x10] = t.minutes.clamp(0, 59);
+    fixChecksum(0);
+  }
+
   static const int _dexBytes = 49; // 386 species -> 49 bytes
   int get caughtCount => _countBits(_s(0) + 0x28, _dexBytes);
 
@@ -210,17 +234,90 @@ class Gen3SaveEditor {
   int _secForLogical(int l) => 1 + (l ~/ 0xF80);
   int _logical(int l) => _s(_secForLogical(l)) + (l % 0xF80);
 
-  // Key Items pocket: (logical offset, slots) per game. Item quantities are
-  // XOR'd with the low 16 bits of the security key on E/FRLG (RS: key 0).
-  ({int ofs, int slots}) _keyPocket(String v) {
+  // Bag pockets: (logical SaveBlock1 offset, slots) per game and pocket. Each
+  // slot is (item id u16, quantity u16); quantities are XOR'd with the low 16
+  // bits of the security key on E/FRLG (RS: key 0). Offsets from PKHeX.
+  ({int ofs, int slots}) _pocket(String v, Gen3Pocket p) {
     switch (v) {
-      case 'emerald':
-        return (ofs: 0x05D8, slots: 30);
       case 'firered':
       case 'leafgreen':
-        return (ofs: 0x03B8, slots: 30);
-      default: // ruby / sapphire
-        return (ofs: 0x05B0, slots: 20);
+        switch (p) {
+          case Gen3Pocket.items:
+            return (ofs: 0x0310, slots: 42);
+          case Gen3Pocket.keyItems:
+            return (ofs: 0x03B8, slots: 30);
+          case Gen3Pocket.balls:
+            return (ofs: 0x0430, slots: 13);
+          case Gen3Pocket.tmHm:
+            return (ofs: 0x0464, slots: 58);
+          case Gen3Pocket.berries:
+            return (ofs: 0x054C, slots: 43);
+        }
+      case 'ruby':
+      case 'sapphire':
+        switch (p) {
+          case Gen3Pocket.items:
+            return (ofs: 0x0560, slots: 20);
+          case Gen3Pocket.keyItems:
+            return (ofs: 0x05B0, slots: 20);
+          case Gen3Pocket.balls:
+            return (ofs: 0x0600, slots: 16);
+          case Gen3Pocket.tmHm:
+            return (ofs: 0x0640, slots: 64);
+          case Gen3Pocket.berries:
+            return (ofs: 0x0740, slots: 46);
+        }
+      default: // emerald
+        switch (p) {
+          case Gen3Pocket.items:
+            return (ofs: 0x0560, slots: 30);
+          case Gen3Pocket.keyItems:
+            return (ofs: 0x05D8, slots: 30);
+          case Gen3Pocket.balls:
+            return (ofs: 0x0650, slots: 16);
+          case Gen3Pocket.tmHm:
+            return (ofs: 0x0690, slots: 64);
+          case Gen3Pocket.berries:
+            return (ofs: 0x0790, slots: 46);
+        }
+    }
+  }
+
+  /// Read the non-empty entries of one bag pocket as (id, qty).
+  List<({int id, int qty})> pocketItems(String v, Gen3Pocket p) {
+    final pk = _pocket(v, p);
+    final key = _securityKey(_ofsFor(v)) & 0xFFFF;
+    final out = <({int id, int qty})>[];
+    for (var i = 0; i < pk.slots; i++) {
+      final o = _logical(pk.ofs + i * 4);
+      final id = _u16(bytes, o);
+      if (id == 0) continue;
+      out.add((id: id, qty: (_u16(bytes, o + 2) ^ key) & 0xFFFF));
+    }
+    return out;
+  }
+
+  int pocketSlots(String v, Gen3Pocket p) => _pocket(v, p).slots;
+
+  /// Overwrite a whole pocket with [items] (packed from slot 0; the rest are
+  /// cleared). Fixes every section the pocket touches.
+  void setPocket(String v, Gen3Pocket p, List<({int id, int qty})> items) {
+    final pk = _pocket(v, p);
+    final key = _securityKey(_ofsFor(v)) & 0xFFFF;
+    final touched = <int>{};
+    for (var i = 0; i < pk.slots; i++) {
+      final o = _logical(pk.ofs + i * 4);
+      if (i < items.length) {
+        _setU16(o, items[i].id & 0xFFFF);
+        _setU16(o + 2, (items[i].qty & 0xFFFF) ^ key);
+      } else {
+        _setU16(o, 0);
+        _setU16(o + 2, 0);
+      }
+      touched.add(_secForLogical(pk.ofs + i * 4));
+    }
+    for (final s in touched) {
+      fixChecksum(s);
     }
   }
 
@@ -238,7 +335,7 @@ class Gen3SaveEditor {
 
   /// Add a key item (id) to the Key Items pocket. Returns false if full.
   bool addKeyItem(String versionId, int itemId) {
-    final pk = _keyPocket(versionId);
+    final pk = _pocket(versionId, Gen3Pocket.keyItems);
     final key = _securityKey(_ofsFor(versionId)) & 0xFFFF;
     for (var i = 0; i < pk.slots; i++) {
       final o = _logical(pk.ofs + i * 4);
@@ -364,6 +461,41 @@ const _ticketDefs = <Gen3Ticket, _TicketDef>{
   Gen3Ticket.aurora: _TicketDef(277, {'frlg', 'e'}, {'e': 0x2D2}),
   Gen3Ticket.oldSeaMap: _TicketDef(278, {'e'}, {'e': 0x2D0}),
 };
+
+/// The five Gen 3 bag pockets.
+enum Gen3Pocket { items, keyItems, balls, tmHm, berries }
+
+/// A Gen 3 trainer card (section 0).
+class Gen3Trainer {
+  final String name;
+  final int gender; // 0 = male, 1 = female
+  final int tid, sid;
+  final int hours, minutes;
+  const Gen3Trainer({
+    required this.name,
+    required this.gender,
+    required this.tid,
+    required this.sid,
+    required this.hours,
+    required this.minutes,
+  });
+  Gen3Trainer copyWith({
+    String? name,
+    int? gender,
+    int? tid,
+    int? sid,
+    int? hours,
+    int? minutes,
+  }) =>
+      Gen3Trainer(
+        name: name ?? this.name,
+        gender: gender ?? this.gender,
+        tid: tid ?? this.tid,
+        sid: sid ?? this.sid,
+        hours: hours ?? this.hours,
+        minutes: minutes ?? this.minutes,
+      );
+}
 
 class _Gen3Offsets {
   final int keyOfs; // security key offset in section 0 (-1 = none, RS)
