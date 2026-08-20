@@ -1,5 +1,31 @@
 import 'dart:typed_data';
 
+/// Total EXP needed to be at [level] for a species' growth rate. Growth-rate
+/// keys are PokeAPI names. Verified against the known level-100 totals.
+int gen3Exp(String growthRate, int level) {
+  final n = level.clamp(1, 100);
+  final n3 = n * n * n;
+  switch (growthRate) {
+    case 'fast':
+      return 4 * n3 ~/ 5;
+    case 'slow':
+      return 5 * n3 ~/ 4;
+    case 'medium-slow':
+      return (6 * n3 ~/ 5) - 15 * n * n + 100 * n - 140;
+    case 'slow-then-very-fast': // erratic
+      if (n < 50) return n3 * (100 - n) ~/ 50;
+      if (n < 68) return n3 * (150 - n) ~/ 100;
+      if (n < 98) return n3 * ((1911 - 10 * n) ~/ 3) ~/ 500;
+      return n3 * (160 - n) ~/ 100;
+    case 'fast-then-very-slow': // fluctuating
+      if (n < 15) return n3 * (((n + 1) ~/ 3) + 24) ~/ 50;
+      if (n < 36) return n3 * (n + 14) ~/ 50;
+      return n3 * ((n ~/ 2) + 32) ~/ 50;
+    default: // medium / medium-fast
+      return n3;
+  }
+}
+
 /// The 25 Gen 3 natures, in PID%25 order.
 const kNatures = [
   'Hardy', 'Lonely', 'Brave', 'Adamant', 'Naughty', 'Bold', 'Docile',
@@ -40,8 +66,11 @@ class PartyEdit {
   final List<int>? evs; // same order (0..255, total <= 510)
   final List<int>? moves; // 4 move ids (0 = empty slot)
   final int? nature; // 0..24
-  const PartyEdit({this.shiny, this.ivs, this.evs, this.moves, this.nature});
-  bool get changesStats => ivs != null || evs != null || nature != null;
+  final int? level; // 1..100
+  const PartyEdit(
+      {this.shiny, this.ivs, this.evs, this.moves, this.nature, this.level});
+  bool get changesStats =>
+      ivs != null || evs != null || nature != null || level != null;
 }
 
 /// A single Gen 3 Pokémon (PK3). Decrypts the 48-byte data block (4 sub-blocks
@@ -168,6 +197,11 @@ class Pk3 {
   }
 
   void setHeldItem(int itemId) => _sU16(data, _sub('G') + 0x02, itemId);
+  int get exp => _u32(data, _sub('G') + 0x04);
+  void setLevel(int level, int exp) {
+    if (raw.length > 0x54) raw[0x54] = level.clamp(1, 100);
+    _sU32(data, _sub('G') + 0x04, exp);
+  }
 
   /// Regenerate the PID keeping the low 16 bits (gender + ability), searching
   /// the high bits to hit the desired nature and shininess (whichever is left

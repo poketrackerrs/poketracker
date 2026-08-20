@@ -61,8 +61,22 @@ void main() {
   print('nature edit: nature=${n2.nature} (want 3) genderKept='
       '${(n2.pid & 0xFF) == genderBitBefore} item=${n2.heldItem}');
 
-  print('flags: ok=$ok shinyOk=$shinyOk natureOk=$natureOk '
+  // EXP curves vs the known level-100 totals
+  final expOk = gen3Exp('medium', 100) == 1000000 &&
+      gen3Exp('fast', 100) == 800000 &&
+      gen3Exp('slow', 100) == 1250000 &&
+      gen3Exp('medium-slow', 100) == 1059860 &&
+      gen3Exp('slow-then-very-fast', 100) == 600000 &&
+      gen3Exp('fast-then-very-slow', 100) == 1640000;
+  print('exp@100: med=${gen3Exp('medium', 100)} fast=${gen3Exp('fast', 100)} '
+      'slow=${gen3Exp('slow', 100)} medslow=${gen3Exp('medium-slow', 100)} '
+      'erratic=${gen3Exp('slow-then-very-fast', 100)} '
+      'fluct=${gen3Exp('fast-then-very-slow', 100)}  allOk=$expOk');
+
+  print('flags: ok=$ok shinyOk=$shinyOk natureOk=$natureOk expOk=$expOk '
       '| abilityKept=${(n2.pid & 1) == abilityBitBefore} '
       'checksumOk=${n2.computeChecksum() == n2.storedChecksum}');
-  print(ok && shinyOk && natureOk ? '\nPASS ✓ PK3 edit round-trip' : '\nFAIL ✗');
+  print(ok && shinyOk && natureOk && expOk
+      ? '\nPASS ✓ PK3 edit round-trip'
+      : '\nFAIL ✗');
 }

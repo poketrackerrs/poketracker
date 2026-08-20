@@ -193,6 +193,16 @@ class PokedexService {
     }
   }
 
+  /// A species' EXP growth-rate name (for computing level<->exp). Cached.
+  Future<String> growthRate(int dex) async {
+    try {
+      final sp = await _cachedGet('$_base/pokemon-species/$dex');
+      return (sp['growth_rate']?['name'] as String?) ?? 'medium';
+    } catch (_) {
+      return 'medium';
+    }
+  }
+
   /// Base PP of a move — to set a freshly-taught move to full (legal) PP. Cached.
   Future<int> movePP(int moveId) async {
     try {

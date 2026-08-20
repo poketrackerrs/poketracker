@@ -450,6 +450,7 @@ class _MonEditorState extends State<_MonEditor> {
   static const _labels = ['HP', 'Atk', 'Def', 'Spe', 'SpA', 'SpD'];
   late bool _shiny;
   late int _nature;
+  late TextEditingController _level;
   late List<TextEditingController> _iv, _ev;
   late List<int> _moves;
   List<({int id, String name})>? _legal; // learnset, null while loading
@@ -461,6 +462,7 @@ class _MonEditorState extends State<_MonEditor> {
     final i = widget.initial;
     _shiny = i?.shiny ?? widget.mon.shiny;
     _nature = i?.nature ?? widget.mon.nature;
+    _level = TextEditingController(text: '${i?.level ?? widget.mon.level}');
     final ivs = i?.ivs ?? widget.mon.ivs;
     final evs = i?.evs ?? widget.mon.evs;
     _moves = List<int>.from(i?.moves ?? widget.mon.moves);
@@ -507,7 +509,7 @@ class _MonEditorState extends State<_MonEditor> {
 
   @override
   void dispose() {
-    for (final c in [..._iv, ..._ev]) {
+    for (final c in [_level, ..._iv, ..._ev]) {
       c.dispose();
     }
     super.dispose();
@@ -562,6 +564,23 @@ class _MonEditorState extends State<_MonEditor> {
               title: const Text('Shiny'),
               value: _shiny,
               onChanged: (v) => setState(() => _shiny = v),
+            ),
+            Row(
+              children: [
+                const Text('Level  ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(
+                  width: 56,
+                  child: TextField(
+                    controller: _level,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: const InputDecoration(
+                        isDense: true, helperText: '1–100'),
+                  ),
+                ),
+              ],
             ),
             Row(
               children: [
@@ -658,6 +677,8 @@ class _MonEditorState extends State<_MonEditor> {
                   PartyEdit(
                     shiny: _shiny,
                     nature: _nature,
+                    level: (int.tryParse(_level.text.trim()) ?? widget.mon.level)
+                        .clamp(1, 100),
                     ivs: _read(_iv, 31),
                     evs: _read(_ev, 255),
                     moves: _moves,

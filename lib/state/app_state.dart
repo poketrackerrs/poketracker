@@ -408,6 +408,10 @@ class AppState extends ChangeNotifier {
       final ed = entry.value;
       final m = Pk3.decode(e.partyBlock(game.version, entry.key));
       if (m.isEmpty) continue;
+      if (ed.level != null) {
+        final rate = await _pokedex.growthRate(m.species);
+        m.setLevel(ed.level!, gen3Exp(rate, ed.level!));
+      }
       if (ed.nature != null) m.setNature(ed.nature!);
       if (ed.shiny != null) m.setShiny(ed.shiny!);
       if (ed.ivs != null) m.setIVs(ed.ivs!);
