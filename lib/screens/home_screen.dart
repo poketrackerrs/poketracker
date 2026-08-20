@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/games_data.dart';
-import '../data/region_theme.dart';
 import '../models/game.dart';
 import '../state/app_state.dart';
 import '../widgets/completion_ring.dart';
 import '../widgets/console_art.dart';
 import '../widgets/game_box_art.dart';
+import '../widgets/cartridge_nav.dart';
 import 'console_shelf_screen.dart';
 import 'game_screen.dart';
 import 'updates_screen.dart';
 import 'pokedex_list_screen.dart';
 import 'emulators_screen.dart';
-import 'emulator_screen.dart';
 import 'settings_screen.dart';
 
 /// Root scaffold with a bottom nav switching between the game tracker and the
@@ -66,15 +65,9 @@ class _HomeScreenState extends State<HomeScreen> {
           SettingsScreen(),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.videogame_asset), label: 'Games'),
-          NavigationDestination(icon: Icon(Icons.menu_book), label: 'Pokedex'),
-          NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
-        ],
+      bottomNavigationBar: CartridgeNavBar(
+        index: _index,
+        onSelect: (i) => setState(() => _index = i),
       ),
     );
   }
@@ -101,12 +94,104 @@ class _GamesTab extends StatelessWidget {
           _ConsoleGrid()
         else ...[
           _LibraryBar(),
-          for (final gen in gens) ...[
-            _SectionHeader(gen: gen, games: byGen[gen]!),
-            for (final game in byGen[gen]!) _GameTile(game: game),
-          ],
+          for (final gen in gens) _GenShelf(gen: gen, games: byGen[gen]!),
         ],
       ],
+    );
+  }
+}
+
+/// One generation's games as 3D boxes standing on a wooden shelf.
+class _GenShelf extends StatelessWidget {
+  final int gen;
+  final List<Game> games;
+  const _GenShelf({required this.gen, required this.games});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 2),
+            child: Row(
+              children: [
+                Text('GEN $gen',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        letterSpacing: 1.5,
+                        color: scheme.onSurface)),
+                const SizedBox(width: 8),
+                Text(games.first.region.toUpperCase(),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                        letterSpacing: 1,
+                        color: scheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 200,
+            child: Stack(
+              children: [
+                // wooden plank the boxes stand on
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 16,
+                  child: Container(
+                    height: 22,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF8A6440),
+                          Color(0xFF5A3A22),
+                          Color(0xFF3E2818)
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                      boxShadow: const [
+                        BoxShadow(
+                            color: Color(0x66000000),
+                            blurRadius: 12,
+                            offset: Offset(0, 8)),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (final g in games)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 14, bottom: 36),
+                            child: GestureDetector(
+                              onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                      builder: (_) => GameScreen(game: g))),
+                              child: GameBoxArt(game: g, height: 150),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -135,8 +220,8 @@ class _ModeToggle extends StatelessWidget {
                 icon: Icon(Icons.videogame_asset, size: 18)),
             ButtonSegment(
                 value: false,
-                label: Text('List'),
-                icon: Icon(Icons.view_list, size: 18)),
+                label: Text('Shelf'),
+                icon: Icon(Icons.view_day, size: 18)),
           ],
           selected: {consoleMode},
           onSelectionChanged: (s) =>
@@ -215,46 +300,6 @@ class _ConsoleCard extends StatelessWidget {
 
 /// A generation section header: region-colored dot, region name(s), and a
 /// summary of game count and average completion.
-class _SectionHeader extends StatelessWidget {
-  final int gen;
-  final List<Game> games;
-  const _SectionHeader({required this.gen, required this.games});
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final regions = <String>[];
-    for (final g in games) {
-      if (!regions.contains(g.region)) regions.add(g.region);
-    }
-    final avg = games.map(state.completion).reduce((a, b) => a + b) / games.length;
-    final tint = state.regionTint
-        ? regionColor(regions.first, state.accent)
-        : state.accent;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 10),
-          Text(regions.join(' · '),
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
-          const Spacer(),
-          Text('Gen $gen · ${games.length} games · ${(avg * 100).round()}%',
-              style: Theme.of(context).textTheme.bodySmall),
-        ],
-      ),
-    );
-  }
-}
-
 class _OverallCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -319,86 +364,6 @@ class _Stat extends StatelessWidget {
   }
 }
 
-class _GameTile extends StatelessWidget {
-  final Game game;
-  const _GameTile({required this.game});
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final pct = state.completion(game);
-    final tint =
-        state.regionTint ? regionColor(game.region, state.accent) : state.accent;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => GameScreen(game: game)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              GameBoxArt(game: game, height: 76),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(game.title,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        _MetaChip(text: game.region),
-                        _MetaChip(text: '${game.releaseYear}'),
-                        _MetaChip(text: game.category.label),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              CompletionRing(value: pct, color: tint, size: 46, stroke: 5),
-              const SizedBox(width: 6),
-              _DownloadControl(game: game),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  final String text;
-  const _MetaChip({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(text,
-          style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-    );
-  }
-}
-
-
-/// Clickable line showing the games library folder; opens it in Explorer.
 class _LibraryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -444,108 +409,3 @@ class _LibraryBar extends StatelessWidget {
 }
 
 /// Per-game download button / status, driven by AppState.
-class _DownloadControl extends StatelessWidget {
-  final Game game;
-  const _DownloadControl({required this.game});
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final prog = state.downloadProgress(game.id);
-
-    if (prog != null) {
-      return SizedBox(
-        width: 34,
-        height: 34,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            CircularProgressIndicator(value: prog == 0 ? null : prog, strokeWidth: 3),
-            Text('${(prog * 100).round()}', style: const TextStyle(fontSize: 9)),
-          ],
-        ),
-      );
-    }
-    if (state.isInstalled(game.id)) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: 'Play',
-            icon: const Icon(Icons.play_circle_fill,
-                color: Colors.green, size: 28),
-            visualDensity: VisualDensity.compact,
-            onPressed: () async {
-              final s = context.read<AppState>();
-              final messenger = ScaffoldMessenger.of(context);
-              final navigator = Navigator.of(context);
-              if (s.canPlayBuiltIn(game)) {
-                final rom = s.builtInRomPath(game);
-                if (rom != null) {
-                  navigator.push(MaterialPageRoute(
-                      builder: (_) =>
-                          EmulatorScreen(game: game, romPath: rom)));
-                  return;
-                }
-              }
-              final outcome = await s.tryLaunchGame(game);
-              void toEmulators() => navigator.push(MaterialPageRoute(
-                  builder: (_) => const EmulatorsScreen()));
-              switch (outcome) {
-                case LaunchOutcome.launched:
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Launching ${game.title}…')),
-                  );
-                case LaunchOutcome.handoffFailed:
-                  final emu = s.emulatorNameFor(game) ?? 'the emulator';
-                  messenger.showSnackBar(SnackBar(
-                    content: Text(
-                        'Opened $emu, but it won\'t load ${game.title} '
-                        'automatically. Load it from inside $emu, or install '
-                        'My Boy!/My OldBoy! for one-tap launch.'),
-                    duration: const Duration(seconds: 7),
-                    action: SnackBarAction(
-                        label: 'Emulators', onPressed: toEmulators),
-                  ));
-                case LaunchOutcome.noEmulator:
-                  messenger.showSnackBar(SnackBar(
-                    content: Text(
-                        'No emulator found for ${game.title}. Install one to play.'),
-                    action: SnackBarAction(
-                        label: 'Emulators', onPressed: toEmulators),
-                  ));
-              }
-            },
-          ),
-          IconButton(
-            tooltip: 'Show file in folder',
-            icon: const Icon(Icons.folder_open),
-            visualDensity: VisualDensity.compact,
-            onPressed: () => context.read<AppState>().revealGameFile(game.id),
-          ),
-        ],
-      );
-    }
-    if (state.canDownload(game.id)) {
-      return IconButton(
-        tooltip: 'Download from your Drive',
-        icon: const Icon(Icons.download),
-        visualDensity: VisualDensity.compact,
-        onPressed: () async {
-          final messenger = ScaffoldMessenger.of(context);
-          try {
-            await context.read<AppState>().downloadGame(game.id);
-            messenger.showSnackBar(
-              SnackBar(content: Text('Downloaded ${game.title}')),
-            );
-          } catch (e) {
-            messenger.showSnackBar(
-              SnackBar(content: Text('Download failed: $e')),
-            );
-          }
-        },
-      );
-    }
-    return const SizedBox.shrink();
-  }
-}
