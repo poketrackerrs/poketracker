@@ -309,7 +309,7 @@ class AppState extends ChangeNotifier {
 
   // ------------------------------------------------ Gen 3 save editor (write)
   /// Current editable Gen 3 values, or null if there's no valid Gen 3 save.
-  Future<({int money, int caught})?> readGen3Save(Game game) async {
+  Future<({int money, int caught, int seen})?> readGen3Save(Game game) async {
     if (game.generation != 3) return null;
     final file = await _findSaveFile(game.id);
     if (file == null) return null;
@@ -317,7 +317,11 @@ class AppState extends ChangeNotifier {
       final e =
           Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
       if (!e.verifyChecksums().ok) return null;
-      return (money: e.getMoney(game.version), caught: e.caughtCount);
+      return (
+        money: e.getMoney(game.version),
+        caught: e.caughtCount,
+        seen: e.seenCount(game.version),
+      );
     } catch (_) {
       return null;
     }
@@ -496,6 +500,7 @@ class AppState extends ChangeNotifier {
   Future<String> writeGen3Save(Game game,
       {int? money,
       bool completeDex = false,
+      bool completeSeenDex = false,
       List<Gen3Ticket> tickets = const [],
       Map<int, PartyEdit> partyEdits = const {},
       Map<int, PartyEdit> boxEdits = const {},
@@ -516,6 +521,7 @@ class AppState extends ChangeNotifier {
     }
     if (money != null) e.setMoney(game.version, money);
     if (completeDex) e.markAllCaught(game.version);
+    if (completeSeenDex) e.markAllSeen(game.version);
     if (trainer != null) e.setTrainer(trainer);
     if (bag != null) {
       for (final entry in bag.entries) {

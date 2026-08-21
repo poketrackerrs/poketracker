@@ -228,6 +228,43 @@ class Gen3SaveEditor {
     fixChecksum(o.seen3Sec);
   }
 
+  /// How many species are marked SEEN (from the primary seen mirror).
+  int seenCount(String versionId) =>
+      _countBits(_s(0) + _ofsFor(versionId).seen1, _dexBytes);
+
+  /// The three "seen" mirror targets for a version (kept in sync by the game).
+  List<int> _seenTargets(_Gen3Offsets o) => [
+        _s(0) + o.seen1,
+        _s(o.seen2Sec) + o.seen2,
+        _s(o.seen3Sec) + o.seen3,
+      ];
+
+  /// Mark every species 1..386 SEEN (all three mirrors), leaving owned as-is.
+  void markAllSeen(String versionId) {
+    final o = _ofsFor(versionId);
+    for (final target in _seenTargets(o)) {
+      for (var i = 0; i < 386; i++) {
+        _setDexBit(target, i);
+      }
+    }
+    fixChecksum(0);
+    fixChecksum(o.seen2Sec);
+    fixChecksum(o.seen3Sec);
+  }
+
+  /// Mark one species (national dex) SEEN in all three mirrors.
+  void markSeen(String versionId, int nationalDex) {
+    final o = _ofsFor(versionId);
+    final i = nationalDex - 1;
+    if (i < 0 || i >= 386) return;
+    for (final target in _seenTargets(o)) {
+      _setDexBit(target, i);
+    }
+    fixChecksum(0);
+    fixChecksum(o.seen2Sec);
+    fixChecksum(o.seen3Sec);
+  }
+
   // Gen 3 SaveBlock1 (trainer/game data) is logically contiguous but stored
   // across sections 1..4 (0xF80 usable bytes each). Map a logical SaveBlock1
   // offset to the physical byte offset (and to its section, for the checksum).

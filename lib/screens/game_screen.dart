@@ -264,8 +264,9 @@ class _SaveEditorDialog extends StatefulWidget {
 class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   final _money = TextEditingController();
   bool _loading = true, _busy = false, _completeDex = false;
+  bool _completeSeenDex = false;
   final Set<Gen3Ticket> _tickets = {};
-  int? _caught;
+  int? _caught, _seen;
   List<Gen3PartyMon>? _party;
   final Map<int, PartyEdit> _partyEdits = {};
   final Map<int, PartyEdit> _boxEdits = {}; // keyed by global PC slot 0..419
@@ -310,6 +311,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
       } else {
         _money.text = '${data.money}';
         _caught = data.caught;
+        _seen = data.seen;
       }
     });
   }
@@ -321,6 +323,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
           widget.game,
           money: money,
           completeDex: _completeDex,
+          completeSeenDex: _completeSeenDex,
           tickets: _tickets.toList(),
           partyEdits: _partyEdits,
           boxEdits: _boxEdits,
@@ -443,10 +446,19 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Complete Pokédex'),
+                      title: const Text('Complete Pokédex (caught)'),
                       subtitle: Text('Currently caught: ${_caught ?? '—'} / 386'),
                       value: _completeDex,
                       onChanged: (v) => setState(() => _completeDex = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Complete Pokédex (seen)'),
+                      subtitle: Text('Currently seen: ${_seen ?? '—'} / 386'),
+                      value: _completeSeenDex || _completeDex,
+                      onChanged: _completeDex
+                          ? null // caught implies seen
+                          : (v) => setState(() => _completeSeenDex = v),
                     ),
                     const Divider(),
                     const Text('Event tickets',
