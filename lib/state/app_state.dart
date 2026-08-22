@@ -1375,6 +1375,33 @@ class AppState extends ChangeNotifier {
     _persist();
   }
 
+  /// Auto-sync progress after a built-in play session: re-reads the freshly
+  /// written save and applies dex + badges + team (non-destructive to the save).
+  /// Returns a short summary for a snackbar, or null if nothing was read.
+  Future<String?> autoSyncAfterPlay(Game game) async {
+    SaveData? data;
+    try {
+      data = await scanSave(game);
+    } catch (_) {
+      return null;
+    }
+    if (data == null) return null;
+    final before = badgesEarned(game.id);
+    final beforeCaught = progressFor(game.id).caughtSpecies.length;
+    await applySaveData(game, data, dex: true, badges: true, team: true);
+    final badgeGain = badgesEarned(game.id) - before;
+    final caughtGain =
+        progressFor(game.id).caughtSpecies.length - beforeCaught;
+    final parts = <String>[];
+    if (data.badgeCount != null) parts.add('${data.badgeCount} badges');
+    if (data.caughtCount > 0) parts.add('${data.caughtCount} caught');
+    if (parts.isEmpty) return null;
+    final delta = (badgeGain > 0 || caughtGain > 0)
+        ? ' (+$badgeGain badge${badgeGain == 1 ? '' : 's'}, +$caughtGain caught)'
+        : '';
+    return 'Synced ${parts.join(' · ')}$delta';
+  }
+
   /// The installed emulator that can run a game, or null. Switch-era games
   /// (Gen 8-9 and Let's Go) have no supported emulator in the catalog.
   DetectedEmulator? emulatorForGame(Game game) {
