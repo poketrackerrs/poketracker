@@ -1048,7 +1048,14 @@ class _MonEditorState extends State<_MonEditor> {
   late int _nature;
   late TextEditingController _level;
   late TextEditingController _nickname;
-  late List<TextEditingController> _iv, _ev;
+  late List<TextEditingController> _ev;
+  // IVs are checker-legal (Method-1 correlated with the PID). Read-only; nature/
+  // shiny changes and the re-roll button regenerate them. _legalPid non-null
+  // means "apply this correlated PID + these IVs".
+  late List<int> _ivs;
+  int? _legalPid;
+  int _legalSeed = 0;
+  bool _rolling = false;
   late List<int> _moves;
   late int _speciesDex; // National dex; may change in the editor
   late int _friendship;
@@ -1072,10 +1079,10 @@ class _MonEditorState extends State<_MonEditor> {
     _level = TextEditingController(text: '${i?.level ?? widget.mon.level}');
     _nickname = TextEditingController(
         text: i?.nickname ?? widget.mon.nickname);
-    final ivs = i?.ivs ?? widget.mon.ivs;
+    _ivs = List<int>.from(i?.ivs ?? widget.mon.ivs);
+    _legalPid = i?.legalPid;
     final evs = i?.evs ?? widget.mon.evs;
     _moves = List<int>.from(i?.moves ?? widget.mon.moves);
-    _iv = [for (final v in ivs) TextEditingController(text: '$v')];
     _ev = [for (final v in evs) TextEditingController(text: '$v')];
     final mon = widget.mon;
     _otName = TextEditingController(text: i?.otName ?? mon.otName);
@@ -1131,6 +1138,32 @@ class _MonEditorState extends State<_MonEditor> {
     });
   }
 
+  // Regenerate a checker-legal (Method-1 correlated) PID + IVs for the current
+  // nature + shininess. [reroll] advances the seed for a different IV spread.
+  Future<void> _regenLegal({bool reroll = false}) async {
+    setState(() => _rolling = true);
+    final res = await context.read<AppState>().findLegalPidIv(
+          dex: _speciesDex,
+          tid: widget.mon.otid & 0xFFFF,
+          sid: widget.mon.otid >> 16,
+          nature: _nature,
+          shiny: _shiny,
+          currentPid: widget.mon.pid,
+          startSeed: reroll ? _legalSeed + 1 : 0,
+        );
+    if (!mounted) return;
+    setState(() {
+      _rolling = false;
+      if (res != null) {
+        _legalPid = res.pid;
+        _ivs = res.ivs;
+        _legalSeed = res.seed;
+      }
+    });
+  }
+
+  int get _ivTotal => _ivs.fold(0, (a, b) => a + b);
+
   String _moveName(int id) => id == 0
       ? '—'
       : (_nameById[id] ?? '#$id').replaceAll('-', ' ');
@@ -1158,7 +1191,7 @@ class _MonEditorState extends State<_MonEditor> {
 
   @override
   void dispose() {
-    for (final c in [_level, _nickname, _otName, ..._iv, ..._ev, ..._contest]) {
+    for (final c in [_level, _nickname, _otName, ..._ev, ..._contest]) {
       c.dispose();
     }
     super.dispose();
@@ -1411,7 +1444,10 @@ class _MonEditorState extends State<_MonEditor> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Shiny'),
               value: _shiny,
-              onChanged: (v) => setState(() => _shiny = v),
+              onChanged: (v) {
+                setState(() => _shiny = v);
+                _regenLegal();
+              },
             ),
             Row(
               children: [
@@ -1445,7 +1481,10 @@ class _MonEditorState extends State<_MonEditor> {
                       for (var n = 0; n < kNatures.length; n++)
                         DropdownMenuItem(value: n, child: Text(kNatures[n])),
                     ],
-                    onChanged: (v) => setState(() => _nature = v ?? _nature),
+                    onChanged: (v) {
+                      setState(() => _nature = v ?? _nature);
+                      _regenLegal();
+                    },
                   ),
                 ),
               ],
@@ -1469,18 +1508,53 @@ class _MonEditorState extends State<_MonEditor> {
             Row(
               children: [
                 const Text('IVs', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(width: 6),
+                Text('total $_ivTotal',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
                 const Spacer(),
-                TextButton(
-                  onPressed: () => setState(() {
-                    for (final c in _iv) {
-                      c.text = '31';
-                    }
-                  }),
-                  child: const Text('Max'),
-                ),
+                if (_rolling)
+                  const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  TextButton.icon(
+                    onPressed: () => _regenLegal(reroll: true),
+                    icon: const Icon(Icons.casino, size: 16),
+                    label: const Text('Re-roll'),
+                  ),
               ],
             ),
-            _statRow('', _iv, 31),
+            // Read-only: IVs are RNG-legal (correlated with the PID). Re-roll to
+            // hunt a better spread; changing nature/shiny re-rolls automatically.
+            Row(
+              children: [
+                for (var k = 0; k < 6; k++)
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(_labels[k], style: const TextStyle(fontSize: 9)),
+                        Text('${_ivs[k]}',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: _ivs[k] == 31
+                                    ? Colors.green
+                                    : Theme.of(context).textTheme.bodyLarge?.color)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                _legalPid == null
+                    ? 'IVs are the Pokémon\'s current legal values.'
+                    : 'Legal PID + IVs generated (checker-safe).',
+                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -1544,7 +1618,11 @@ class _MonEditorState extends State<_MonEditor> {
                     nature: _nature,
                     level: (int.tryParse(_level.text.trim()) ?? widget.mon.level)
                         .clamp(1, 100),
-                    ivs: _read(_iv, 31),
+                    // Strict-legal: when nature/shiny changed or the user
+                    // re-rolled, ship the correlated PID + IVs; otherwise leave
+                    // the Pokémon's existing PID/IVs untouched.
+                    legalPid: _legalPid,
+                    ivs: _legalPid != null ? _ivs : null,
                     evs: _read(_ev, 255),
                     moves: _moves,
                     species:

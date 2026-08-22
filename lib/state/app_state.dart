@@ -365,6 +365,8 @@ class AppState extends ChangeNotifier {
           nickname: m.nickname,
           otName: m.otName,
           friendship: m.friendship,
+          pid: m.pid,
+          otid: m.otid,
           ball: m.ball,
           metLevel: m.metLevel,
           metLocation: m.metLocation,
@@ -416,6 +418,8 @@ class AppState extends ChangeNotifier {
           otName: m.otName,
           friendship: m.friendship,
           exp: m.exp,
+          pid: m.pid,
+          otid: m.otid,
           ball: m.ball,
           metLevel: m.metLevel,
           metLocation: m.metLocation,
@@ -529,6 +533,37 @@ class AppState extends ChangeNotifier {
       } catch (_) {/* offline: stats stay 0 until first heal */}
     }
     return pk.encode();
+  }
+
+  /// Finds a checker-legal (Method-1 correlated) PID + IVs for [dex] with the
+  /// wanted nature/shiny, preserving the current gender + ability. [startSeed]
+  /// lets the UI re-roll for a different (still legal) IV spread. Returns null
+  /// if nothing was found (e.g. an impossible shiny frame within the budget).
+  Future<({int pid, List<int> ivs, int seed})?> findLegalPidIv({
+    required int dex,
+    required int tid,
+    required int sid,
+    required int nature,
+    required bool shiny,
+    required int currentPid,
+    int startSeed = 0,
+  }) async {
+    var genderRate = -1;
+    try {
+      genderRate = (await _pokedex.fetchDetail(dex)).genderRate;
+    } catch (_) {/* offline: don't constrain gender */}
+    final wantGender =
+        genderRate == -1 ? null : gen3GenderOf(currentPid, genderRate);
+    return gen3Method1Find(
+      tid: tid,
+      sid: sid,
+      nature: nature,
+      shiny: shiny,
+      genderRate: genderRate,
+      wantGender: wantGender,
+      wantAbility: currentPid & 1,
+      startSeed: startSeed,
+    );
   }
 
   /// The level a boxed Pokémon of [dex] with [exp] total experience is at.
@@ -692,9 +727,14 @@ class AppState extends ChangeNotifier {
         final rate = await _pokedex.growthRate(dex);
         m.setLevel(targetLevel, gen3Exp(rate, targetLevel));
       }
-      if (ed.nature != null) m.setNature(ed.nature!);
-      if (ed.shiny != null) m.setShiny(ed.shiny!);
-      if (ed.ivs != null) m.setIVs(ed.ivs!);
+      // Strict-legal: a correlated Method-1 PID+IV supersedes nature/shiny/IVs.
+      if (ed.legalPid != null) {
+        m.setPidAndIvs(ed.legalPid!, ed.ivs ?? m.ivs);
+      } else {
+        if (ed.nature != null) m.setNature(ed.nature!);
+        if (ed.shiny != null) m.setShiny(ed.shiny!);
+        if (ed.ivs != null) m.setIVs(ed.ivs!);
+      }
       if (ed.evs != null) m.setEVs(ed.evs!);
       if (ed.friendship != null) m.setFriendship(ed.friendship!);
       if (ed.otName != null) m.setOtName(ed.otName!);

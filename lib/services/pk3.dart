@@ -58,6 +58,95 @@ const kNatures = [
   'Careful', 'Quirky',
 ];
 
+// ---- Gen 3 Method 1 RNG (for checker-legal, correlated PID + IVs) ----------
+// The GBA LCRNG. A legit Gen 3 Pokémon's PID and IVs come from consecutive
+// rand() calls off one seed, so third-party legality checkers verify that
+// correlation. Method 1 order: PID-low, PID-high, IV word 1, IV word 2.
+int _lcrngNext(int seed) => (seed * 0x41C64E6D + 0x6073) & 0xFFFFFFFF;
+int _rand16(int seed) => (seed >> 16) & 0xFFFF;
+
+/// Gen 3 gender threshold from a PokeAPI gender_rate (eighths female; -1 =
+/// genderless). A Pokémon is female when (PID & 0xFF) < threshold.
+int? gen3GenderThreshold(int genderRate) {
+  switch (genderRate) {
+    case -1:
+      return null; // genderless
+    case 0:
+      return 0; // male only
+    case 1:
+      return 31;
+    case 2:
+      return 63;
+    case 4:
+      return 127;
+    case 6:
+      return 191;
+    case 7:
+      return 225;
+    case 8:
+      return 254; // female only
+    default:
+      return 127;
+  }
+}
+
+/// 0 = male, 1 = female, 2 = genderless.
+int gen3GenderOf(int pid, int genderRate) {
+  final t = gen3GenderThreshold(genderRate);
+  if (t == null) return 2;
+  return (pid & 0xFF) < t ? 1 : 0;
+}
+
+/// Search Gen 3 Method-1 seeds for a PID+IV pair matching the wanted
+/// nature/shiny (and, when given, gender/ability). PID and IVs are read from
+/// consecutive RNG frames, so the result passes a checker's PID/IV correlation.
+/// Returns null if nothing matched within [maxIter]; [seed] lets a re-roll
+/// continue past the last hit.
+({int pid, List<int> ivs, int seed})? gen3Method1Find({
+  required int tid,
+  required int sid,
+  required int nature,
+  required bool shiny,
+  int genderRate = -1,
+  int? wantGender,
+  int? wantAbility,
+  int startSeed = 0,
+  int maxIter = 8000000,
+}) {
+  final sx = (tid ^ sid) & 0xFFFF;
+  var seed = startSeed & 0xFFFFFFFF;
+  for (var i = 0; i < maxIter; i++) {
+    final s1 = _lcrngNext(seed);
+    final pidLow = _rand16(s1);
+    final s2 = _lcrngNext(s1);
+    final pidHigh = _rand16(s2);
+    final s3 = _lcrngNext(s2);
+    final iv1 = _rand16(s3);
+    final s4 = _lcrngNext(s3);
+    final iv2 = _rand16(s4);
+    final pid = ((pidHigh << 16) | pidLow) & 0xFFFFFFFF;
+    final thisSeed = seed;
+    seed = _lcrngNext(seed);
+    if (pid % 25 != nature) continue;
+    if (((sx ^ pidHigh ^ pidLow) < 8) != shiny) continue;
+    if (wantAbility != null && (pid & 1) != wantAbility) continue;
+    if (wantGender != null &&
+        genderRate != -1 &&
+        gen3GenderOf(pid, genderRate) != wantGender) {
+      continue;
+    }
+    return (
+      pid: pid,
+      ivs: [
+        iv1 & 31, (iv1 >> 5) & 31, (iv1 >> 10) & 31, // HP, Atk, Def
+        iv2 & 31, (iv2 >> 5) & 31, (iv2 >> 10) & 31, // Spe, SpA, SpD
+      ],
+      seed: thisSeed,
+    );
+  }
+  return null;
+}
+
 /// Gen 3 stores its own internal species order: #1–251 match the National dex
 /// 1:1, then 25 unused slots, then Hoenn (#252–386) sits at internal 277–411
 /// (National + 25). These convert between the two.
@@ -126,6 +215,8 @@ class Gen3PartyMon {
   final String otName; // original trainer name
   final int friendship; // 0..255
   final int exp; // total experience (box mons derive level from this)
+  final int pid; // personality value (nature/gender/ability/shiny derive from it)
+  final int otid; // full OT id (TID low16 | SID high16)
   final int ball; // Poké Ball id
   final int metLevel; // level met (0..100)
   final int metLocation; // location id
@@ -149,6 +240,8 @@ class Gen3PartyMon {
     this.otName = '',
     this.friendship = 0,
     this.exp = 0,
+    this.pid = 0,
+    this.otid = 0,
     this.ball = 0,
     this.metLevel = 0,
     this.metLocation = 0,
@@ -174,6 +267,8 @@ class Gen3PartyMon {
         otName: otName,
         friendship: friendship,
         exp: exp,
+        pid: pid,
+        otid: otid,
         ball: ball,
         metLevel: metLevel,
         metLocation: metLocation,
@@ -208,6 +303,9 @@ class PartyEdit {
   final int? markings; // 4-bit marking flags
   final int? pokerus; // Pokérus byte
   final List<int>? contest; // cool, beauty, cute, smart, tough, sheen
+  // Strict-legal: a Method-1 PID applied together with [ivs] (correlated), so a
+  // checker accepts the PID/IV pair. When set, it supersedes nature/shiny.
+  final int? legalPid;
   const PartyEdit(
       {this.shiny,
       this.ivs,
@@ -226,13 +324,15 @@ class PartyEdit {
       this.language,
       this.markings,
       this.pokerus,
-      this.contest});
+      this.contest,
+      this.legalPid});
   bool get changesStats =>
       ivs != null ||
       evs != null ||
       nature != null ||
       level != null ||
-      species != null;
+      species != null ||
+      legalPid != null;
 }
 
 /// A single Gen 3 Pokémon (PK3). Decrypts the 48-byte data block (4 sub-blocks
@@ -439,6 +539,13 @@ class Pk3 {
     }
     order = newOrder;
     _sU32(raw, 0x00, newPid & 0xFFFFFFFF);
+  }
+
+  /// Apply a correlated PID + IVs together (from a Method-1 search) — the
+  /// checker-legal way to set nature/shiny/IVs at once.
+  void setPidAndIvs(int newPid, List<int> newIvs) {
+    _setPid(newPid);
+    setIVs(newIvs);
   }
 
   void setHeldItem(int itemId) => _sU16(data, _sub('G') + 0x02, itemId);
