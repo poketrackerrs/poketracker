@@ -615,9 +615,19 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     setState(() => _busy = true);
     final msg = await context.read<AppState>().restoreGen3Backup(widget.game);
     if (!mounted) return;
-    setState(() => _busy = false);
     ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+    // Reload the editor from the restored save (clears the error state).
+    if (msg.startsWith('Restored')) {
+      setState(() {
+        _busy = false;
+        _loading = true;
+        _error = null;
+      });
+      await _load();
+    } else {
+      setState(() => _busy = false);
+    }
   }
 
   Future<void> _addEvent() async {
@@ -675,7 +685,23 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
           ? const SizedBox(
               height: 60, child: Center(child: CircularProgressIndicator()))
           : _error != null
-              ? Text(_error!)
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_error!),
+                    if (!_gen4) ...[
+                      const SizedBox(height: 16),
+                      // Reachable even when the current save is corrupt/blank —
+                      // this is exactly when you need to roll back to a backup.
+                      FilledButton.icon(
+                        onPressed: _busy ? null : _restoreBackup,
+                        icon: const Icon(Icons.restore),
+                        label: const Text('Restore last backup'),
+                      ),
+                    ],
+                  ],
+                )
               : SingleChildScrollView(
                   child: Column(
                   mainAxisSize: MainAxisSize.min,

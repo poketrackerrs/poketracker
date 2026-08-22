@@ -1359,18 +1359,20 @@ class AppState extends ChangeNotifier {
     if (file == null) return 'No save file found for ${game.title}.';
     final baks = _backupsFor(file);
     if (baks.isEmpty) return 'No backup found to restore.';
-    final newest = baks.first;
-    try {
-      final bytes = Uint8List.fromList(await newest.readAsBytes());
-      if (!Gen3SaveEditor.load(bytes).verifyChecksums().ok) {
-        return 'The backup looks corrupt — not restoring.';
+    // Restore the newest backup that actually passes checksums — skip any
+    // corrupt ones (e.g. a bad save the emulator may have backed up).
+    for (final bak in baks) {
+      try {
+        final bytes = Uint8List.fromList(await bak.readAsBytes());
+        if (!Gen3SaveEditor.load(bytes).verifyChecksums().ok) continue;
+        await file.writeAsBytes(bytes, flush: true);
+        return 'Restored ${bak.uri.pathSegments.last}. Reload it in your '
+            'emulator.';
+      } catch (_) {
+        continue;
       }
-      await file.writeAsBytes(bytes, flush: true);
-      return 'Restored ${newest.uri.pathSegments.last}. Reload it in your '
-          'emulator.';
-    } catch (_) {
-      return 'Could not read the backup — not restoring.';
     }
+    return 'No valid backup found to restore.';
   }
 
   /// Applies one PartyEdit to a decoded PK3 in place (shared by party + box).
