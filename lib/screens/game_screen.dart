@@ -401,8 +401,8 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   Future<void> _editMon(Gen3PartyMon m) async {
     final result = await Navigator.of(context).push<PartyEdit>(
       MaterialPageRoute(
-          builder: (_) => _MonEditor(
-              mon: m, initial: _partyEdits[m.slot], strictLegal: !_gen4)),
+          builder: (_) =>
+              _MonEditor(mon: m, initial: _partyEdits[m.slot], strictLegal: true)),
     );
     if (result != null && mounted) {
       setState(() => _partyEdits[m.slot] = result);

@@ -466,15 +466,23 @@ class AppState extends ChangeNotifier {
     if (ed.level != null || speciesChanged) {
       m.setExp(gen3Exp(await _pokedex.growthRate(dex), targetLevel));
     }
-    if (ed.nature != null || ed.shiny != null) {
-      m.regenNatureShiny(
-          nature: ed.nature,
-          shiny: ed.shiny,
-          tid: tid,
-          sid: sid,
-          primaryShiny: ed.shiny != null);
+    // Strict-legal: a correlated Method-1 PID+IV (checker-safe) supersedes
+    // nature/shiny/IVs — the same engine Gen 3 uses (Method 1 is how Gen 4
+    // gift/starter Pokémon are generated).
+    if (ed.legalPid != null) {
+      m.setPid(ed.legalPid!);
+      if (ed.ivs != null) m.setIVs(ed.ivs!);
+    } else {
+      if (ed.nature != null || ed.shiny != null) {
+        m.regenNatureShiny(
+            nature: ed.nature,
+            shiny: ed.shiny,
+            tid: tid,
+            sid: sid,
+            primaryShiny: ed.shiny != null);
+      }
+      if (ed.ivs != null) m.setIVs(ed.ivs!);
     }
-    if (ed.ivs != null) m.setIVs(ed.ivs!);
     if (ed.evs != null) m.setEVs(ed.evs!);
     if (ed.friendship != null) m.setFriendship(ed.friendship!);
     if (ed.ball != null) m.setBall(ed.ball!);
@@ -517,7 +525,8 @@ class AppState extends ChangeNotifier {
         ed.ivs != null ||
         ed.evs != null ||
         ed.nature != null ||
-        ed.shiny != null;
+        ed.shiny != null ||
+        ed.legalPid != null;
     if (m.isParty && statsChanged) {
       try {
         final st = (await _pokedex.fetchDetail(dex)).stats;
