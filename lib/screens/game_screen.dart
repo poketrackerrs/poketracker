@@ -1261,6 +1261,31 @@ class _MonEditorState extends State<_MonEditor> {
     'status': Icons.shield_outlined,
   };
 
+  // Color-coded +stat / −stat for a nature (grey "neutral" for the 5 neutrals).
+  Widget _natureEffectChip(int n) {
+    final up = natureUp(n);
+    if (up < 0) {
+      return const Text('neutral',
+          style: TextStyle(fontSize: 11, color: Colors.grey));
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('+${kNatureStats[up]}',
+            style: const TextStyle(
+                fontSize: 11,
+                color: Colors.green,
+                fontWeight: FontWeight.w600)),
+        const SizedBox(width: 4),
+        Text('−${kNatureStats[natureDown(n)]}',
+            style: const TextStyle(
+                fontSize: 11,
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
   // Compact "type · category · Pow · PP · Acc" line for a move's info.
   Widget _moveMeta(({int power, int pp, int accuracy, String type, String damageClass}) info) =>
       Row(
@@ -1707,9 +1732,31 @@ class _MonEditorState extends State<_MonEditor> {
                     style: TextStyle(
                         fontSize: 14,
                         color: Theme.of(context).textTheme.bodyLarge?.color),
+                    selectedItemBuilder: (_) => [
+                      for (var n = 0; n < kNatures.length; n++)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Row(
+                            children: [
+                              Text(kNatures[n]),
+                              const SizedBox(width: 8),
+                              _natureEffectChip(n),
+                            ],
+                          ),
+                        ),
+                    ],
                     items: [
                       for (var n = 0; n < kNatures.length; n++)
-                        DropdownMenuItem(value: n, child: Text(kNatures[n])),
+                        DropdownMenuItem(
+                          value: n,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(width: 76, child: Text(kNatures[n])),
+                              _natureEffectChip(n),
+                            ],
+                          ),
+                        ),
                     ],
                     onChanged: (v) {
                       setState(() => _nature = v ?? _nature);

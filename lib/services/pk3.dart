@@ -50,6 +50,21 @@ const kGen3Balls = [
 /// Gen 3 language codes → name (6 = Korean, unused in the Western games).
 const kGen3Languages = {1: 'JPN', 2: 'ENG', 3: 'FRE', 4: 'ITA', 5: 'GER', 7: 'SPA'};
 
+/// Stat labels a nature can raise/lower (Atk, Def, Spe, SpA, SpD).
+const kNatureStats = ['Atk', 'Def', 'Spe', 'SpA', 'SpD'];
+
+/// The stat a nature RAISES (0..4 = Atk/Def/Spe/SpA/SpD), or -1 if neutral.
+int natureUp(int n) => (n ~/ 5) == (n % 5) ? -1 : (n ~/ 5);
+
+/// The stat a nature LOWERS (0..4), or -1 if neutral.
+int natureDown(int n) => (n ~/ 5) == (n % 5) ? -1 : (n % 5);
+
+/// Short effect string for a nature, e.g. "+Atk −SpA" or "neutral".
+String natureEffect(int n) {
+  final up = natureUp(n);
+  return up < 0 ? 'neutral' : '+${kNatureStats[up]} −${kNatureStats[natureDown(n)]}';
+}
+
 /// The 25 Gen 3 natures, in PID%25 order.
 const kNatures = [
   'Hardy', 'Lonely', 'Brave', 'Adamant', 'Naughty', 'Bold', 'Docile',
