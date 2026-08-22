@@ -489,22 +489,40 @@ class _EmulatorScreenState extends State<EmulatorScreen>
                 ],
               ),
             ),
-            // A / B, bottom-right (A upper-right, B lower-left)
+            // Face buttons, bottom-right. DS gets the full X/Y/A/B diamond
+            // (X top, A right, B bottom, Y left); GBA just A/B.
             Positioned(
               right: 18,
               bottom: clusterB,
-              width: 156,
-              height: 120,
-              child: Stack(
-                children: [
-                  Align(
-                      alignment: Alignment.bottomLeft,
-                      child: _padBtn(retroB, label: 'B', size: 62)),
-                  Align(
-                      alignment: Alignment.topRight,
-                      child: _padBtn(retroA, label: 'A', size: 62)),
-                ],
-              ),
+              width: _isDs ? 168 : 156,
+              height: _isDs ? 168 : 120,
+              child: _isDs
+                  ? Stack(
+                      children: [
+                        Align(
+                            alignment: Alignment.topCenter,
+                            child: _padBtn(retroX, label: 'X', size: 54)),
+                        Align(
+                            alignment: Alignment.centerRight,
+                            child: _padBtn(retroA, label: 'A', size: 54)),
+                        Align(
+                            alignment: Alignment.bottomCenter,
+                            child: _padBtn(retroB, label: 'B', size: 54)),
+                        Align(
+                            alignment: Alignment.centerLeft,
+                            child: _padBtn(retroY, label: 'Y', size: 54)),
+                      ],
+                    )
+                  : Stack(
+                      children: [
+                        Align(
+                            alignment: Alignment.bottomLeft,
+                            child: _padBtn(retroB, label: 'B', size: 62)),
+                        Align(
+                            alignment: Alignment.topRight,
+                            child: _padBtn(retroA, label: 'A', size: 62)),
+                      ],
+                    ),
             ),
             // shoulders, above each cluster
             Positioned(left: 18, bottom: shoulderLB, child: _pillBtn(retroL, 'L')),
