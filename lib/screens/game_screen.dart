@@ -1958,16 +1958,24 @@ class _MonEditorState extends State<_MonEditor> {
   @override
   Widget build(BuildContext context) {
     final over = _evTotal > 510;
+    final keyboardUp = MediaQuery.of(context).viewInsets.bottom > 0;
     return Scaffold(
       body: Column(
         children: [
           _header(context),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            // Tap anywhere in the form to dismiss the (number-pad) keyboard,
+            // which has no return key of its own on iOS.
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
             // Species picker — changing it re-derives stats, legal moves,
             // growth-rate EXP and the default nickname (Gen 3 + Gen 4).
             Row(
@@ -2222,10 +2230,29 @@ class _MonEditorState extends State<_MonEditor> {
             ),
             for (var k = 0; k < 4; k++) _moveRow(k),
                   _moreSection(),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
+          // A Done bar sits directly above the number pad (which has no return
+          // key) so the keyboard can always be dismissed.
+          if (keyboardUp)
+            Material(
+              color: Theme.of(context).colorScheme.surface,
+              elevation: 8,
+              child: SafeArea(
+                top: false,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => FocusScope.of(context).unfocus(),
+                    icon: const Icon(Icons.keyboard_hide, size: 18),
+                    label: const Text('Done'),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
       bottomNavigationBar: _saveBar(context, over),
