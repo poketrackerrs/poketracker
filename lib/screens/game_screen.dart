@@ -12,6 +12,7 @@ import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../data/gen3_events.dart';
 import '../data/gen3_items.dart';
+import '../data/type_colors.dart';
 import '../services/gen3_save_editor.dart';
 import '../services/pk3.dart';
 import '../state/app_state.dart';
@@ -354,9 +355,9 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   }
 
   Future<void> _editMon(Gen3PartyMon m) async {
-    final result = await showDialog<PartyEdit>(
-      context: context,
-      builder: (_) => _MonEditor(mon: m, initial: _partyEdits[m.slot]),
+    final result = await Navigator.of(context).push<PartyEdit>(
+      MaterialPageRoute(
+          builder: (_) => _MonEditor(mon: m, initial: _partyEdits[m.slot])),
     );
     if (result != null && mounted) {
       setState(() => _partyEdits[m.slot] = result);
@@ -706,10 +707,10 @@ class _BoxBrowserState extends State<_BoxBrowser> {
     // Boxed mons store no level byte — derive it from EXP for the editor.
     final lvl = await state.gen3LevelForExp(m.dex, m.exp);
     if (!mounted) return;
-    final result = await showDialog<PartyEdit>(
-      context: context,
-      builder: (_) =>
-          _MonEditor(mon: m.copyWith(level: lvl), initial: widget.edits[m.boxSlot]),
+    final result = await Navigator.of(context).push<PartyEdit>(
+      MaterialPageRoute(
+          builder: (_) => _MonEditor(
+              mon: m.copyWith(level: lvl), initial: widget.edits[m.boxSlot])),
     );
     if (result != null && mounted) {
       setState(() => widget.edits[m.boxSlot!] = result);
@@ -1067,6 +1068,10 @@ class _MonEditorState extends State<_MonEditor> {
   List<({int id, String name})>? _legal; // learnset, null while loading
   final Map<int, String> _nameById = {};
   List<({int id, String name})> _allSpecies = const []; // for the picker
+  List<String> _types = const []; // for the dex-style header banner
+  // move id -> display info (power/pp/type/category), fetched lazily + cached
+  final Map<int, ({int power, int pp, int accuracy, String type, String damageClass})>
+      _mi = {};
 
   @override
   void initState() {
@@ -1096,6 +1101,23 @@ class _MonEditorState extends State<_MonEditor> {
     _contest = [for (final v in contest) TextEditingController(text: '$v')];
     _loadMoves();
     _loadSpecies();
+    _loadTypes();
+    for (final id in _moves) {
+      _ensureMoveInfo(id);
+    }
+  }
+
+  Future<void> _loadTypes() async {
+    try {
+      final d = await context.read<AppState>().pokedexTypes(_speciesDex);
+      if (mounted) setState(() => _types = d);
+    } catch (_) {/* keep header neutral */}
+  }
+
+  Future<void> _ensureMoveInfo(int id) async {
+    if (id == 0 || _mi.containsKey(id)) return;
+    final info = await context.read<AppState>().moveInfo(id);
+    if (mounted) setState(() => _mi[id] = info);
   }
 
   Future<void> _loadSpecies() async {
@@ -1136,6 +1158,10 @@ class _MonEditorState extends State<_MonEditor> {
         _moves[k] = legal[k].id;
       }
     });
+    _loadTypes();
+    for (final id in _moves) {
+      _ensureMoveInfo(id);
+    }
   }
 
   // Regenerate a checker-legal (Method-1 correlated) PID + IVs for the current
@@ -1187,6 +1213,68 @@ class _MonEditorState extends State<_MonEditor> {
               Text(_moveName(current), style: const TextStyle(fontSize: 12))));
     }
     return items;
+  }
+
+  static const _catIcon = {
+    'physical': Icons.sports_mma,
+    'special': Icons.auto_awesome,
+    'status': Icons.shield_outlined,
+  };
+
+  // One move slot: a picker plus an enriched info line (type / category /
+  // power / PP) for the selected move.
+  Widget _moveRow(int k) {
+    final id = _moves[k];
+    final info = _mi[id];
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          SizedBox(
+              width: 18,
+              child: Text('${k + 1}', style: const TextStyle(fontSize: 11))),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButton<int>(
+                  isExpanded: true,
+                  isDense: true,
+                  value: id,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).textTheme.bodyLarge?.color),
+                  items: _moveItems(id),
+                  onChanged: (v) {
+                    setState(() => _moves[k] = v ?? 0);
+                    _ensureMoveInfo(v ?? 0);
+                  },
+                ),
+                if (id != 0 && info != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        TypeChip(info.type),
+                        const SizedBox(width: 8),
+                        Icon(_catIcon[info.damageClass] ?? Icons.help_outline,
+                            size: 14, color: Colors.grey),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Pow ${info.power == 0 ? '—' : info.power}'
+                          '   PP ${info.pp}'
+                          '${info.accuracy > 0 ? '   Acc ${info.accuracy}' : ''}',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1384,13 +1472,16 @@ class _MonEditorState extends State<_MonEditor> {
   @override
   Widget build(BuildContext context) {
     final over = _evTotal > 510;
-    return AlertDialog(
-      title: Text('${widget.mon.name ?? '#${widget.mon.dex}'}  Lv${widget.mon.level}'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return Scaffold(
+      body: Column(
+        children: [
+          _header(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             // Species picker — changing it re-derives stats, legal moves,
             // growth-rate EXP, and the default nickname (kept legal).
             Row(
@@ -1581,72 +1672,161 @@ class _MonEditorState extends State<_MonEditor> {
                 ],
               ],
             ),
-            for (var k = 0; k < 4; k++)
-              Row(
-                children: [
-                  SizedBox(
-                      width: 18,
-                      child: Text('${k + 1}',
-                          style: const TextStyle(fontSize: 11))),
-                  Expanded(
-                    child: DropdownButton<int>(
-                      isExpanded: true,
-                      isDense: true,
-                      value: _moves[k],
-                      style: const TextStyle(fontSize: 12, color: Colors.black),
-                      items: _moveItems(_moves[k]),
-                      onChanged: (v) => setState(() => _moves[k] = v ?? 0),
-                    ),
-                  ),
+            for (var k = 0; k < 4; k++) _moveRow(k),
+                  _moreSection(),
                 ],
               ),
-            _moreSection(),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel')),
-        FilledButton(
-          onPressed: over
-              ? null
-              : () => Navigator.pop(
-                  context,
-                  PartyEdit(
-                    shiny: _shiny,
-                    nature: _nature,
-                    level: (int.tryParse(_level.text.trim()) ?? widget.mon.level)
-                        .clamp(1, 100),
-                    // Strict-legal: when nature/shiny changed or the user
-                    // re-rolled, ship the correlated PID + IVs; otherwise leave
-                    // the Pokémon's existing PID/IVs untouched.
-                    legalPid: _legalPid,
-                    ivs: _legalPid != null ? _ivs : null,
-                    evs: _read(_ev, 255),
-                    moves: _moves,
-                    species:
-                        _speciesDex == widget.mon.dex ? null : _speciesDex,
-                    nickname: _nickname.text.trim().isEmpty
-                        ? null
-                        : _nickname.text.trim(),
-                    friendship: _friendship,
-                    otName: _otName.text.trim().isEmpty
-                        ? null
-                        : _otName.text.trim(),
-                    ball: _ball,
-                    metLevel: _metLevel,
-                    otGender: _otGender,
-                    language: _language,
-                    markings: _markings,
-                    pokerus: _pokerus,
-                    contest: _read(_contest, 255),
-                  )),
-          child: const Text('Done'),
-        ),
-      ],
+      bottomNavigationBar: _saveBar(context, over),
     );
   }
+
+  PartyEdit _buildEdit() => PartyEdit(
+        shiny: _shiny,
+        nature: _nature,
+        level: (int.tryParse(_level.text.trim()) ?? widget.mon.level)
+            .clamp(1, 100),
+        // Strict-legal: when nature/shiny changed or the user re-rolled, ship
+        // the correlated PID + IVs; otherwise leave the existing PID/IVs alone.
+        legalPid: _legalPid,
+        ivs: _legalPid != null ? _ivs : null,
+        evs: _read(_ev, 255),
+        moves: _moves,
+        species: _speciesDex == widget.mon.dex ? null : _speciesDex,
+        nickname:
+            _nickname.text.trim().isEmpty ? null : _nickname.text.trim(),
+        friendship: _friendship,
+        otName: _otName.text.trim().isEmpty ? null : _otName.text.trim(),
+        ball: _ball,
+        metLevel: _metLevel,
+        otGender: _otGender,
+        language: _language,
+        markings: _markings,
+        pokerus: _pokerus,
+        contest: _read(_contest, 255),
+      );
+
+  // Dex-entry-style header: type-colored banner with artwork, name, level,
+  // shiny star and type chips.
+  Widget _header(BuildContext context) {
+    final banner = _types.isEmpty ? const Color(0xFF6B7280) : typeColor(_types.first);
+    final art =
+        'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$_speciesDex.png';
+    final name = _nickname.text.trim().isEmpty ? _speciesName : _nickname.text.trim();
+    final lvl = int.tryParse(_level.text.trim()) ?? widget.mon.level;
+    return Container(
+      color: banner,
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 132,
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                        if (_shiny)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6),
+                            child: Icon(Icons.auto_awesome,
+                                color: Colors.amberAccent, size: 20),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text('$_speciesName  ·  Lv$lvl',
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        for (final t in _types)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(t.toUpperCase(),
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.5)),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: CachedNetworkImage(
+                  imageUrl: art,
+                  width: 104,
+                  height: 104,
+                  fit: BoxFit.contain,
+                  errorWidget: (_, _, _) =>
+                      const Icon(Icons.catching_pokemon, color: Colors.white54, size: 60),
+                  placeholder: (_, _) => const SizedBox(width: 104, height: 104),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _saveBar(BuildContext context, bool over) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed:
+                      over ? null : () => Navigator.pop(context, _buildEdit()),
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 // --------------------------------------------------------------- Badges

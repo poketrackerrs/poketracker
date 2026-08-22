@@ -213,6 +213,24 @@ class PokedexService {
     }
   }
 
+  /// Full display info for a move (power / PP / type / category / accuracy).
+  /// Cached via the same HTTP cache as movePP.
+  Future<({int power, int pp, int accuracy, String type, String damageClass})>
+      moveInfo(int moveId) async {
+    try {
+      final j = await _cachedGet('$_base/move/$moveId');
+      return (
+        power: (j['power'] as int?) ?? 0,
+        pp: (j['pp'] as int?) ?? 0,
+        accuracy: (j['accuracy'] as int?) ?? 0,
+        type: (j['type']?['name'] as String?) ?? '',
+        damageClass: (j['damage_class']?['name'] as String?) ?? '',
+      );
+    } catch (_) {
+      return (power: 0, pp: 0, accuracy: 0, type: '', damageClass: '');
+    }
+  }
+
   Future<PokemonDetail> fetchDetail(int id) async {
     if (_memCache.containsKey(id)) return _memCache[id]!;
 

@@ -570,6 +570,19 @@ class AppState extends ChangeNotifier {
   Future<int> gen3LevelForExp(int dex, int exp) async =>
       gen3LevelFromExp(await _pokedex.growthRate(dex), exp);
 
+  /// A species' Gen 3 typing (for the editor's dex-style header).
+  Future<List<String>> pokedexTypes(int dex) async {
+    try {
+      return (await _pokedex.fetchDetail(dex)).typesForGeneration(3);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Move display info (power/PP/type/category) for the editor's move rows.
+  Future<({int power, int pp, int accuracy, String type, String damageClass})>
+      moveInfo(int id) => _pokedex.moveInfo(id);
+
   /// All species (National dex id + name), sorted by dex, for the editor's
   /// species picker.
   Future<List<({int id, String name})>> allSpeciesForPicker() async {
