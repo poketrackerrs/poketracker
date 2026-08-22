@@ -38,13 +38,21 @@ class LibraryService {
     return d;
   }
 
-  /// The ROM stored for a game (the first file in its subfolder), if any.
+  /// ROM file extensions we recognise (never a save/backup).
+  static const romExts = ['.gba', '.gbc', '.gb', '.nds', '.3ds', '.cia', '.srl'];
+
+  /// The ROM stored for a game, if any. Matches only real ROM extensions so a
+  /// stray save (.sav) or editor backup (`.sav.bak-<ts>`) in the folder is never
+  /// mistaken for the ROM.
   Future<File?> fileForGame(String gameId) async {
     final lib = await libraryDir();
     final d = Directory('${lib.path}${Platform.pathSeparator}$gameId');
     if (!d.existsSync()) return null;
-    final files = d.listSync().whereType<File>().toList();
-    return files.isEmpty ? null : files.first;
+    for (final f in d.listSync().whereType<File>()) {
+      final lower = f.path.toLowerCase();
+      if (romExts.any((e) => lower.endsWith(e))) return f;
+    }
+    return null;
   }
 
   Future<void> deleteForGame(String gameId) async {
