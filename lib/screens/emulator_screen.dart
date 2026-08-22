@@ -103,8 +103,11 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       _saveTimer =
           Timer.periodic(const Duration(seconds: 6), (_) => _persistSave());
       // True-live achievements: poll the core's working RAM (no save needed).
-      _liveRamTimer =
-          Timer.periodic(const Duration(seconds: 2), (_) => _liveRamCheck());
+      // Temporarily disabled — verifying the core safely exposes system RAM.
+      if (_liveRamEnabled && !_isDs) {
+        _liveRamTimer =
+            Timer.periodic(const Duration(seconds: 2), (_) => _liveRamCheck());
+      }
     } catch (e) {
       if (mounted) setState(() => _status = 'Emulator error: $e');
     }
@@ -278,6 +281,8 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   Timer? _toastTimer;
   Timer? _liveRamTimer;
   bool _liveRamBusy = false;
+  // Master switch for the working-RAM achievement poll (off until verified).
+  static const bool _liveRamEnabled = false;
 
   // Read the emulator's working RAM and unlock achievements in real time.
   Future<void> _liveRamCheck() async {
