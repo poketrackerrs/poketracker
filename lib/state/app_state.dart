@@ -309,9 +309,10 @@ class AppState extends ChangeNotifier {
       caughtCount: p.caughtSpecies.where((s) => s < 10000).length,
     );
     return [
-      for (final a in kFrlgAchievements)
+      // Only show auto-trackable achievements for now (skip manual tap-offs).
+      for (final a in kFrlgAchievements.where((a) => !a.isManual))
         () {
-          // Auto (badges/caught/champion) OR flag/manual (stored on sync/tap).
+          // Auto (badges/caught/champion) OR flag (stored on sync).
           final unlocked = a.auto != null
               ? a.auto!(ctx)
               : p.unlockedAchievements.contains(a.id);
