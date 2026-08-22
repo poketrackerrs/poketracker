@@ -290,6 +290,68 @@ class Pk3 {
     return Pk3._(raw, data, _orders[pid % 24]);
   }
 
+  /// Build a fresh, self-consistent PK3 from scratch (for event injection).
+  /// Stats are left zero — the caller fills them with [recomputeStats] after
+  /// supplying base stats. [party] picks the 100- vs 80-byte block size.
+  factory Pk3.create({
+    required int otid,
+    required int nationalSpecies,
+    required int level,
+    required int totalExp,
+    required List<int> moves,
+    required List<int> pp,
+    required List<int> ivs,
+    required String nickname,
+    required String otName,
+    required int nature,
+    bool shiny = false,
+    int ball = 4,
+    int heldItem = 0,
+    int metLocation = 255,
+    int metLevel = 0,
+    int language = 2,
+    int friendship = 70,
+    int otGender = 0,
+    int gameOfOrigin = 0,
+    bool party = true,
+  }) {
+    final raw = Uint8List(party ? 100 : 80);
+    _sU32(raw, 0x04, otid);
+    raw[0x12] = language & 0xFF;
+    raw[0x13] = 0x02; // "has species" sanity flag (non-egg, valid)
+    // Choose a PID that yields the wanted nature (pid % 25) and shininess.
+    final tid = otid & 0xFFFF, sid = otid >> 16;
+    var pid = nature + 25 * 0x100; // start above 0 to avoid an empty-looking PID
+    for (var n = 0; n < 0x20000; n++) {
+      final p = nature + 25 * (0x100 + n);
+      if (p > 0xFFFFFFFF) break;
+      final sh = (tid ^ sid ^ (p & 0xFFFF) ^ (p >> 16)) < 8;
+      if (sh == shiny) {
+        pid = p;
+        break;
+      }
+    }
+    _sU32(raw, 0x00, pid & 0xFFFFFFFF);
+    final pk = Pk3._(raw, Uint8List(48), _orders[pid % 24]);
+    pk.setSpeciesNational(nationalSpecies);
+    pk.setLevel(level, totalExp);
+    pk.setMoves(moves);
+    for (var k = 0; k < 4; k++) {
+      pk.setPP(k, k < pp.length ? pp[k] : 0);
+    }
+    pk.setIVs(ivs);
+    pk.setNickname(nickname);
+    pk.setOtName(otName);
+    pk.setHeldItem(heldItem);
+    pk.setFriendship(friendship);
+    pk.setBall(ball);
+    pk.setMetLevel(metLevel);
+    pk.setMetLocation(metLocation);
+    pk.setOtGender(otGender);
+    pk.setGameOfOrigin(gameOfOrigin);
+    return pk;
+  }
+
   // sub-block base offset within the decrypted 48-byte data
   int _sub(String letter) => order.indexOf(letter) * 12;
 

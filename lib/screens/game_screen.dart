@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -9,6 +10,7 @@ import '../models/pokedex_models.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
+import '../data/gen3_events.dart';
 import '../data/gen3_items.dart';
 import '../services/gen3_save_editor.dart';
 import '../services/pk3.dart';
@@ -279,6 +281,10 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   bool _trainerLoaded = false;
   // Bag: pockets the user edited (empty = leave the bag untouched)
   final Map<Gen3Pocket, List<({int id, int qty})>> _bagEdits = {};
+  // Event Pokémon queued for injection (built blocks + labels for display)
+  final List<Uint8List> _partyInjects = [];
+  final List<Uint8List> _boxInjects = [];
+  final List<String> _injectLabels = [];
   String? _error;
 
   @override
@@ -338,6 +344,8 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                 )
               : null,
           bag: _bagEdits.isEmpty ? null : _bagEdits,
+          partyInjects: _partyInjects,
+          boxInjects: _boxInjects,
         );
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -353,6 +361,45 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     if (result != null && mounted) {
       setState(() => _partyEdits[m.slot] = result);
     }
+  }
+
+  Future<void> _addEvent() async {
+    final ev = await showModalBottomSheet<Gen3Event>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text('Add an event Pokémon',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            for (final e in kGen3Events)
+              ListTile(
+                leading: const Icon(Icons.auto_awesome, color: Colors.amber),
+                title: Text('${e.label}  ·  Lv${e.level}'),
+                subtitle: Text('OT ${e.otName}  ·  ${e.note}',
+                    style: const TextStyle(fontSize: 11)),
+                onTap: () => Navigator.pop(context, e),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (ev == null || !mounted) return;
+    // Party if there's room (counting queued party injects), else a PC box.
+    final partyRoom = 6 - (_party?.length ?? 0) - _partyInjects.length;
+    final toParty = partyRoom > 0;
+    setState(() => _busy = true);
+    final block =
+        await context.read<AppState>().buildEventMon(widget.game, ev, party: toParty);
+    if (!mounted) return;
+    setState(() {
+      (toParty ? _partyInjects : _boxInjects).add(block);
+      _injectLabels.add('${ev.label} → ${toParty ? 'party' : 'PC box'}');
+      _busy = false;
+    });
   }
 
   @override
@@ -546,6 +593,17 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                         ));
                         if (mounted) setState(() {});
                       },
+                    ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading:
+                          const Icon(Icons.auto_awesome, color: Colors.amber),
+                      title: const Text('Event Pokémon'),
+                      subtitle: Text(_injectLabels.isEmpty
+                          ? 'Add Mew, Celebi, Jirachi, Deoxys…'
+                          : _injectLabels.join(', ')),
+                      trailing: const Icon(Icons.add),
+                      onTap: _busy ? null : _addEvent,
                     ),
                     const SizedBox(height: 4),
                     const Text(

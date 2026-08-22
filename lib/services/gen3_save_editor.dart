@@ -453,6 +453,39 @@ class Gen3SaveEditor {
         [for (var i = 0; i < 80; i++) bytes[_pcLogical(base + i)]]);
   }
 
+  /// Append a party Pokémon (100-byte block). False if the party is full (6).
+  bool addPartyMon(String versionId, Uint8List block) {
+    final n = partyCount(versionId);
+    if (n >= 6) return false;
+    writePartyBlock(versionId, n, block);
+    final cnt = _partyOfs(versionId);
+    _setU32(_logical(cnt), n + 1);
+    fixChecksum(_secForLogical(cnt));
+    return true;
+  }
+
+  /// Put an 80-byte block in the first empty PC box slot. Returns the global
+  /// slot index (0..419), or -1 if every box is full.
+  int addBoxMon(Uint8List block) {
+    final total = pcBoxCount * pcPerBox;
+    for (var g = 0; g < total; g++) {
+      final head = boxSlot(g); // byte-wise, straddle-safe
+      final empty = head[0] == 0 &&
+          head[1] == 0 &&
+          head[2] == 0 &&
+          head[3] == 0 &&
+          head[4] == 0 &&
+          head[5] == 0 &&
+          head[6] == 0 &&
+          head[7] == 0;
+      if (empty) {
+        writeBoxSlot(g, block);
+        return g;
+      }
+    }
+    return -1;
+  }
+
   /// Write PC box slot [index], fixing the checksum of every section it touches.
   void writeBoxSlot(int index, Uint8List block) {
     final base = 4 + index * 80;

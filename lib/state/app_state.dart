@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
+import '../data/gen3_events.dart';
 import '../models/game.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
@@ -461,6 +462,53 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Builds an event Pokémon into an encoded PK3 block (party or box variant),
+  /// pulling EXP/PP/base-stats from PokeAPI. Legal-by-construction.
+  Future<Uint8List> buildEventMon(Game game, Gen3Event ev,
+      {required bool party}) async {
+    final otid = (ev.otTid & 0xFFFF) | ((ev.otSid & 0xFFFF) << 16);
+    final rate = await _pokedex.growthRate(ev.dex);
+    final pp = <int>[];
+    for (final mid in ev.moves) {
+      pp.add(mid == 0 ? 0 : await _pokedex.movePP(mid));
+    }
+    var name = '';
+    for (final s in await _pokedex.loadIndex()) {
+      if (s.id == ev.dex) {
+        name = s.name;
+        break;
+      }
+    }
+    final pk = Pk3.create(
+      otid: otid,
+      nationalSpecies: ev.dex,
+      level: ev.level,
+      totalExp: gen3Exp(rate, ev.level),
+      moves: ev.moves,
+      pp: pp,
+      ivs: const [31, 31, 31, 31, 31, 31],
+      nickname: name.isEmpty ? 'EVENT' : name.toUpperCase(),
+      otName: ev.otName,
+      nature: ev.nature,
+      ball: ev.ball,
+      heldItem: ev.heldItem,
+      metLocation: ev.metLocation,
+      metLevel: ev.metLevel,
+      party: party,
+    );
+    if (party) {
+      try {
+        final st = (await _pokedex.fetchDetail(ev.dex)).stats;
+        int g(String k) => st[k] ?? 50;
+        pk.recomputeStats([
+          g('hp'), g('attack'), g('defense'),
+          g('speed'), g('special-attack'), g('special-defense'),
+        ]);
+      } catch (_) {/* offline: stats stay 0 until first heal */}
+    }
+    return pk.encode();
+  }
+
   /// The level a boxed Pokémon of [dex] with [exp] total experience is at.
   Future<int> gen3LevelForExp(int dex, int exp) async =>
       gen3LevelFromExp(await _pokedex.growthRate(dex), exp);
@@ -505,7 +553,9 @@ class AppState extends ChangeNotifier {
       Map<int, PartyEdit> partyEdits = const {},
       Map<int, PartyEdit> boxEdits = const {},
       Gen3Trainer? trainer,
-      Map<Gen3Pocket, List<({int id, int qty})>>? bag}) async {
+      Map<Gen3Pocket, List<({int id, int qty})>>? bag,
+      List<Uint8List> partyInjects = const [],
+      List<Uint8List> boxInjects = const []}) async {
     if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
@@ -542,6 +592,14 @@ class AppState extends ChangeNotifier {
       if (m.isEmpty) continue;
       await _applyGen3MonEdit(m, entry.value, game, e);
       e.writeBoxSlot(entry.key, m.encode());
+    }
+    for (final b in partyInjects) {
+      e.addPartyMon(game.version, b);
+      e.markCaught(game.version, Pk3.decode(b).nationalDex);
+    }
+    for (final b in boxInjects) {
+      e.addBoxMon(b);
+      e.markCaught(game.version, Pk3.decode(b).nationalDex);
     }
     if (!e.verifyChecksums().ok) {
       return 'Edit produced bad checksums — aborted, your save was NOT changed.';
