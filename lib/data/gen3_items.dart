@@ -72,6 +72,30 @@ final Map<int, String> kGen3ItemNames = () {
 
 String gen3ItemName(int id) => kGen3ItemNames[id] ?? 'Item #$id';
 
+// PokeAPI item-sprite slugs for our compressed (no-space) names that PokeAPI
+// hyphenates. Everything else derives its slug from the display name.
+const Map<int, String> _slugOverrides = {
+  30: 'energy-powder', 103: 'tiny-mushroom', 179: 'bright-powder',
+  188: 'silver-powder', 192: 'deep-sea-tooth', 193: 'deep-sea-scale',
+  206: 'black-glasses', 212: 'never-melt-ice', 214: 'twisted-spoon',
+};
+
+/// PokeAPI item sprite URL for a Gen 3 item id, or null when there's no useful
+/// per-item sprite (TMs/HMs 289–346 use generic type icons upstream). Callers
+/// should show a fallback icon on null or a network error.
+String? gen3ItemSprite(int id) {
+  if (id >= 289 && id <= 346) return null; // TMs & HMs
+  final name = kGen3ItemNames[id];
+  if (name == null) return null;
+  final slug = _slugOverrides[id] ??
+      name
+          .toLowerCase()
+          .replaceAll('é', 'e')
+          .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+          .replaceAll(RegExp(r'^-|-$'), '');
+  return 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/$slug.png';
+}
+
 /// Items offered in the bag editor's "add" picker (id + name), sorted by name.
 List<({int id, String name})> gen3ItemPicker() {
   final out = [for (final e in kGen3ItemNames.entries) (id: e.key, name: e.value)];

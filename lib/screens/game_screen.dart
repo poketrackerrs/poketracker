@@ -834,61 +834,64 @@ class _BagEditorState extends State<_BagEditor> {
 
   Future<void> _addItem() async {
     final all = gen3ItemPicker();
-    int? pickedId;
-    final qty = TextEditingController(text: '1');
-    final ok = await showDialog<bool>(
+    final picked = await showModalBottomSheet<int>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => AlertDialog(
-          title: const Text('Add item'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Autocomplete<({int id, String name})>(
-                optionsBuilder: (v) {
-                  final q = v.text.trim().toLowerCase();
-                  if (q.isEmpty) return const Iterable.empty();
-                  return all
-                      .where((e) => e.name.toLowerCase().contains(q))
-                      .take(40);
-                },
-                displayStringForOption: (o) => o.name,
-                onSelected: (o) => setSheet(() => pickedId = o.id),
-                fieldViewBuilder: (c, ctrl, focus, onSub) => TextField(
-                  controller: ctrl,
-                  focusNode: focus,
-                  decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.search), hintText: 'Item name'),
-                ),
+      isScrollControlled: true,
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final q = query.trim().toLowerCase();
+            final matches = q.isEmpty
+                ? all
+                : all.where((e) => e.name.toLowerCase().contains(q)).toList();
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.7,
+              builder: (_, scroll) => Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Search items…',
+                          isDense: true),
+                      onChanged: (v) => setSheet(() => query = v),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scroll,
+                      itemCount: matches.length,
+                      itemBuilder: (_, i) => ListTile(
+                        leading: _itemImage(matches[i].id),
+                        title: Text(matches[i].name),
+                        onTap: () => Navigator.pop(ctx, matches[i].id),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: qty,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Quantity'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel')),
-            TextButton(
-                onPressed: pickedId == null
-                    ? null
-                    : () => Navigator.pop(ctx, true),
-                child: const Text('Add')),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
-    if (ok == true && pickedId != null) {
-      setState(() => _local[_pocket]!.add((
-            id: pickedId!,
-            qty: (int.tryParse(qty.text.trim()) ?? 1).clamp(1, 999),
-          )));
-      _commit();
-    }
+    if (picked == null || !mounted) return;
+    // If already in the pocket, just add one; else add a new stack of 1.
+    final idx = _local[_pocket]!.indexWhere((e) => e.id == picked);
+    setState(() {
+      if (idx >= 0) {
+        final cur = _local[_pocket]![idx];
+        _local[_pocket]![idx] =
+            (id: cur.id, qty: (cur.qty + 1).clamp(1, 999));
+      } else {
+        _local[_pocket]!.add((id: picked, qty: 1));
+      }
+    });
+    _commit();
   }
 
   @override
@@ -930,18 +933,68 @@ class _BagEditorState extends State<_BagEditor> {
                       : ListView.builder(
                           itemCount: list.length,
                           itemBuilder: (_, i) => ListTile(
-                            dense: true,
+                            leading: _itemImage(list[i].id),
                             title: Text(gen3ItemName(list[i].id)),
-                            trailing: Text('×${list[i].qty}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w600)),
-                            onTap: () => _editQty(i),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: () => _bump(i, -1),
+                                ),
+                                SizedBox(
+                                  width: 34,
+                                  child: Text('${list[i].qty}',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700)),
+                                ),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  onPressed: () => _bump(i, 1),
+                                ),
+                              ],
+                            ),
+                            onTap: () => _editQty(i), // precise set / remove
                           ),
                         ),
                 ),
               ],
             ),
     );
+  }
+
+  /// The item's sprite (from data/gen3_items), with a graceful fallback icon.
+  Widget _itemImage(int id) {
+    const fallback = Icon(Icons.category_outlined, size: 22, color: Colors.grey);
+    final url = gen3ItemSprite(id);
+    if (url == null) return const SizedBox(width: 34, child: Center(child: fallback));
+    return SizedBox(
+      width: 34,
+      height: 34,
+      child: CachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.contain,
+        errorWidget: (_, _, _) => fallback,
+        placeholder: (_, _) => const SizedBox(width: 34, height: 34),
+      ),
+    );
+  }
+
+  // Tap +/- to change a quantity; removes the item at 0.
+  void _bump(int index, int delta) {
+    final cur = _local[_pocket]![index];
+    final q = (cur.qty + delta).clamp(0, 999);
+    setState(() {
+      if (q == 0) {
+        _local[_pocket]!.removeAt(index);
+      } else {
+        _local[_pocket]![index] = (id: cur.id, qty: q);
+      }
+    });
+    _commit();
   }
 }
 
