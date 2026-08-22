@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
 import '../data/gen3_events.dart';
+import '../models/achievement.dart';
 import '../models/game.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
@@ -221,6 +222,289 @@ class AppState extends ChangeNotifier {
           p.milestones.entries
               .where((e) => e.value && e.key.contains('Badge'))
               .length);
+
+  // =============================== Achievements ===============================
+  // All achievements unlock automatically from already-tracked progress
+  // (badges, caught-dex, shinies, team). Per-game and cross-game (global).
+
+  /// True if the user has any tracked progress for this game (without creating
+  /// an empty progress record, unlike [progressFor]).
+  bool hasProgress(String gameId) {
+    final p = _progress[gameId];
+    return p != null &&
+        (p.caughtSpecies.isNotEmpty ||
+            p.milestones.values.any((v) => v) ||
+            p.team.isNotEmpty ||
+            p.shinyHunts.isNotEmpty);
+  }
+
+  int badgesEarned(String gameId) => progressFor(gameId)
+      .milestones
+      .entries
+      .where((e) => e.value && e.key.contains('Badge'))
+      .length;
+
+  int _shiniesCaught(String gameId) =>
+      progressFor(gameId).shinyHunts.where((h) => h.caught).length;
+
+  int get totalShiniesCaught =>
+      _progress.values.fold(0, (a, p) => a + p.shinyHunts.where((h) => h.caught).length);
+
+  int get championCount => _progress.values
+      .where((p) => p.milestones['Champion'] == true)
+      .length;
+
+  int _maxTeamLevel(String gameId) => progressFor(gameId)
+      .team
+      .fold(0, (a, m) => m.level > a ? m.level : a);
+
+  /// Generations the user has made any progress in (caught something or earned
+  /// a milestone), for the "played across N generations" achievement.
+  int get generationsPlayed {
+    final gens = <int>{};
+    for (final g in kGames) {
+      final p = _progress[g.id];
+      if (p == null) continue;
+      if (p.caughtSpecies.isNotEmpty || p.milestones.values.any((v) => v)) {
+        gens.add(g.generation);
+      }
+    }
+    return gens.length;
+  }
+
+  AchievementStatus _threshold(Achievement a, int value, int target) =>
+      AchievementStatus(
+        achievement: a,
+        unlocked: value >= target,
+        progress: target == 0 ? 1 : (value / target).clamp(0, 1).toDouble(),
+        detail: '$value / $target',
+      );
+
+  AchievementStatus _flag(Achievement a, bool done) => AchievementStatus(
+        achievement: a,
+        unlocked: done,
+        progress: done ? 1 : 0,
+      );
+
+  /// Per-game achievements, evaluated from that game's tracked progress.
+  List<AchievementStatus> gameAchievements(Game game) {
+    final id = game.id;
+    final p = progressFor(id);
+    final badgeTotal =
+        game.milestones.where((m) => m.contains('Badge')).length;
+    final badges = badgesEarned(id);
+    final caught = p.caughtSpecies.where((s) => s < 10000).length;
+    final shinies = _shiniesCaught(id);
+    final maxLvl = _maxTeamLevel(id);
+    final teamSize = p.team.length;
+
+    return [
+      // Progression
+      _flag(
+          const Achievement(
+              id: 'first-badge',
+              title: 'Gym Challenger',
+              description: 'Earn your first Gym Badge',
+              icon: Icons.emoji_events,
+              group: AchGroup.progression),
+          badges >= 1),
+      if (badgeTotal >= 8)
+        _threshold(
+            Achievement(
+                id: 'half-badges',
+                title: 'Halfway There',
+                description: 'Earn 4 Gym Badges',
+                icon: Icons.emoji_events,
+                group: AchGroup.progression),
+            badges,
+            4),
+      _threshold(
+          Achievement(
+              id: 'all-badges',
+              title: 'Badge Master',
+              description: 'Earn all Gym Badges',
+              icon: Icons.workspace_premium,
+              group: AchGroup.progression),
+          badges,
+          badgeTotal == 0 ? 8 : badgeTotal),
+      if (game.milestones.contains('Elite Four'))
+        _flag(
+            const Achievement(
+                id: 'elite-four',
+                title: 'Elite Four',
+                description: 'Defeat the Elite Four',
+                icon: Icons.shield_moon,
+                group: AchGroup.progression),
+            p.milestones['Elite Four'] == true),
+      if (game.milestones.contains('Champion'))
+        _flag(
+            const Achievement(
+                id: 'champion',
+                title: 'Champion',
+                description: 'Become the Pokémon League Champion',
+                icon: Icons.military_tech,
+                group: AchGroup.progression),
+            p.milestones['Champion'] == true),
+      // Collection
+      _threshold(
+          const Achievement(
+              id: 'catch-10',
+              title: 'Getting Started',
+              description: 'Catch 10 species',
+              icon: Icons.catching_pokemon,
+              group: AchGroup.collection),
+          caught,
+          10),
+      _threshold(
+          const Achievement(
+              id: 'catch-50',
+              title: 'Collector',
+              description: 'Catch 50 species',
+              icon: Icons.catching_pokemon,
+              group: AchGroup.collection),
+          caught,
+          50),
+      _threshold(
+          Achievement(
+              id: 'dex-complete',
+              title: 'Regional Champion',
+              description: 'Complete the ${game.region} Pokédex',
+              icon: Icons.auto_stories,
+              group: AchGroup.collection),
+          caught,
+          game.dexTotal),
+      // Shiny
+      _flag(
+          const Achievement(
+              id: 'first-shiny',
+              title: 'Sparkle',
+              description: 'Catch a shiny Pokémon',
+              icon: Icons.auto_awesome,
+              group: AchGroup.shiny),
+          shinies >= 1),
+      _threshold(
+          const Achievement(
+              id: 'shiny-5',
+              title: 'Shiny Hunter',
+              description: 'Catch 5 shiny Pokémon',
+              icon: Icons.auto_awesome_motion,
+              group: AchGroup.shiny),
+          shinies,
+          5),
+      // Team
+      _flag(
+          const Achievement(
+              id: 'full-team',
+              title: 'Full Squad',
+              description: 'Build a team of 6',
+              icon: Icons.groups,
+              group: AchGroup.team),
+          teamSize >= 6),
+      _flag(
+          const Achievement(
+              id: 'level-100',
+              title: 'Powerhouse',
+              description: 'Raise a Pokémon to Lv 100',
+              icon: Icons.bolt,
+              group: AchGroup.team),
+          maxLvl >= 100),
+    ];
+  }
+
+  /// Cross-game / meta achievements spanning the whole library.
+  List<AchievementStatus> globalAchievements() {
+    return [
+      _threshold(
+          const Achievement(
+              id: 'g-badges-8',
+              title: 'Badge Collector',
+              description: 'Earn 8 Gym Badges across all games',
+              icon: Icons.emoji_events,
+              group: AchGroup.meta),
+          totalBadges,
+          8),
+      _threshold(
+          const Achievement(
+              id: 'g-badges-24',
+              title: 'Badge Baron',
+              description: 'Earn 24 Gym Badges across all games',
+              icon: Icons.workspace_premium,
+              group: AchGroup.meta),
+          totalBadges,
+          24),
+      _threshold(
+          const Achievement(
+              id: 'g-badges-50',
+              title: 'Badge Overlord',
+              description: 'Earn 50 Gym Badges across all games',
+              icon: Icons.military_tech,
+              group: AchGroup.meta),
+          totalBadges,
+          50),
+      _threshold(
+          const Achievement(
+              id: 'g-champ-3',
+              title: 'Multi-Region Champion',
+              description: 'Become Champion in 3 regions',
+              icon: Icons.public,
+              group: AchGroup.meta),
+          championCount,
+          3),
+      _threshold(
+          const Achievement(
+              id: 'g-catch-100',
+              title: 'Pokédex Progress',
+              description: 'Catch 100 species across all games',
+              icon: Icons.catching_pokemon,
+              group: AchGroup.collection),
+          totalCaught,
+          100),
+      _threshold(
+          const Achievement(
+              id: 'g-catch-500',
+              title: 'Serious Collector',
+              description: 'Catch 500 species across all games',
+              icon: Icons.menu_book,
+              group: AchGroup.collection),
+          totalCaught,
+          500),
+      _threshold(
+          const Achievement(
+              id: 'g-catch-1000',
+              title: 'Gotta Catch a Thousand',
+              description: 'Catch 1000 species across all games',
+              icon: Icons.auto_stories,
+              group: AchGroup.collection),
+          totalCaught,
+          1000),
+      _flag(
+          const Achievement(
+              id: 'g-first-shiny',
+              title: 'First Sparkle',
+              description: 'Catch your first shiny anywhere',
+              icon: Icons.auto_awesome,
+              group: AchGroup.shiny),
+          totalShiniesCaught >= 1),
+      _threshold(
+          const Achievement(
+              id: 'g-shiny-10',
+              title: 'Shiny Legend',
+              description: 'Catch 10 shiny Pokémon',
+              icon: Icons.auto_awesome_motion,
+              group: AchGroup.shiny),
+          totalShiniesCaught,
+          10),
+      _threshold(
+          const Achievement(
+              id: 'g-generations',
+              title: 'Journey Through Time',
+              description: 'Make progress in 3 different generations',
+              icon: Icons.history_edu,
+              group: AchGroup.meta),
+          generationsPlayed,
+          3),
+    ];
+  }
 
   /// Opens an external URL (store page, etc.) in the default browser/app.
   /// Uses url_launcher so it works on Android and iOS as well as desktop.

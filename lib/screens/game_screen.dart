@@ -17,6 +17,7 @@ import '../services/gen3_save_editor.dart';
 import '../services/gen4_save_editor.dart';
 import '../services/pk3.dart';
 import '../state/app_state.dart';
+import 'achievements_screen.dart';
 import 'cartridge_viewer.dart';
 import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
@@ -33,7 +34,7 @@ class GameScreen extends StatelessWidget {
     final tint =
         state.regionTint ? regionColor(game.region, state.accent) : state.accent;
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         floatingActionButton: _playButton(context, state, tint),
         appBar: AppBar(
@@ -68,6 +69,7 @@ class GameScreen extends StatelessWidget {
                   Tab(icon: Icon(Icons.menu_book), text: 'Pokedex'),
                   Tab(icon: Icon(Icons.groups), text: 'Team'),
                   Tab(icon: Icon(Icons.auto_awesome), text: 'Shiny'),
+                  Tab(icon: Icon(Icons.military_tech), text: 'Trophies'),
                 ],
               ),
             ),
@@ -78,6 +80,7 @@ class GameScreen extends StatelessWidget {
                   _DexTab(game: game, tint: tint),
                   _TeamTab(game: game, tint: tint),
                   _ShinyTab(game: game, tint: tint),
+                  GameAchievementsView(game: game),
                 ],
               ),
             ),
