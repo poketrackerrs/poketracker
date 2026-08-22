@@ -177,6 +177,47 @@ class Pkx {
     _sU32(data, 0x38, w & 0xFFFFFFFF);
   }
 
+  void setPid(int v) => _sU32(data, 0x00, v & 0xFFFFFFFF);
+  void setFriendshipEx(int v) => data[0x14] = v.clamp(0, 255);
+
+  void setNicknamed(bool v) {
+    var w = _ivWord;
+    w = v ? (w | (1 << 31)) : (w & ~(1 << 31));
+    _sU32(data, 0x38, w & 0xFFFFFFFF);
+  }
+
+  /// Regenerate the PID to hit a wanted nature/shininess while preserving gender
+  /// and ability (the low byte). Gen 4 derives nature/gender/ability/shiny from
+  /// the PID just like Gen 3, and [encode] re-shuffles for the new PID, so this
+  /// stays self-consistent. Shininess uses the TRAINER's id.
+  void regenNatureShiny({
+    int? nature,
+    bool? shiny,
+    required int tid,
+    required int sid,
+    bool primaryShiny = false,
+  }) {
+    final loByte = pid & 0xFF;
+    final wantNature = nature ?? this.nature;
+    final wantShiny = shiny ?? isShiny(tid, sid);
+    int? both, shinyOnly, natureOnly;
+    for (var up = 0; up <= 0xFFFFFF; up++) {
+      final full = ((up << 8) | loByte) & 0xFFFFFFFF;
+      final natOk = full % 25 == wantNature;
+      final shOk =
+          ((tid ^ sid ^ (full >> 16) ^ (full & 0xFFFF)) < 8) == wantShiny;
+      if (natOk && shOk) {
+        both = full;
+        break;
+      }
+      if (shOk) shinyOnly ??= full;
+      if (natOk) natureOnly ??= full;
+    }
+    final chosen = both ??
+        (primaryShiny ? (shinyOnly ?? natureOnly) : (natureOnly ?? shinyOnly));
+    if (chosen != null) setPid(chosen);
+  }
+
   /// Recompute the block checksum: sum of the 64 decrypted data u16 words.
   int computeChecksum() {
     var s = 0;

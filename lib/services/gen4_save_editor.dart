@@ -147,6 +147,12 @@ class Gen4SaveEditor {
         gender: bytes[generalOfs + _gender] & 1,
       );
 
+  int get money => _u32(bytes, generalOfs + _money);
+  void setMoney(int v) {
+    _setU32(generalOfs + _money, v.clamp(0, 9999999));
+    fixGeneral();
+  }
+
   void setTrainer(Gen4Trainer t) {
     gen4EncodeText(bytes, generalOfs + _otName, 8, t.name);
     _setU16(generalOfs + _tid, t.tid & 0xFFFF);

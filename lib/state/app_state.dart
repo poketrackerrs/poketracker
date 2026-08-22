@@ -15,6 +15,9 @@ import '../services/library_service.dart';
 import '../services/emulator_service.dart';
 import '../services/save_service.dart';
 import '../services/gen3_save_editor.dart';
+import '../services/gen4_save_editor.dart';
+import '../services/gen4_pkx.dart';
+import '../services/gen4_text.dart';
 import '../services/pk3.dart';
 import '../services/pokedex_service.dart';
 import '../services/lemuroid_sync.dart';
@@ -336,6 +339,144 @@ class AppState extends ChangeNotifier {
       );
     } catch (_) {
       return null;
+    }
+  }
+
+  // ========================= Gen 4 (DPPt / HGSS) =========================
+  /// Trainer + money summary for a Gen 4 save.
+  Future<({int money, String trainer, int tid, int sid, int gender})?>
+      readGen4Save(Game game) async {
+    if (game.generation != 4) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen4SaveEditor.load(
+          Uint8List.fromList(await file.readAsBytes()), game.version);
+      if (!e.verifyChecksums().ok) return null;
+      final t = e.trainer();
+      return (
+        money: e.money,
+        trainer: t.name,
+        tid: t.tid,
+        sid: t.sid,
+        gender: t.gender
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reads a Gen 4 party for the editor (reuses the Gen3PartyMon UI model).
+  Future<List<Gen3PartyMon>?> readGen4Party(Game game) async {
+    if (game.generation != 4) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen4SaveEditor.load(
+          Uint8List.fromList(await file.readAsBytes()), game.version);
+      if (!e.verifyChecksums().ok) return null;
+      final t = e.trainer();
+      final out = <Gen3PartyMon>[];
+      for (var i = 0; i < e.partyCount; i++) {
+        final m = Pkx.decode(e.partyBlock(i));
+        if (m.isEmpty) continue;
+        var level = 0;
+        try {
+          level = gen3LevelFromExp(await _pokedex.growthRate(m.species), m.exp);
+        } catch (_) {}
+        out.add(Gen3PartyMon(
+          slot: i,
+          dex: m.species,
+          level: level,
+          shiny: m.isShiny(t.tid, t.sid),
+          nature: m.nature,
+          ivs: m.ivs,
+          evs: m.evs,
+          moves: m.moves,
+          nickname: gen4DecodeText(m.nicknameRaw, 0, 11),
+          otName: t.name,
+          friendship: m.friendship,
+          exp: m.exp,
+          pid: m.pid,
+          otid: (t.tid & 0xFFFF) | ((t.sid & 0xFFFF) << 16),
+        ));
+      }
+      try {
+        final byId = {for (final s in await _pokedex.loadIndex()) s.id: s.name};
+        for (final m in out) {
+          m.name = byId[m.dex];
+        }
+      } catch (_) {}
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Applies Gen 4 edits and writes back (backup + checksum guard).
+  Future<String> writeGen4Save(Game game,
+      {int? money,
+      Gen4Trainer? trainer,
+      Map<int, PartyEdit> partyEdits = const {}}) async {
+    if (game.generation != 4) return 'Gen 4 editing only.';
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    final Gen4SaveEditor e;
+    try {
+      e = Gen4SaveEditor.load(raw, game.version);
+    } catch (_) {
+      return 'Not a readable Gen 4 save.';
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Save checksums look wrong — refusing to edit it.';
+    }
+    if (money != null) e.setMoney(money);
+    if (trainer != null) e.setTrainer(trainer);
+    final t = e.trainer();
+    for (final entry in partyEdits.entries) {
+      final m = Pkx.decode(e.partyBlock(entry.key));
+      if (m.isEmpty) continue;
+      await _applyGen4MonEdit(m, entry.value, t.tid, t.sid);
+      e.writePartyBlock(entry.key, m.encode());
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+    }
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final bak = File('${file.path}.bak-$stamp');
+    await bak.writeAsBytes(raw, flush: true);
+    await file.writeAsBytes(e.toBytes(), flush: true);
+    return 'Saved. Backup written next to the save '
+        '(${bak.uri.pathSegments.last}). Reload it in your emulator to check.';
+  }
+
+  Future<void> _applyGen4MonEdit(Pkx m, PartyEdit ed, int tid, int sid) async {
+    final dex = m.species; // Gen 4 species change not supported yet
+    if (ed.level != null) {
+      m.setExp(gen3Exp(await _pokedex.growthRate(dex), ed.level!));
+    }
+    if (ed.nature != null || ed.shiny != null) {
+      m.regenNatureShiny(
+          nature: ed.nature,
+          shiny: ed.shiny,
+          tid: tid,
+          sid: sid,
+          primaryShiny: ed.shiny != null);
+    }
+    if (ed.ivs != null) m.setIVs(ed.ivs!);
+    if (ed.evs != null) m.setEVs(ed.evs!);
+    if (ed.friendship != null) m.setFriendship(ed.friendship!);
+    if (ed.moves != null) {
+      m.setMoves(ed.moves!);
+      for (var k = 0; k < 4; k++) {
+        final id = k < ed.moves!.length ? ed.moves![k] : 0;
+        m.setPP(k, id == 0 ? 0 : await _pokedex.movePP(id));
+      }
+    }
+    if (ed.nickname != null) {
+      gen4EncodeText(m.data, 0x48, 11, ed.nickname!);
+      m.setNicknamed(true);
     }
   }
 
