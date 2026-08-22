@@ -82,19 +82,10 @@ class GameAchievementsView extends StatelessWidget {
     final state = context.watch<AppState>();
     final list = state.gameAchievements(game);
     final unlocked = list.where((a) => a.unlocked).length;
-    final earnedPts = list
-        .where((a) => a.unlocked)
-        .fold(0, (a, s) => a + s.achievement.points);
-    final totalPts =
-        list.fold(0, (a, s) => a + s.achievement.points);
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        _SummaryHeader(
-            unlocked: unlocked,
-            total: list.length,
-            earnedPoints: earnedPts,
-            totalPoints: totalPts),
+        _SummaryHeader(unlocked: unlocked, total: list.length),
         ...AchievementListView.grouped(
           list,
           onToggle: (s) => context.read<AppState>().toggleAchievement(
@@ -189,31 +180,9 @@ class AchievementTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(a.title,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700, fontSize: 14)),
-                        ),
-                        if (a.points > 0) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text('${a.points}',
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: color)),
-                          ),
-                        ],
-                      ],
-                    ),
+                    Text(a.title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
                     const SizedBox(height: 1),
                     Text(a.description,
                         style: TextStyle(
@@ -262,13 +231,7 @@ class AchievementTile extends StatelessWidget {
 class _SummaryHeader extends StatelessWidget {
   final int unlocked;
   final int total;
-  final int earnedPoints;
-  final int totalPoints;
-  const _SummaryHeader(
-      {required this.unlocked,
-      required this.total,
-      this.earnedPoints = 0,
-      this.totalPoints = 0});
+  const _SummaryHeader({required this.unlocked, required this.total});
 
   @override
   Widget build(BuildContext context) {
@@ -300,10 +263,7 @@ class _SummaryHeader extends StatelessWidget {
               Text('$unlocked / $total unlocked',
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w800)),
-              Text(
-                  totalPoints > 0
-                      ? '${(frac * 100).round()}% · $earnedPoints / $totalPoints pts'
-                      : '${(frac * 100).round()}% complete',
+              Text('${(frac * 100).round()}% complete',
                   style: Theme.of(context).textTheme.bodySmall),
             ],
           ),

@@ -37,6 +37,13 @@ class SaveData {
   /// Notes surfaced to the user (e.g. "team not read for this format yet").
   final List<String> notes;
 
+  /// Achievement ids satisfied by the save's event flags (e.g. FRLG story
+  /// beats), applied to the game's unlocked achievements on sync.
+  final Set<String> flagAchievements;
+
+  /// True if the save's game-clear flag is set (became Champion).
+  final bool gameClear;
+
   const SaveData({
     required this.generation,
     required this.versionId,
@@ -50,6 +57,8 @@ class SaveData {
     this.money,
     this.playTime,
     this.notes = const [],
+    this.flagAchievements = const {},
+    this.gameClear = false,
   });
 
   SaveData copyWith({
@@ -57,6 +66,8 @@ class SaveData {
     List<SaveTeamMon>? team,
     int? money,
     List<String>? notes,
+    Set<String>? flagAchievements,
+    bool? gameClear,
   }) =>
       SaveData(
         generation: generation,
@@ -71,6 +82,8 @@ class SaveData {
         money: money ?? this.money,
         playTime: playTime,
         notes: notes ?? this.notes,
+        flagAchievements: flagAchievements ?? this.flagAchievements,
+        gameClear: gameClear ?? this.gameClear,
       );
 
   int get caughtCount => caughtDex.length;

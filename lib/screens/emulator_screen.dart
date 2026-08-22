@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:gamepads/gamepads.dart';
+import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/game.dart';
+import '../state/app_state.dart';
 import '../services/gba_emulator.dart';
 import '../services/emulator_controls.dart';
 import '../services/emulator_prefs.dart';
@@ -238,6 +240,18 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     });
   }
 
+  int _lastSaveSig = 0;
+
+  // Cheap change signature over the save bytes (sampled) — lets us skip the
+  // live achievement sync when the in-game save hasn't actually changed.
+  int _sigOf(List<int> d) {
+    var s = d.length;
+    for (var i = 0; i < d.length; i += 512) {
+      s = (s * 31 + d[i]) & 0x7FFFFFFF;
+    }
+    return s;
+  }
+
   Future<void> _persistSave() async {
     final emu = _emu;
     final path = _savPath;
@@ -247,6 +261,41 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     try {
       await File(path).writeAsBytes(data, flush: true);
     } catch (_) {}
+    // Live achievements: when the committed save changes (i.e. the player
+    // saved in-game), re-sync progress and toast anything that just unlocked.
+    final sig = _sigOf(data);
+    if (sig != _lastSaveSig) {
+      _lastSaveSig = sig;
+      _liveSync();
+    }
+  }
+
+  Future<void> _liveSync() async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    List<String> unlocked;
+    try {
+      unlocked =
+          await context.read<AppState>().syncAndDetectUnlocks(widget.game);
+    } catch (_) {
+      return;
+    }
+    if (!mounted || messenger == null) return;
+    for (final title in unlocked) {
+      messenger.showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            const Icon(Icons.military_tech, color: Colors.amber),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text('Achievement unlocked — $title',
+                    style: const TextStyle(fontWeight: FontWeight.w600))),
+          ],
+        ),
+      ));
+    }
   }
 
   Future<void> _exit() async {

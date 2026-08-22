@@ -310,25 +310,27 @@ class AppState extends ChangeNotifier {
     );
     return [
       for (final a in kFrlgAchievements)
-        AchievementStatus(
-          achievement: Achievement(
-            id: a.id,
-            title: a.title,
-            description: a.description,
-            icon: a.group.icon,
-            group: a.group,
-            points: a.points,
-          ),
-          unlocked: a.auto != null
+        () {
+          // Auto (badges/caught/champion) OR flag/manual (stored on sync/tap).
+          final unlocked = a.auto != null
               ? a.auto!(ctx)
-              : p.unlockedAchievements.contains(a.id),
-          progress: (a.auto != null
-                  ? a.auto!(ctx)
-                  : p.unlockedAchievements.contains(a.id))
-              ? 1
-              : 0,
-          manual: a.auto == null,
-        ),
+              : p.unlockedAchievements.contains(a.id);
+          return AchievementStatus(
+            achievement: Achievement(
+              id: a.id,
+              title: a.title,
+              description: a.description,
+              icon: a.group.icon,
+              group: a.group,
+              points: a.points,
+            ),
+            unlocked: unlocked,
+            progress: unlocked ? 1 : 0,
+            // Only truly-manual achievements (no auto, no event flags) get the
+            // tappable check-off; flag-based ones unlock from the save.
+            manual: a.isManual,
+          );
+        }(),
     ];
   }
 
@@ -649,6 +651,20 @@ class AppState extends ChangeNotifier {
         final e = Gen3SaveEditor.load(Uint8List.fromList(bytes));
         if (e.verifyChecksums().ok) {
           final party = await readGen3Party(game) ?? const <Gen3PartyMon>[];
+          // FireRed/LeafGreen: evaluate the curated achievement set's event
+          // flags (rival/Rocket/story beats) so they auto-unlock.
+          final flagAch = <String>{};
+          var gameClear = false;
+          if (game.version == 'firered' || game.version == 'leafgreen') {
+            gameClear = e.getEventFlag(game.version, kFrlgGameClearFlag);
+            for (final a in kFrlgAchievements) {
+              final f = a.flags;
+              if (f == null) continue;
+              if (f.any((n) => e.getEventFlag(game.version, n))) {
+                flagAch.add(a.id);
+              }
+            }
+          }
           data = data.copyWith(
             badgeCount: e.badgeCount(game.version),
             money: e.getMoney(game.version),
@@ -661,6 +677,8 @@ class AppState extends ChangeNotifier {
                     name: m.name),
             ],
             notes: const [],
+            flagAchievements: flagAch,
+            gameClear: gameClear,
           );
         }
       } catch (_) {/* keep the flat parse */}
@@ -1421,6 +1439,17 @@ class AppState extends ChangeNotifier {
               level: m.level,
             )));
     }
+    // Event-flag achievements (FRLG story beats) auto-unlock on sync.
+    if (data.flagAchievements.isNotEmpty) {
+      p.unlockedAchievements.addAll(data.flagAchievements);
+    }
+    // Game-clear flag → mark the Champion / Elite Four milestones too.
+    if (data.gameClear) {
+      if (game.milestones.contains('Champion')) p.milestones['Champion'] = true;
+      if (game.milestones.contains('Elite Four')) {
+        p.milestones['Elite Four'] = true;
+      }
+    }
     _persist();
   }
 
@@ -1449,6 +1478,29 @@ class AppState extends ChangeNotifier {
         ? ' (+$badgeGain badge${badgeGain == 1 ? '' : 's'}, +$caughtGain caught)'
         : '';
     return 'Synced ${parts.join(' · ')}$delta';
+  }
+
+  /// Live achievement sync: re-reads the save and applies progress, returning
+  /// the titles of any achievements that just unlocked (for in-game toasts).
+  /// Called periodically while playing in the built-in emulator.
+  Future<List<String>> syncAndDetectUnlocks(Game game) async {
+    final before = <String>{
+      for (final s in gameAchievements(game))
+        if (s.unlocked) s.achievement.id,
+    };
+    SaveData? data;
+    try {
+      data = await scanSave(game);
+    } catch (_) {
+      return const [];
+    }
+    if (data == null) return const [];
+    await applySaveData(game, data, dex: true, badges: true, team: true);
+    return [
+      for (final s in gameAchievements(game))
+        if (s.unlocked && !before.contains(s.achievement.id))
+          s.achievement.title,
+    ];
   }
 
   /// The installed emulator that can run a game, or null. Switch-era games
