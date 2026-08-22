@@ -293,7 +293,6 @@ class _EmulatorScreenState extends State<EmulatorScreen>
 
   Future<void> _liveSync() async {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
     List<String> unlocked;
     try {
       unlocked =
@@ -301,22 +300,73 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     } catch (_) {
       return;
     }
-    if (!mounted || messenger == null) return;
+    if (!mounted || unlocked.isEmpty) return;
     for (final title in unlocked) {
-      messenger.showSnackBar(SnackBar(
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
-        content: Row(
-          children: [
-            const Icon(Icons.military_tech, color: Colors.amber),
-            const SizedBox(width: 10),
-            Expanded(
-                child: Text('Achievement unlocked — $title',
-                    style: const TextStyle(fontWeight: FontWeight.w600))),
-          ],
-        ),
-      ));
+      _achievementToasts.add(title);
     }
+    _showNextToast();
+  }
+
+  // Achievement toasts are shown via an OverlayEntry — a floating layer ABOVE
+  // the game that never participates in the game's Stack layout, so it cannot
+  // affect (or blank) the video like an in-Stack widget could.
+  final List<String> _achievementToasts = [];
+  OverlayEntry? _toastEntry;
+  Timer? _toastTimer;
+
+  void _showNextToast() {
+    if (_toastEntry != null) return; // one at a time
+    if (_achievementToasts.isEmpty || !mounted) return;
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+    final title = _achievementToasts.removeAt(0);
+    final top = MediaQuery.of(context).padding.top + 10;
+    final entry = OverlayEntry(
+      builder: (_) => Positioned(
+        top: top,
+        left: 12,
+        right: 12,
+        child: IgnorePointer(
+          child: Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.amber, width: 1.5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.military_tech,
+                        color: Colors.amber, size: 20),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text('Achievement unlocked — $title',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    _toastEntry = entry;
+    overlay.insert(entry);
+    _toastTimer?.cancel();
+    _toastTimer = Timer(const Duration(seconds: 4), () {
+      _toastEntry?.remove();
+      _toastEntry = null;
+      _showNextToast(); // show the next queued one, if any
+    });
   }
 
   Future<void> _exit() async {
@@ -436,6 +486,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   void dispose() {
     _timer?.cancel();
     _saveTimer?.cancel();
+    _toastTimer?.cancel();
+    _toastEntry?.remove();
+    _toastEntry = null;
     _padSub?.cancel();
     // best-effort synchronous save on teardown
     try {
