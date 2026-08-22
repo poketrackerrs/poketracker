@@ -1194,86 +1194,157 @@ class _MonEditorState extends State<_MonEditor> {
       ? '—'
       : (_nameById[id] ?? '#$id').replaceAll('-', ' ');
 
-  List<DropdownMenuItem<int>> _moveItems(int current) {
-    final items = <DropdownMenuItem<int>>[
-      const DropdownMenuItem(
-          value: 0, child: Text('—', style: TextStyle(fontSize: 12))),
-    ];
-    for (final m in (_legal ?? const [])) {
-      items.add(DropdownMenuItem(
-          value: m.id,
-          child: Text(m.name.replaceAll('-', ' '),
-              style: const TextStyle(fontSize: 12),
-              overflow: TextOverflow.ellipsis)));
-    }
-    if (current != 0 && !items.any((it) => it.value == current)) {
-      items.add(DropdownMenuItem(
-          value: current,
-          child:
-              Text(_moveName(current), style: const TextStyle(fontSize: 12))));
-    }
-    return items;
-  }
-
   static const _catIcon = {
     'physical': Icons.sports_mma,
     'special': Icons.auto_awesome,
     'status': Icons.shield_outlined,
   };
 
-  // One move slot: a picker plus an enriched info line (type / category /
-  // power / PP) for the selected move.
-  Widget _moveRow(int k) {
-    final id = _moves[k];
-    final info = _mi[id];
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
+  // Compact "type · category · Pow · PP · Acc" line for a move's info.
+  Widget _moveMeta(({int power, int pp, int accuracy, String type, String damageClass}) info) =>
+      Row(
         children: [
-          SizedBox(
-              width: 18,
-              child: Text('${k + 1}', style: const TextStyle(fontSize: 11))),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                DropdownButton<int>(
-                  isExpanded: true,
-                  isDense: true,
-                  value: id,
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: Theme.of(context).textTheme.bodyLarge?.color),
-                  items: _moveItems(id),
-                  onChanged: (v) {
-                    setState(() => _moves[k] = v ?? 0);
-                    _ensureMoveInfo(v ?? 0);
-                  },
-                ),
-                if (id != 0 && info != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      children: [
-                        TypeChip(info.type),
-                        const SizedBox(width: 8),
-                        Icon(_catIcon[info.damageClass] ?? Icons.help_outline,
-                            size: 14, color: Colors.grey),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Pow ${info.power == 0 ? '—' : info.power}'
-                          '   PP ${info.pp}'
-                          '${info.accuracy > 0 ? '   Acc ${info.accuracy}' : ''}',
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
+          TypeChip(info.type),
+          const SizedBox(width: 8),
+          Icon(_catIcon[info.damageClass] ?? Icons.help_outline,
+              size: 14, color: Colors.grey),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              'Pow ${info.power == 0 ? '—' : info.power}   PP ${info.pp}'
+              '${info.accuracy > 0 ? '   Acc ${info.accuracy}' : ''}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
+      );
+
+  // One move slot: a tappable card that opens the rich picker, showing the
+  // selected move's name and its type/category/power/PP.
+  Widget _moveRow(int k) {
+    final id = _moves[k];
+    final info = _mi[id];
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Material(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => _pickMove(k),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                SizedBox(
+                    width: 16,
+                    child: Text('${k + 1}',
+                        style: TextStyle(
+                            fontSize: 12, color: scheme.onSurfaceVariant))),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(id == 0 ? '—' : _moveName(id),
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
+                      if (id != 0 && info != null) ...[
+                        const SizedBox(height: 4),
+                        _moveMeta(info),
+                      ],
+                    ],
+                  ),
+                ),
+                Icon(Icons.expand_more, color: scheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
       ),
+    );
+  }
+
+  // Rich move picker (matches the bag picker): searchable list where each move
+  // shows its type / category / power / PP, loaded lazily and cached.
+  Future<void> _pickMove(int slot) async {
+    final legal = _legal ?? const <({int id, String name})>[];
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final q = query.trim().toLowerCase();
+            final matches = q.isEmpty
+                ? legal
+                : legal.where((m) => m.name.toLowerCase().contains(q)).toList();
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.75,
+              maxChildSize: 0.95,
+              builder: (_, scroll) => Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Search moves…',
+                          isDense: true),
+                      onChanged: (v) => setSheet(() => query = v),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scroll,
+                      itemCount: matches.length + 1,
+                      itemBuilder: (_, i) {
+                        if (i == 0) {
+                          return ListTile(
+                            leading: const Icon(Icons.block, color: Colors.grey),
+                            title: const Text('— (empty slot)'),
+                            onTap: () => Navigator.pop(ctx, 0),
+                          );
+                        }
+                        final m = matches[i - 1];
+                        return _movePickerRow(m.id, m.name,
+                            () => Navigator.pop(ctx, m.id));
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      setState(() => _moves[slot] = picked);
+      _ensureMoveInfo(picked);
+    }
+  }
+
+  Widget _movePickerRow(int id, String name, VoidCallback onTap) {
+    return ListTile(
+      title: Text(name.replaceAll('-', ' ')),
+      subtitle: FutureBuilder<
+          ({int power, int pp, int accuracy, String type, String damageClass})>(
+        future: context.read<AppState>().moveInfo(id),
+        builder: (_, snap) => snap.hasData
+            ? Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: _moveMeta(snap.data!),
+              )
+            : const SizedBox(height: 16),
+      ),
+      onTap: onTap,
     );
   }
 
@@ -1540,34 +1611,41 @@ class _MonEditorState extends State<_MonEditor> {
                 _regenLegal();
               },
             ),
+            const SizedBox(height: 8),
             Row(
               children: [
-                const Text('Level  ',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(
+                    width: 90,
+                    child: Text('Level',
+                        style: TextStyle(fontWeight: FontWeight.w600))),
                 SizedBox(
-                  width: 56,
+                  width: 64,
                   child: TextField(
                     controller: _level,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13),
+                    style: const TextStyle(fontSize: 14),
                     decoration: const InputDecoration(
                         isDense: true, helperText: '1–100'),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 12),
             Row(
               children: [
-                const Text('Nature  ',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(
+                    width: 90,
+                    child: Text('Nature',
+                        style: TextStyle(fontWeight: FontWeight.w600))),
                 Expanded(
                   child: DropdownButton<int>(
                     isExpanded: true,
                     isDense: true,
                     value: _nature,
-                    style:
-                        const TextStyle(fontSize: 13, color: Colors.black),
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).textTheme.bodyLarge?.color),
                     items: [
                       for (var n = 0; n < kNatures.length; n++)
                         DropdownMenuItem(value: n, child: Text(kNatures[n])),
@@ -1580,12 +1658,17 @@ class _MonEditorState extends State<_MonEditor> {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
             Row(
               children: [
-                const Text('Friendship  ',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                Text('$_friendship',
-                    style: const TextStyle(fontSize: 12)),
+                const SizedBox(
+                    width: 90,
+                    child: Text('Friendship',
+                        style: TextStyle(fontWeight: FontWeight.w600))),
+                SizedBox(
+                    width: 34,
+                    child: Text('$_friendship',
+                        style: const TextStyle(fontSize: 12))),
                 Expanded(
                   child: Slider(
                     value: _friendship.toDouble(),
@@ -1596,6 +1679,7 @@ class _MonEditorState extends State<_MonEditor> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 const Text('IVs', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -1646,7 +1730,7 @@ class _MonEditorState extends State<_MonEditor> {
                 style: const TextStyle(fontSize: 10, color: Colors.grey),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Row(
               children: [
                 const Text('EVs', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -1657,8 +1741,9 @@ class _MonEditorState extends State<_MonEditor> {
                         color: over ? Colors.red : Colors.grey)),
               ],
             ),
+            const SizedBox(height: 4),
             _statRow('', _ev, 255),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Row(
               children: [
                 const Text('Moves',
