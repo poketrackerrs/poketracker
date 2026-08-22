@@ -148,8 +148,37 @@ class _GameHeader extends StatelessWidget {
     return Container(
       width: double.infinity,
       color: tint,
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-      child: Row(
+      child: Stack(
+        children: [
+          // Faded cover art as a banner texture so the header isn't a flat block.
+          Positioned.fill(
+            child: ClipRect(
+              child: Opacity(
+                opacity: 0.22,
+                child: Image.asset(
+                  game.boxArtAsset,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+          // Tint gradient so the artwork reads as texture and text stays legible.
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [tint, tint.withValues(alpha: 0.55)],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+            child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Column(
@@ -211,6 +240,9 @@ class _GameHeader extends StatelessWidget {
             stroke: 6,
             trackColor: Colors.white.withValues(alpha: 0.3),
             textColor: Colors.white,
+          ),
+              ],
+            ),
           ),
         ],
       ),
@@ -2337,8 +2369,10 @@ class _MonEditorState extends State<_MonEditor> {
   // shiny star and type chips.
   Widget _header(BuildContext context) {
     final banner = _types.isEmpty ? const Color(0xFF6B7280) : typeColor(_types.first);
+    // Shiny-aware official artwork; the URL changes with species + shiny so the
+    // header re-fetches whenever either is edited.
     final art =
-        'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/$_speciesDex.png';
+        'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${_shiny ? 'shiny/' : ''}$_speciesDex.png';
     final name = _nickname.text.trim().isEmpty ? _speciesName : _nickname.text.trim();
     final lvl = int.tryParse(_level.text.trim()) ?? widget.mon.level;
     return Container(
