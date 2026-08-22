@@ -1614,42 +1614,40 @@ class _MonEditorState extends State<_MonEditor> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-            // Species picker (Gen 3 only for now) — changing it re-derives
-            // stats, legal moves, growth-rate EXP, and the default nickname.
-            if (widget.strictLegal) ...[
-              Row(
-                children: [
-                  const Text('Species  ',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  Expanded(
-                    child: Text(_speciesName,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                ],
-              ),
-              Autocomplete<({int id, String name})>(
-                optionsBuilder: (v) {
-                  final q = v.text.trim().toLowerCase();
-                  if (q.isEmpty) return const Iterable.empty();
-                  return _allSpecies
-                      .where((s) => s.name.toLowerCase().contains(q))
-                      .take(40);
-                },
-                displayStringForOption: (o) => _pretty(o.name),
-                onSelected: (o) => _changeSpecies(o.id, o.name),
-                fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
-                  controller: ctrl,
-                  focusNode: focus,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
-                      isDense: true,
-                      prefixIcon: Icon(Icons.search, size: 18),
-                      hintText: 'Change species…'),
+            // Species picker — changing it re-derives stats, legal moves,
+            // growth-rate EXP and the default nickname (Gen 3 + Gen 4).
+            Row(
+              children: [
+                const Text('Species  ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: Text(_speciesName,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      overflow: TextOverflow.ellipsis),
                 ),
+              ],
+            ),
+            Autocomplete<({int id, String name})>(
+              optionsBuilder: (v) {
+                final q = v.text.trim().toLowerCase();
+                if (q.isEmpty) return const Iterable.empty();
+                return _allSpecies
+                    .where((s) => s.name.toLowerCase().contains(q))
+                    .take(40);
+              },
+              displayStringForOption: (o) => _pretty(o.name),
+              onSelected: (o) => _changeSpecies(o.id, o.name),
+              fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
+                controller: ctrl,
+                focusNode: focus,
+                style: const TextStyle(fontSize: 13),
+                decoration: const InputDecoration(
+                    isDense: true,
+                    prefixIcon: Icon(Icons.search, size: 18),
+                    hintText: 'Change species…'),
               ),
-              const SizedBox(height: 8),
-            ],
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 const Text('Nickname  ',
@@ -1868,9 +1866,7 @@ class _MonEditorState extends State<_MonEditor> {
             : _read(_iv, 31),
         evs: _read(_ev, 255),
         moves: _moves,
-        species: widget.strictLegal && _speciesDex != widget.mon.dex
-            ? _speciesDex
-            : null,
+        species: _speciesDex != widget.mon.dex ? _speciesDex : null,
         nickname:
             _nickname.text.trim().isEmpty ? null : _nickname.text.trim(),
         friendship: _friendship,

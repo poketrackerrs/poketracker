@@ -399,6 +399,13 @@ class AppState extends ChangeNotifier {
           exp: m.exp,
           pid: m.pid,
           otid: (t.tid & 0xFFFF) | ((t.sid & 0xFFFF) << 16),
+          ball: m.ballId,
+          metLevel: m.metLevel,
+          metLocation: m.metLocation,
+          otGender: m.otGender,
+          language: m.language,
+          markings: m.markings,
+          contest: m.contest,
         ));
       }
       try {
@@ -452,9 +459,12 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _applyGen4MonEdit(Pkx m, PartyEdit ed, int tid, int sid) async {
-    final dex = m.species; // Gen 4 species change not supported yet
-    if (ed.level != null) {
-      m.setExp(gen3Exp(await _pokedex.growthRate(dex), ed.level!));
+    final speciesChanged = ed.species != null && ed.species != m.species;
+    final dex = ed.species ?? m.species;
+    if (ed.species != null) m.setSpecies(ed.species!);
+    final targetLevel = ed.level ?? m.partyLevel;
+    if (ed.level != null || speciesChanged) {
+      m.setExp(gen3Exp(await _pokedex.growthRate(dex), targetLevel));
     }
     if (ed.nature != null || ed.shiny != null) {
       m.regenNatureShiny(
@@ -467,16 +477,56 @@ class AppState extends ChangeNotifier {
     if (ed.ivs != null) m.setIVs(ed.ivs!);
     if (ed.evs != null) m.setEVs(ed.evs!);
     if (ed.friendship != null) m.setFriendship(ed.friendship!);
-    if (ed.moves != null) {
-      m.setMoves(ed.moves!);
+    if (ed.ball != null) m.setBall(ed.ball!);
+    if (ed.metLevel != null) m.setMetLevel(ed.metLevel!);
+    if (ed.metLocation != null) m.setMetLocation(ed.metLocation!);
+    if (ed.otGender != null) m.setOtGender(ed.otGender!);
+    if (ed.language != null) m.setLanguage(ed.language!);
+    if (ed.markings != null) m.setMarkings(ed.markings!);
+    if (ed.contest != null) m.setContest(ed.contest!);
+    // Moves: explicit list wins; a species change resets to a legal moveset.
+    var newMoves = ed.moves;
+    if (newMoves == null && speciesChanged) {
+      newMoves = [for (final mv in (await gen3Learnset(dex)).take(4)) mv.id];
+    }
+    if (newMoves != null) {
+      m.setMoves(newMoves);
       for (var k = 0; k < 4; k++) {
-        final id = k < ed.moves!.length ? ed.moves![k] : 0;
+        final id = k < newMoves.length ? newMoves[k] : 0;
         m.setPP(k, id == 0 ? 0 : await _pokedex.movePP(id));
       }
     }
+    // Nickname: explicit wins; a species change resets to the species name.
     if (ed.nickname != null) {
       gen4EncodeText(m.data, 0x48, 11, ed.nickname!);
       m.setNicknamed(true);
+    } else if (speciesChanged) {
+      var name = '';
+      for (final s in await _pokedex.loadIndex()) {
+        if (s.id == dex) {
+          name = s.name;
+          break;
+        }
+      }
+      if (name.isNotEmpty) gen4EncodeText(m.data, 0x48, 11, name.toUpperCase());
+      m.setNicknamed(false);
+    }
+    // Recompute party stats when a stat-affecting field changed.
+    final statsChanged = ed.level != null ||
+        speciesChanged ||
+        ed.ivs != null ||
+        ed.evs != null ||
+        ed.nature != null ||
+        ed.shiny != null;
+    if (m.isParty && statsChanged) {
+      try {
+        final st = (await _pokedex.fetchDetail(dex)).stats;
+        int g(String k) => st[k] ?? 50;
+        m.recomputeStats(targetLevel, [
+          g('hp'), g('attack'), g('defense'),
+          g('speed'), g('special-attack'), g('special-defense'),
+        ]);
+      } catch (_) {/* offline: stored stats stay until the next in-game heal */}
     }
   }
 

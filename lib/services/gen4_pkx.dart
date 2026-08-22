@@ -178,7 +178,64 @@ class Pkx {
   }
 
   void setPid(int v) => _sU32(data, 0x00, v & 0xFFFFFFFF);
-  void setFriendshipEx(int v) => data[0x14] = v.clamp(0, 255);
+
+  // ---- extra fields (verified against a real Platinum PK4) ----
+  int get markings => data[0x16];
+  int get language => data[0x17];
+  int get ballId => data[0x83];
+  int get metLevel => data[0x84] & 0x7F;
+  int get otGender => (data[0x84] >> 7) & 1;
+  int get metLocation => _u16(data, 0x80); // DP format (0x46 = Pt/HGSS mirror)
+  List<int> get contest => [for (var k = 0; k < 6; k++) data[0x1E + k]];
+
+  void setAbility(int v) => data[0x15] = v & 0xFF;
+  void setMarkings(int v) => data[0x16] = v & 0xF;
+  void setLanguage(int v) => data[0x17] = v & 0xFF;
+  void setBall(int v) => data[0x83] = v & 0xFF;
+  void setMetLevel(int v) =>
+      data[0x84] = (data[0x84] & 0x80) | (v.clamp(0, 100) & 0x7F);
+  void setOtGender(int g) => data[0x84] = (data[0x84] & 0x7F) | ((g & 1) << 7);
+  void setMetLocation(int v) {
+    _sU16(data, 0x80, v & 0xFFFF); // DP format
+    _sU16(data, 0x46, v & 0xFFFF); // Pt/HGSS format
+  }
+
+  void setContest(List<int> v) {
+    for (var k = 0; k < 6; k++) {
+      data[0x1E + k] = v[k].clamp(0, 255);
+    }
+  }
+
+  /// The stored party level byte (0x8C); box mons don't have it.
+  int get partyLevel => length == 236 ? data[0x8C] : 0;
+
+  /// Recompute the party battle stats (and level byte) from IVs/EVs/nature/base
+  /// stats. [baseGen4] is in Gen order (HP, Atk, Def, Spe, SpA, SpD). Only
+  /// meaningful on a 236-byte party block. Heals to full.
+  void recomputeStats(int level, List<int> baseGen4) {
+    if (length < 236) return;
+    data[0x8C] = level.clamp(1, 100);
+    final iv = ivs, ev = evs;
+    final up = nature ~/ 5, down = nature % 5; // 0=Atk,1=Def,2=Spe,3=SpA,4=SpD
+    final hp =
+        (2 * baseGen4[0] + iv[0] + ev[0] ~/ 4) * level ~/ 100 + level + 10;
+    final out = <int>[hp];
+    for (var s = 0; s < 5; s++) {
+      var v = (2 * baseGen4[s + 1] + iv[s + 1] + ev[s + 1] ~/ 4) * level ~/ 100 + 5;
+      if (up != down) {
+        if (up == s) v = v * 110 ~/ 100;
+        if (down == s) v = v * 90 ~/ 100;
+      }
+      out.add(v);
+    }
+    _sU16(data, 0x8E, out[0]); // current HP (healed)
+    _sU16(data, 0x90, out[0]); // max HP
+    _sU16(data, 0x92, out[1]); // Atk
+    _sU16(data, 0x94, out[2]); // Def
+    _sU16(data, 0x96, out[3]); // Spe
+    _sU16(data, 0x98, out[4]); // SpA
+    _sU16(data, 0x9A, out[5]); // SpD
+  }
 
   void setNicknamed(bool v) {
     var w = _ivWord;
