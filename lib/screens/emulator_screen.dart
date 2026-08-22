@@ -453,9 +453,10 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     // SELECT · R in one row just above them (no shoulders floating over the
     // screens).
     final spread = portrait && !_isDs;
-    final clusterB = spread ? 190.0 : (_isDs ? 24.0 : 18.0);
-    // DS: shoulders and start/select share one row above the clusters.
-    final dsRowB = 200.0;
+    final clusterB = spread ? 190.0 : (_isDs ? 14.0 : 18.0);
+    final clusterSize = _isDs ? 150.0 : 168.0; // face/d-pad footprint
+    // DS: shoulders and start/select share one tight row above the clusters.
+    final dsRowB = 172.0;
     final shoulderLB = _isDs ? dsRowB : (spread ? 384.0 : 196.0);
     final shoulderRB = _isDs ? dsRowB : (spread ? 384.0 : 146.0);
     final startSelectB = _isDs ? dsRowB : (spread ? 80.0 : 18.0);
@@ -467,8 +468,8 @@ class _EmulatorScreenState extends State<EmulatorScreen>
             Positioned(
               left: 18,
               bottom: clusterB,
-              width: 168,
-              height: 168,
+              width: clusterSize,
+              height: clusterSize,
               child: Stack(
                 children: [
                   Align(
@@ -494,23 +495,23 @@ class _EmulatorScreenState extends State<EmulatorScreen>
             Positioned(
               right: 18,
               bottom: clusterB,
-              width: _isDs ? 168 : 156,
-              height: _isDs ? 168 : 120,
+              width: _isDs ? clusterSize : 156,
+              height: _isDs ? clusterSize : 120,
               child: _isDs
                   ? Stack(
                       children: [
                         Align(
                             alignment: Alignment.topCenter,
-                            child: _padBtn(retroX, label: 'X', size: 54)),
+                            child: _padBtn(retroX, label: 'X', size: 50)),
                         Align(
                             alignment: Alignment.centerRight,
-                            child: _padBtn(retroA, label: 'A', size: 54)),
+                            child: _padBtn(retroA, label: 'A', size: 50)),
                         Align(
                             alignment: Alignment.bottomCenter,
-                            child: _padBtn(retroB, label: 'B', size: 54)),
+                            child: _padBtn(retroB, label: 'B', size: 50)),
                         Align(
                             alignment: Alignment.centerLeft,
-                            child: _padBtn(retroY, label: 'Y', size: 54)),
+                            child: _padBtn(retroY, label: 'Y', size: 50)),
                       ],
                     )
                   : Stack(
@@ -578,8 +579,8 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     return LayoutBuilder(
       builder: (ctx, c) {
         final w = c.maxWidth, h = c.maxHeight;
-        const gap = 6.0;
         final stacked = h >= w;
+        final gap = stacked ? 18.0 : 10.0; // room for the "hinge"
         late Rect top, bot;
         if (stacked) {
           final s = _minD(w / fw, (h - gap) / (half * 2));
@@ -598,6 +599,24 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         }
         return Stack(
           children: [
+            // Screen bezels — a dark rounded frame set into the device body.
+            Positioned.fromRect(rect: top.inflate(5), child: _bezel()),
+            Positioned.fromRect(rect: bot.inflate(5), child: _bezel()),
+            // A subtle hinge between the two stacked screens (DS cue).
+            if (stacked)
+              Positioned(
+                left: (w - 46) / 2,
+                top: top.bottom + (gap - 5) / 2,
+                child: Container(
+                  width: 46,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2C31),
+                    borderRadius: BorderRadius.circular(3),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                ),
+              ),
             Positioned.fill(
               child: CustomPaint(painter: _DsPainter(img, top, bot)),
             ),
@@ -618,6 +637,19 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     );
   }
 
+  // A screen bezel: near-black rounded frame with a faint inner edge, so each
+  // screen reads as inset into the console body.
+  Widget _bezel() => Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF08090B),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white10),
+          boxShadow: const [
+            BoxShadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 3)),
+          ],
+        ),
+      );
+
   double _minD(double a, double b) => a < b ? a : b;
 
   void _dsTouch(Offset local, Size size) {
@@ -634,13 +666,15 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   void _dsTouchUp() => gPointerDown = 0;
 
   Widget _gameLayer(bool portrait) {
-    final topInset = _barVisible ? 52.0 : 8.0;
+    // Clear the notch / status bar: content starts below the safe-area inset.
+    final safeTop = _isMobile ? MediaQuery.of(context).padding.top : 0.0;
+    final topInset = safeTop + (_barVisible ? 46.0 : 10.0);
     if (_isDs) {
       // Portrait phone: reserve the bottom strip for the compact buttons; the
       // two screens use everything above it (more room when the bar is hidden).
       if (_isMobile && portrait) {
         return Positioned(
-            top: topInset, left: 0, right: 0, bottom: 248, child: _dsScreens());
+            top: topInset, left: 0, right: 0, bottom: 236, child: _dsScreens());
       }
       return Positioned.fill(child: _dsScreens());
     }
@@ -666,8 +700,55 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         onKeyEvent: _onKey,
         child: Stack(
           children: [
-            const Positioned.fill(child: ColoredBox(color: Colors.black)),
+            // Device-body background: a subtle dark gradient so the empty space
+            // reads like a handheld's shell rather than flat black.
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFF1B1D22),
+                      Color(0xFF0B0C0F),
+                      Color(0xFF141519),
+                    ],
+                    stops: [0.0, 0.55, 1.0],
+                  ),
+                ),
+              ),
+            ),
             _gameLayer(portrait),
+            // Console "face plate" behind the DS control strip — a raised panel
+            // with a rounded top seam, so it feels like a handheld's lower body.
+            if (_isMobile && portrait && _isDs)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 230,
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF1C1E23), Color(0xFF0C0D10)],
+                      ),
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(24)),
+                      border: Border(
+                          top: BorderSide(color: Colors.white12, width: 1)),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black54,
+                            blurRadius: 14,
+                            offset: Offset(0, -4)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             if (_isMobile) _touchControls(portrait),
             if (_barVisible)
               Align(
