@@ -101,13 +101,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       if (mounted) setState(() => _status = 'running');
       _startLoop();
       _saveTimer =
-          Timer.periodic(const Duration(seconds: 6), (_) => _persistSave());
-      // True-live achievements: poll the core's working RAM (no save needed).
-      // Temporarily disabled — verifying the core safely exposes system RAM.
-      if (_liveRamEnabled && !_isDs) {
-        _liveRamTimer =
-            Timer.periodic(const Duration(seconds: 2), (_) => _liveRamCheck());
-      }
+          Timer.periodic(const Duration(seconds: 15), (_) => _persistSave());
     } catch (e) {
       if (mounted) setState(() => _status = 'Emulator error: $e');
     }
@@ -276,37 +270,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     }
   }
 
-  final List<String> _toastQueue = [];
-  String? _toast;
-  Timer? _toastTimer;
-  Timer? _liveRamTimer;
-  bool _liveRamBusy = false;
-  // Master switch for the working-RAM achievement poll (off until verified).
-  static const bool _liveRamEnabled = false;
-
-  // Read the emulator's working RAM and unlock achievements in real time.
-  Future<void> _liveRamCheck() async {
-    if (_liveRamBusy || !mounted) return;
-    final emu = _emu;
-    if (emu == null || !emu.loaded) return;
-    _liveRamBusy = true;
-    try {
-      final ewram = emu.readSystemRam();
-      if (ewram == null || !mounted) return;
-      final unlocked =
-          await context.read<AppState>().liveRamUnlocks(widget.game, ewram);
-      if (!mounted || unlocked.isEmpty) return;
-      _toastQueue.addAll(unlocked);
-      if (_toast == null) _showNextToast();
-    } catch (_) {
-      // ignore — falls back to the on-save sync
-    } finally {
-      _liveRamBusy = false;
-    }
-  }
-
   Future<void> _liveSync() async {
     if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
     List<String> unlocked;
     try {
       unlocked =
@@ -314,57 +280,22 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     } catch (_) {
       return;
     }
-    if (!mounted || unlocked.isEmpty) return;
-    _toastQueue.addAll(unlocked);
-    if (_toast == null) _showNextToast();
-  }
-
-  void _showNextToast() {
-    if (_toastQueue.isEmpty) {
-      setState(() => _toast = null);
-      return;
-    }
-    setState(() => _toast = _toastQueue.removeAt(0));
-    _toastTimer?.cancel();
-    _toastTimer = Timer(const Duration(seconds: 4), _showNextToast);
-  }
-
-  // A prominent banner at the top of the game view (the bottom is covered by
-  // the on-screen controls), shown when an achievement unlocks mid-session.
-  Widget _achievementBanner() {
-    final t = _toast;
-    if (t == null) return const SizedBox.shrink();
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 8,
-      left: 12,
-      right: 12,
-      child: IgnorePointer(
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.amber, width: 1.5),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.military_tech, color: Colors.amber, size: 20),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text('Achievement unlocked — $t',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13)),
-                ),
-              ],
-            ),
-          ),
+    if (!mounted || messenger == null) return;
+    for (final title in unlocked) {
+      messenger.showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            const Icon(Icons.military_tech, color: Colors.amber),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text('Achievement unlocked — $title',
+                    style: const TextStyle(fontWeight: FontWeight.w600))),
+          ],
         ),
-      ),
-    );
+      ));
+    }
   }
 
   Future<void> _exit() async {
@@ -484,8 +415,6 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   void dispose() {
     _timer?.cancel();
     _saveTimer?.cancel();
-    _toastTimer?.cancel();
-    _liveRamTimer?.cancel();
     _padSub?.cancel();
     // best-effort synchronous save on teardown
     try {
@@ -826,7 +755,6 @@ class _EmulatorScreenState extends State<EmulatorScreen>
               ),
             ),
             _gameLayer(portrait),
-            _achievementBanner(),
             // Console "face plate" behind the DS control strip — a raised panel
             // with a rounded top seam, so it feels like a handheld's lower body.
             if (_isMobile && portrait && _isDs)
