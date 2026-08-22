@@ -1223,6 +1223,47 @@ class AppState extends ChangeNotifier {
   /// Applies Gen 3 edits and writes the save back, backing up the original
   /// first. Refuses to write unless checksums are valid before AND after the
   /// edit. Returns a human-readable status message.
+  /// Reorganize every boxed Pokémon (Gen 3) by National Dex number, packing
+  /// them from Box 1 Slot 1 onward. Backs up the save, verifies checksums, and
+  /// only writes if they pass.
+  Future<String> sortGen3BoxesByDex(Game game) async {
+    if (game.generation != 3) return 'Only Gen 3 boxes can be sorted here.';
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    final e = Gen3SaveEditor.load(raw);
+    if (!e.verifyChecksums().ok) {
+      return 'Save checksums are invalid — not sorting.';
+    }
+    final total = Gen3SaveEditor.pcBoxCount * Gen3SaveEditor.pcPerBox;
+    final mons = <({int dex, int level, Uint8List block})>[];
+    for (var g = 0; g < total; g++) {
+      final block = e.boxSlot(g);
+      final m = Pk3.decode(block);
+      if (m.isEmpty) continue;
+      mons.add((dex: m.nationalDex, level: m.level, block: block));
+    }
+    if (mons.isEmpty) return 'No boxed Pokémon to sort.';
+    // Sort by Dex number, then by level (stable, tidy within a species).
+    mons.sort((a, b) {
+      final d = a.dex.compareTo(b.dex);
+      return d != 0 ? d : a.level.compareTo(b.level);
+    });
+    final empty = Uint8List(80);
+    for (var g = 0; g < total; g++) {
+      e.writeBoxSlot(g, g < mons.length ? mons[g].block : empty);
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Sort produced bad checksums — aborted, your save was NOT changed.';
+    }
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    await File('${file.path}.bak-$stamp').writeAsBytes(raw, flush: true);
+    await file.writeAsBytes(e.toBytes(), flush: true);
+    notifyListeners();
+    return 'Organized ${mons.length} Pokémon by Dex number. '
+        'Backup written next to the save.';
+  }
+
   Future<String> writeGen3Save(Game game,
       {int? money,
       bool completeDex = false,

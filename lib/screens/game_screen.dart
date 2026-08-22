@@ -876,6 +876,36 @@ class _BoxBrowserState extends State<_BoxBrowser> {
     });
   }
 
+  Future<void> _sortByDex() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Organize by Dex?'),
+        content: const Text(
+            'This rearranges every boxed Pokémon by National Dex number, '
+            'packed from Box 1. A backup is written next to your save first. '
+            'Any unsaved box edits here will be discarded.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Organize')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final msg =
+        await context.read<AppState>().sortGen3BoxesByDex(widget.game);
+    if (!mounted) return;
+    widget.edits.clear(); // slot keys are no longer valid after a reorder
+    setState(() => _loading = true);
+    await _load();
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Future<void> _edit(Gen3PartyMon m) async {
     final state = context.read<AppState>();
     // Boxed mons store no level byte — derive it from EXP for the editor.
@@ -902,7 +932,16 @@ class _BoxBrowserState extends State<_BoxBrowser> {
     final inBox = mons.where((m) => m.boxSlot! ~/ 30 == _box).toList()
       ..sort((a, b) => a.boxSlot!.compareTo(b.boxSlot!));
     return Scaffold(
-      appBar: AppBar(title: const Text('PC Boxes')),
+      appBar: AppBar(
+        title: const Text('PC Boxes'),
+        actions: [
+          IconButton(
+            tooltip: 'Organize by Dex',
+            icon: const Icon(Icons.sort),
+            onPressed: _loading || mons.isEmpty ? null : _sortByDex,
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : mons.isEmpty
@@ -2501,6 +2540,7 @@ class _BadgeDisc extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final spec = _gymBadgeSpecs[name];
     return SizedBox(
       width: 66,
       child: InkWell(
@@ -2508,16 +2548,23 @@ class _BadgeDisc extends StatelessWidget {
         onTap: onTap,
         child: Column(
           children: [
-            Container(
+            SizedBox(
               width: 54,
               height: 54,
-              decoration: BoxDecoration(
-                color: earned ? tint : scheme.surfaceContainerHighest,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.workspace_premium,
-                  size: 26,
-                  color: earned ? Colors.white : scheme.onSurfaceVariant),
+              child: spec != null
+                  ? CustomPaint(painter: _GymBadgePainter(spec, earned))
+                  : Container(
+                      decoration: BoxDecoration(
+                        color:
+                            earned ? tint : scheme.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.workspace_premium,
+                          size: 26,
+                          color: earned
+                              ? Colors.white
+                              : scheme.onSurfaceVariant),
+                    ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -2533,6 +2580,133 @@ class _BadgeDisc extends StatelessWidget {
       ),
     );
   }
+}
+
+// --- Gym badge artwork (drawn, no assets) ---------------------------------
+
+enum _BadgeShape { octagon, teardrop, star, flower, heart, disc, rhombus, leaf }
+
+class _GymBadgeSpec {
+  final _BadgeShape shape;
+  final Color color;
+  const _GymBadgeSpec(this.shape, this.color);
+}
+
+// The eight Kanto Gym Badges, by milestone name — shape + signature color.
+const Map<String, _GymBadgeSpec> _gymBadgeSpecs = {
+  'Boulder Badge': _GymBadgeSpec(_BadgeShape.octagon, Color(0xFFB0A08A)),
+  'Cascade Badge': _GymBadgeSpec(_BadgeShape.teardrop, Color(0xFF35A7E0)),
+  'Thunder Badge': _GymBadgeSpec(_BadgeShape.star, Color(0xFFF6B92B)),
+  'Rainbow Badge': _GymBadgeSpec(_BadgeShape.flower, Color(0xFFE24B87)),
+  'Soul Badge': _GymBadgeSpec(_BadgeShape.heart, Color(0xFFE8567F)),
+  'Marsh Badge': _GymBadgeSpec(_BadgeShape.disc, Color(0xFFF4CE3A)),
+  'Volcano Badge': _GymBadgeSpec(_BadgeShape.rhombus, Color(0xFFE24C3B)),
+  'Earth Badge': _GymBadgeSpec(_BadgeShape.leaf, Color(0xFF64B45A)),
+};
+
+class _GymBadgePainter extends CustomPainter {
+  final _GymBadgeSpec spec;
+  final bool earned;
+  _GymBadgePainter(this.spec, this.earned);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.width * 0.42;
+    // Locked badges are drawn as a flat grey silhouette.
+    final base = earned ? spec.color : const Color(0xFFB8B8B8);
+    final dark = Color.lerp(base, Colors.black, 0.35)!;
+    final fill = Paint()..color = base;
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = dark;
+
+    if (spec.shape == _BadgeShape.flower) {
+      _flower(canvas, c, r);
+    } else {
+      final path = _shapePath(spec.shape, c, r);
+      canvas.drawPath(path, fill);
+      canvas.drawPath(path, stroke);
+      // A soft highlight for a metallic feel.
+      canvas.drawCircle(c.translate(-r * 0.28, -r * 0.28), r * 0.16,
+          Paint()..color = Colors.white.withValues(alpha: earned ? 0.5 : 0.2));
+    }
+  }
+
+  void _flower(Canvas canvas, Offset c, double r) {
+    const petals = [
+      Color(0xFFE24B87), // pink
+      Color(0xFFF6B92B), // yellow
+      Color(0xFF64B45A), // green
+      Color(0xFF35A7E0), // blue
+      Color(0xFF9B59B6), // purple
+      Color(0xFFE24C3B), // red
+    ];
+    for (var i = 0; i < 6; i++) {
+      final a = (i / 6) * 2 * math.pi - math.pi / 2;
+      final pc = c + Offset(math.cos(a), math.sin(a)) * (r * 0.55);
+      canvas.drawCircle(
+          pc, r * 0.42, Paint()..color = earned ? petals[i] : const Color(0xFFC4C4C4));
+    }
+    canvas.drawCircle(c, r * 0.42,
+        Paint()..color = earned ? const Color(0xFFF6D64A) : const Color(0xFFDDDDDD));
+  }
+
+  Path _shapePath(_BadgeShape s, Offset c, double r) {
+    final p = Path();
+    switch (s) {
+      case _BadgeShape.octagon:
+        for (var i = 0; i < 8; i++) {
+          final a = (i / 8) * 2 * math.pi + math.pi / 8;
+          final pt = c + Offset(math.cos(a), math.sin(a)) * r;
+          i == 0 ? p.moveTo(pt.dx, pt.dy) : p.lineTo(pt.dx, pt.dy);
+        }
+        p.close();
+      case _BadgeShape.disc:
+        p.addOval(Rect.fromCircle(center: c, radius: r));
+      case _BadgeShape.rhombus:
+        p.moveTo(c.dx, c.dy - r);
+        p.lineTo(c.dx + r * 0.8, c.dy);
+        p.lineTo(c.dx, c.dy + r);
+        p.lineTo(c.dx - r * 0.8, c.dy);
+        p.close();
+      case _BadgeShape.star:
+        for (var i = 0; i < 16; i++) {
+          final rad = i.isEven ? r : r * 0.46;
+          final a = (i / 16) * 2 * math.pi - math.pi / 2;
+          final pt = c + Offset(math.cos(a), math.sin(a)) * rad;
+          i == 0 ? p.moveTo(pt.dx, pt.dy) : p.lineTo(pt.dx, pt.dy);
+        }
+        p.close();
+      case _BadgeShape.teardrop:
+        p.moveTo(c.dx, c.dy - r);
+        p.quadraticBezierTo(c.dx + r, c.dy - r * 0.1, c.dx + r * 0.75, c.dy + r * 0.5);
+        p.arcToPoint(Offset(c.dx - r * 0.75, c.dy + r * 0.5),
+            radius: Radius.circular(r * 0.8), clockwise: true);
+        p.quadraticBezierTo(c.dx - r, c.dy - r * 0.1, c.dx, c.dy - r);
+        p.close();
+      case _BadgeShape.heart:
+        p.moveTo(c.dx, c.dy + r * 0.85);
+        p.cubicTo(c.dx - r * 1.3, c.dy - r * 0.1, c.dx - r * 0.5, c.dy - r,
+            c.dx, c.dy - r * 0.35);
+        p.cubicTo(c.dx + r * 0.5, c.dy - r, c.dx + r * 1.3, c.dy - r * 0.1,
+            c.dx, c.dy + r * 0.85);
+        p.close();
+      case _BadgeShape.leaf:
+        p.moveTo(c.dx, c.dy - r);
+        p.quadraticBezierTo(c.dx + r, c.dy, c.dx, c.dy + r);
+        p.quadraticBezierTo(c.dx - r, c.dy, c.dx, c.dy - r);
+        p.close();
+      case _BadgeShape.flower:
+        break; // handled separately
+    }
+    return p;
+  }
+
+  @override
+  bool shouldRepaint(_GymBadgePainter old) =>
+      old.earned != earned || old.spec != spec;
 }
 
 class _MilestoneRow extends StatelessWidget {
