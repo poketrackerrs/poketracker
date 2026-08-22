@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
 import '../data/gen3_events.dart';
+import '../data/frlg_achievements.dart';
 import '../models/achievement.dart';
 import '../models/game.dart';
 import '../models/progress.dart';
@@ -286,8 +287,56 @@ class AppState extends ChangeNotifier {
         progress: done ? 1 : 0,
       );
 
+  /// Toggle a manual (non-auto-detectable) achievement on/off.
+  void toggleAchievement(String gameId, String achId, bool done) {
+    final s = progressFor(gameId).unlockedAchievements;
+    if (done) {
+      s.add(achId);
+    } else {
+      s.remove(achId);
+    }
+    _persist();
+  }
+
+  /// The curated FireRed/LeafGreen achievement set (sourced from the RA base
+  /// set). Auto-unlocks from badges/champion/caught-dex; the rest are manual.
+  List<AchievementStatus> _frlgAchievements(Game game) {
+    final p = progressFor(game.id);
+    final ctx = AchContext(
+      badges: badgesEarned(game.id),
+      champion: p.milestones['Champion'] == true,
+      caught: p.caughtSpecies,
+      caughtCount: p.caughtSpecies.where((s) => s < 10000).length,
+    );
+    return [
+      for (final a in kFrlgAchievements)
+        AchievementStatus(
+          achievement: Achievement(
+            id: a.id,
+            title: a.title,
+            description: a.description,
+            icon: a.group.icon,
+            group: a.group,
+            points: a.points,
+          ),
+          unlocked: a.auto != null
+              ? a.auto!(ctx)
+              : p.unlockedAchievements.contains(a.id),
+          progress: (a.auto != null
+                  ? a.auto!(ctx)
+                  : p.unlockedAchievements.contains(a.id))
+              ? 1
+              : 0,
+          manual: a.auto == null,
+        ),
+    ];
+  }
+
   /// Per-game achievements, evaluated from that game's tracked progress.
   List<AchievementStatus> gameAchievements(Game game) {
+    if (game.version == 'firered' || game.version == 'leafgreen') {
+      return _frlgAchievements(game);
+    }
     final id = game.id;
     final p = progressFor(id);
     final badgeTotal =

@@ -64,6 +64,10 @@ class GameProgress {
   List<TeamMember> team;
   List<ShinyHunt> shinyHunts;
 
+  /// Ids of achievements the user manually checked off (ones the app can't
+  /// auto-detect from a save).
+  Set<String> unlockedAchievements;
+
   GameProgress({
     required this.gameId,
     Map<String, bool>? milestones,
@@ -72,10 +76,12 @@ class GameProgress {
     Set<int>? caughtSpecies,
     List<TeamMember>? team,
     List<ShinyHunt>? shinyHunts,
+    Set<String>? unlockedAchievements,
   })  : milestones = milestones ?? {},
         caughtSpecies = caughtSpecies ?? {},
         team = team ?? [],
-        shinyHunts = shinyHunts ?? [];
+        shinyHunts = shinyHunts ?? [],
+        unlockedAchievements = unlockedAchievements ?? {};
 
   Map<String, dynamic> toJson() => {
         'gameId': gameId,
@@ -85,6 +91,7 @@ class GameProgress {
         'caughtSpecies': caughtSpecies.toList(),
         'team': team.map((t) => t.toJson()).toList(),
         'shinyHunts': shinyHunts.map((s) => s.toJson()).toList(),
+        'unlockedAchievements': unlockedAchievements.toList(),
       };
 
   factory GameProgress.fromJson(Map<String, dynamic> j) => GameProgress(
@@ -101,5 +108,8 @@ class GameProgress {
         shinyHunts: (j['shinyHunts'] as List? ?? [])
             .map((s) => ShinyHunt.fromJson(Map<String, dynamic>.from(s)))
             .toList(),
+        unlockedAchievements: ((j['unlockedAchievements'] as List?) ?? [])
+            .map((e) => e as String)
+            .toSet(),
       );
 }

@@ -37,12 +37,14 @@ class Achievement {
   final String description;
   final IconData icon;
   final AchGroup group;
+  final int points; // RetroAchievements-style point value (0 = unweighted)
   const Achievement({
     required this.id,
     required this.title,
     required this.description,
     required this.icon,
     required this.group,
+    this.points = 0,
   });
 }
 
@@ -58,10 +60,15 @@ class AchievementStatus {
   /// Human-readable progress, e.g. "3 / 8" or "Lv 100". Empty for yes/no.
   final String detail;
 
+  /// True if this achievement is unlocked by the user tapping it (the app can't
+  /// detect it from a save), so the UI shows a check-off control.
+  final bool manual;
+
   const AchievementStatus({
     required this.achievement,
     required this.unlocked,
     required this.progress,
     this.detail = '',
+    this.manual = false,
   });
 }

@@ -82,11 +82,24 @@ class GameAchievementsView extends StatelessWidget {
     final state = context.watch<AppState>();
     final list = state.gameAchievements(game);
     final unlocked = list.where((a) => a.unlocked).length;
+    final earnedPts = list
+        .where((a) => a.unlocked)
+        .fold(0, (a, s) => a + s.achievement.points);
+    final totalPts =
+        list.fold(0, (a, s) => a + s.achievement.points);
     return ListView(
       padding: const EdgeInsets.only(bottom: 24),
       children: [
-        _SummaryHeader(unlocked: unlocked, total: list.length),
-        ...AchievementListView.grouped(list),
+        _SummaryHeader(
+            unlocked: unlocked,
+            total: list.length,
+            earnedPoints: earnedPts,
+            totalPoints: totalPts),
+        ...AchievementListView.grouped(
+          list,
+          onToggle: (s) => context.read<AppState>().toggleAchievement(
+              game.id, s.achievement.id, !s.unlocked),
+        ),
       ],
     );
   }
@@ -94,7 +107,8 @@ class GameAchievementsView extends StatelessWidget {
 
 /// Builds a grouped list of achievement tiles (section headers per group).
 class AchievementListView {
-  static List<Widget> grouped(List<AchievementStatus> items) {
+  static List<Widget> grouped(List<AchievementStatus> items,
+      {void Function(AchievementStatus)? onToggle}) {
     final out = <Widget>[];
     for (final group in AchGroup.values) {
       final inGroup = items.where((s) => s.achievement.group == group).toList();
@@ -105,7 +119,11 @@ class AchievementListView {
         return b.progress.compareTo(a.progress);
       });
       out.add(_SectionLabel(group.label));
-      out.addAll(inGroup.map((s) => AchievementTile(status: s)));
+      out.addAll(inGroup.map((s) => AchievementTile(
+            status: s,
+            onToggle:
+                (s.manual && onToggle != null) ? () => onToggle(s) : null,
+          )));
     }
     return out;
   }
@@ -113,7 +131,8 @@ class AchievementListView {
 
 class AchievementTile extends StatelessWidget {
   final AchievementStatus status;
-  const AchievementTile({super.key, required this.status});
+  final VoidCallback? onToggle; // non-null for manual achievements
+  const AchievementTile({super.key, required this.status, this.onToggle});
 
   @override
   Widget build(BuildContext context) {
@@ -124,7 +143,10 @@ class AchievementTile extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       child: Opacity(
         opacity: unlocked ? 1 : 0.72,
-        child: Container(
+        child: InkWell(
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: unlocked
@@ -167,9 +189,31 @@ class AchievementTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(a.title,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(a.title,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700, fontSize: 14)),
+                        ),
+                        if (a.points > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text('${a.points}',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: color)),
+                          ),
+                        ],
+                      ],
+                    ),
                     const SizedBox(height: 1),
                     Text(a.description,
                         style: TextStyle(
@@ -195,12 +239,20 @@ class AchievementTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (unlocked)
+              if (status.manual)
+                Icon(
+                    unlocked
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: unlocked ? color : Colors.grey,
+                    size: 24)
+              else if (unlocked)
                 Icon(Icons.check_circle, color: color, size: 22)
               else
                 const SizedBox(width: 22),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -210,7 +262,13 @@ class AchievementTile extends StatelessWidget {
 class _SummaryHeader extends StatelessWidget {
   final int unlocked;
   final int total;
-  const _SummaryHeader({required this.unlocked, required this.total});
+  final int earnedPoints;
+  final int totalPoints;
+  const _SummaryHeader(
+      {required this.unlocked,
+      required this.total,
+      this.earnedPoints = 0,
+      this.totalPoints = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +300,10 @@ class _SummaryHeader extends StatelessWidget {
               Text('$unlocked / $total unlocked',
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w800)),
-              Text('${(frac * 100).round()}% complete',
+              Text(
+                  totalPoints > 0
+                      ? '${(frac * 100).round()}% · $earnedPoints / $totalPoints pts'
+                      : '${(frac * 100).round()}% complete',
                   style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
