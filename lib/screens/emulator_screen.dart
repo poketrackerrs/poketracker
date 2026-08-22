@@ -453,10 +453,10 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     // SELECT · R in one row just above them (no shoulders floating over the
     // screens).
     final spread = portrait && !_isDs;
-    final clusterB = spread ? 190.0 : (_isDs ? 14.0 : 18.0);
-    final clusterSize = _isDs ? 150.0 : 168.0; // face/d-pad footprint
+    final clusterB = spread ? 190.0 : (_isDs ? 28.0 : 18.0);
+    final clusterSize = _isDs ? 156.0 : 168.0; // face/d-pad footprint
     // DS: shoulders and start/select share one tight row above the clusters.
-    final dsRowB = 172.0;
+    final dsRowB = 190.0;
     final shoulderLB = _isDs ? dsRowB : (spread ? 384.0 : 196.0);
     final shoulderRB = _isDs ? dsRowB : (spread ? 384.0 : 146.0);
     final startSelectB = _isDs ? dsRowB : (spread ? 80.0 : 18.0);
@@ -580,7 +580,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       builder: (ctx, c) {
         final w = c.maxWidth, h = c.maxHeight;
         final stacked = h >= w;
-        final gap = stacked ? 18.0 : 10.0; // room for the "hinge"
+        final gap = stacked ? 10.0 : 10.0;
         late Rect top, bot;
         if (stacked) {
           final s = _minD(w / fw, (h - gap) / (half * 2));
@@ -602,21 +602,6 @@ class _EmulatorScreenState extends State<EmulatorScreen>
             // Screen bezels — a dark rounded frame set into the device body.
             Positioned.fromRect(rect: top.inflate(5), child: _bezel()),
             Positioned.fromRect(rect: bot.inflate(5), child: _bezel()),
-            // A subtle hinge between the two stacked screens (DS cue).
-            if (stacked)
-              Positioned(
-                left: (w - 46) / 2,
-                top: top.bottom + (gap - 5) / 2,
-                child: Container(
-                  width: 46,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2A2C31),
-                    borderRadius: BorderRadius.circular(3),
-                    border: Border.all(color: Colors.white10),
-                  ),
-                ),
-              ),
             Positioned.fill(
               child: CustomPaint(painter: _DsPainter(img, top, bot)),
             ),
@@ -674,7 +659,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       // two screens use everything above it (more room when the bar is hidden).
       if (_isMobile && portrait) {
         return Positioned(
-            top: topInset, left: 0, right: 0, bottom: 236, child: _dsScreens());
+            top: topInset, left: 0, right: 0, bottom: 280, child: _dsScreens());
       }
       return Positioned.fill(child: _dsScreens());
     }
@@ -726,7 +711,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
                 left: 0,
                 right: 0,
                 bottom: 0,
-                height: 230,
+                height: 280,
                 child: IgnorePointer(
                   child: Container(
                     decoration: const BoxDecoration(
