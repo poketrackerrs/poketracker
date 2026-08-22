@@ -39,6 +39,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   bool _turboHeld = false;
   bool _turboLatch = false;
   bool _fullscreen = false;
+  bool _barVisible = false; // top toolbar hidden behind a menu button by default
   int _fitMode = 1; // 0 = Fill, 1 = Fit (default), 2 = Zoom
   String _status = 'starting…';
   String? _savPath;
@@ -447,13 +448,17 @@ class _EmulatorScreenState extends State<EmulatorScreen>
 
   Widget _touchControls(bool portrait) {
     // Portrait has lots of vertical room, so spread the clusters out; landscape
-    // keeps everything hugging the bottom edges over the letterbox. DS keeps the
-    // buttons compact even in portrait so the two screens get the upper space.
+    // keeps everything hugging the bottom edges over the letterbox. DS uses a
+    // tidy two-tier strip: d-pad + A/B at the very bottom, and L · START ·
+    // SELECT · R in one row just above them (no shoulders floating over the
+    // screens).
     final spread = portrait && !_isDs;
-    final clusterB = spread ? 190.0 : 18.0;
-    final shoulderLB = spread ? 384.0 : 196.0;
-    final shoulderRB = spread ? 384.0 : 146.0;
-    final startSelectB = spread ? 80.0 : 18.0;
+    final clusterB = spread ? 190.0 : (_isDs ? 24.0 : 18.0);
+    // DS: shoulders and start/select share one row above the clusters.
+    final dsRowB = 200.0;
+    final shoulderLB = _isDs ? dsRowB : (spread ? 384.0 : 196.0);
+    final shoulderRB = _isDs ? dsRowB : (spread ? 384.0 : 146.0);
+    final startSelectB = _isDs ? dsRowB : (spread ? 80.0 : 18.0);
     return Positioned.fill(
       child: SafeArea(
         child: Stack(
@@ -611,17 +616,19 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   void _dsTouchUp() => gPointerDown = 0;
 
   Widget _gameLayer(bool portrait) {
+    final topInset = _barVisible ? 52.0 : 8.0;
     if (_isDs) {
-      // Portrait phone: reserve the bottom strip for the compact buttons.
+      // Portrait phone: reserve the bottom strip for the compact buttons; the
+      // two screens use everything above it (more room when the bar is hidden).
       if (_isMobile && portrait) {
         return Positioned(
-            top: 52, left: 0, right: 0, bottom: 236, child: _dsScreens());
+            top: topInset, left: 0, right: 0, bottom: 248, child: _dsScreens());
       }
       return Positioned.fill(child: _dsScreens());
     }
     if (portrait) {
       return Positioned(
-        top: 60,
+        top: topInset,
         left: 0,
         right: 0,
         child: AspectRatio(aspectRatio: 3 / 2, child: _screen(BoxFit.contain)),
@@ -644,70 +651,92 @@ class _EmulatorScreenState extends State<EmulatorScreen>
             const Positioned.fill(child: ColoredBox(color: Colors.black)),
             _gameLayer(portrait),
             if (_isMobile) _touchControls(portrait),
-            Align(
-              alignment: Alignment.topCenter,
-              child: Container(
-                color: Colors.black45,
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                child: SafeArea(
-                  bottom: false,
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        color: Colors.white,
-                        tooltip: 'Back (Esc)',
-                        onPressed: _exit,
-                      ),
-                      Expanded(
-                        child: Text(
-                          widget.game.title,
-                          style: const TextStyle(color: Colors.white),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(_turbo
-                            ? Icons.fast_forward
-                            : Icons.fast_forward_outlined),
-                        color: _turbo ? Colors.orange : Colors.white,
-                        tooltip: 'Fast-forward (hold Tab)',
-                        onPressed: () =>
-                            setState(() => _turboLatch = !_turboLatch),
-                      ),
-                      if (!_isDs)
+            if (_barVisible)
+              Align(
+                alignment: Alignment.topCenter,
+                child: Container(
+                  color: Colors.black87,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Row(
+                      children: [
                         IconButton(
-                          icon: const Icon(Icons.aspect_ratio),
+                          icon: const Icon(Icons.arrow_back),
                           color: Colors.white,
-                          tooltip: 'Scale: $_fitName (V)',
-                          onPressed: () =>
-                              setState(() => _fitMode = (_fitMode + 1) % 3),
+                          tooltip: 'Back (Esc)',
+                          onPressed: _exit,
                         ),
-                      IconButton(
-                        icon: Icon(_fullscreen
-                            ? Icons.fullscreen_exit
-                            : Icons.fullscreen),
-                        color: Colors.white,
-                        tooltip: 'Fullscreen (F11)',
-                        onPressed: _toggleFullscreen,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.tune),
-                        color: Colors.white,
-                        tooltip: 'Audio & speed',
-                        onPressed: _openEmuSettings,
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.videogame_asset),
-                        color: Colors.white,
-                        tooltip: 'Controls',
-                        onPressed: _openControls,
-                      ),
-                    ],
+                        Expanded(
+                          child: Text(
+                            widget.game.title,
+                            style: const TextStyle(color: Colors.white),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(_turbo
+                              ? Icons.fast_forward
+                              : Icons.fast_forward_outlined),
+                          color: _turbo ? Colors.orange : Colors.white,
+                          tooltip: 'Fast-forward (hold Tab)',
+                          onPressed: () =>
+                              setState(() => _turboLatch = !_turboLatch),
+                        ),
+                        if (!_isDs)
+                          IconButton(
+                            icon: const Icon(Icons.aspect_ratio),
+                            color: Colors.white,
+                            tooltip: 'Scale: $_fitName (V)',
+                            onPressed: () =>
+                                setState(() => _fitMode = (_fitMode + 1) % 3),
+                          ),
+                        IconButton(
+                          icon: Icon(_fullscreen
+                              ? Icons.fullscreen_exit
+                              : Icons.fullscreen),
+                          color: Colors.white,
+                          tooltip: 'Fullscreen (F11)',
+                          onPressed: _toggleFullscreen,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.tune),
+                          color: Colors.white,
+                          tooltip: 'Audio & speed',
+                          onPressed: _openEmuSettings,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.videogame_asset),
+                          color: Colors.white,
+                          tooltip: 'Controls',
+                          onPressed: _openControls,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.expand_less),
+                          color: Colors.white,
+                          tooltip: 'Hide bar',
+                          onPressed: () => setState(() => _barVisible = false),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 6,
+                left: 6,
+                child: Material(
+                  color: Colors.black45,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    icon: const Icon(Icons.menu, color: Colors.white, size: 22),
+                    tooltip: 'Menu',
+                    onPressed: () => setState(() => _barVisible = true),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
