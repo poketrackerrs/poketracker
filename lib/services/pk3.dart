@@ -480,15 +480,20 @@ class Pk3 {
   /// null is preserved). Falls back to matching nature alone if the exact
   /// nature+shiny combo isn't reachable without changing gender/ability.
   void _regenPid({int? targetNature, bool? targetShiny, bool primaryShiny = false}) {
-    final lo = pid & 0xFFFF;
+    // Keep only the low BYTE fixed — that alone preserves gender (PID & 0xFF)
+    // and ability (PID & 1). Varying the other 24 bits makes every
+    // (nature, shiny) pair reachable, so shiny + nature can always be set
+    // together without touching gender/ability.
+    final loByte = pid & 0xFF;
     final tid = otid & 0xFFFF, sid = otid >> 16;
     final wantNature = targetNature ?? nature;
     final wantShiny = targetShiny ?? isShiny;
     int? both, shinyOnly, natureOnly;
-    for (var h = 0; h <= 0xFFFF; h++) {
-      final full = ((h << 16) | lo) & 0xFFFFFFFF;
+    for (var up = 0; up <= 0xFFFFFF; up++) {
+      final full = ((up << 8) | loByte) & 0xFFFFFFFF;
       final natOk = full % 25 == wantNature;
-      final shOk = ((tid ^ sid ^ h ^ lo) < 8) == wantShiny;
+      final shOk =
+          ((tid ^ sid ^ (full & 0xFFFF) ^ (full >> 16)) < 8) == wantShiny;
       if (natOk && shOk) {
         both = full;
         break;
@@ -496,8 +501,8 @@ class Pk3 {
       if (shOk) shinyOnly ??= full;
       if (natOk) natureOnly ??= full;
     }
-    // both if reachable; else honour the caller's primary field (gender+ability
-    // stay fixed via the low 16 bits either way).
+    // "both" is essentially always reachable now; the fallbacks only matter in
+    // pathological cases. gender + ability stay fixed via the low byte either way.
     final chosen = both ??
         (primaryShiny ? (shinyOnly ?? natureOnly) : (natureOnly ?? shinyOnly));
     if (chosen != null) _setPid(chosen);
