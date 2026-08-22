@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'gen4_text.dart' show gen4DecodeText, gen4EncodeText;
+
 /// Read/write access to a Gen 4 (Diamond/Pearl/Platinum, HGSS) `.sav`.
 ///
 /// Foundation of the Gen 4 save editor — mirrors [Gen3SaveEditor]'s "verify
@@ -120,5 +122,99 @@ class Gen4SaveEditor {
 
   int get saveCounter => _counter(bytes, generalOfs, generalSize);
 
+  // ---- Platinum general-block field offsets (relative to generalOfs) --------
+  // Verified against a real Platinum save. DP and HGSS shift these (party moves,
+  // block sizes differ) — reconfirm before trusting writes there.
+  static const int _otName = 0x68; // 8 char slots
+  static const int _tid = 0x78;
+  static const int _sid = 0x7A;
+  static const int _money = 0x7C;
+  static const int _gender = 0x80;
+  static const int _partyCount = 0x9C;
+  static const int _partyData = 0xA0;
+  static const int partySlotSize = 236;
+
+  // PC storage: box slots pack from the storage block's start.
+  static const int boxCount = 18;
+  static const int perBox = 30;
+  static const int boxSlotSize = 136;
+
+  Gen4Trainer trainer() => Gen4Trainer(
+        name: gen4DecodeText(bytes, generalOfs + _otName, 8),
+        tid: _u16(bytes, generalOfs + _tid),
+        sid: _u16(bytes, generalOfs + _sid),
+        money: _u32(bytes, generalOfs + _money),
+        gender: bytes[generalOfs + _gender] & 1,
+      );
+
+  void setTrainer(Gen4Trainer t) {
+    gen4EncodeText(bytes, generalOfs + _otName, 8, t.name);
+    _setU16(generalOfs + _tid, t.tid & 0xFFFF);
+    _setU16(generalOfs + _sid, t.sid & 0xFFFF);
+    _setU32(generalOfs + _money, t.money.clamp(0, 9999999));
+    bytes[generalOfs + _gender] = t.gender & 1;
+    fixGeneral();
+  }
+
+  void _setU16(int o, int v) {
+    bytes[o] = v & 0xFF;
+    bytes[o + 1] = (v >> 8) & 0xFF;
+  }
+
+  void _setU32(int o, int v) {
+    bytes[o] = v & 0xFF;
+    bytes[o + 1] = (v >> 8) & 0xFF;
+    bytes[o + 2] = (v >> 16) & 0xFF;
+    bytes[o + 3] = (v >> 24) & 0xFF;
+  }
+
+  // ---- Party (in the general block) ----
+  int get partyCount =>
+      _u32(bytes, generalOfs + _partyCount).clamp(0, 6);
+
+  Uint8List partyBlock(int i) {
+    final o = generalOfs + _partyData + i * partySlotSize;
+    return Uint8List.fromList(bytes.sublist(o, o + partySlotSize));
+  }
+
+  void writePartyBlock(int i, Uint8List block) {
+    final o = generalOfs + _partyData + i * partySlotSize;
+    bytes.setRange(o, o + block.length.clamp(0, partySlotSize), block);
+    fixGeneral();
+  }
+
+  // ---- PC boxes (in the storage block) ----
+  Uint8List boxSlot(int globalIndex) {
+    final o = storageOfs + globalIndex * boxSlotSize;
+    return Uint8List.fromList(bytes.sublist(o, o + boxSlotSize));
+  }
+
+  void writeBoxSlot(int globalIndex, Uint8List block) {
+    final o = storageOfs + globalIndex * boxSlotSize;
+    bytes.setRange(o, o + block.length.clamp(0, boxSlotSize), block);
+    fixStorage();
+  }
+
   Uint8List toBytes() => bytes;
+}
+
+/// A Gen 4 trainer card (general block).
+class Gen4Trainer {
+  final String name;
+  final int tid, sid, money, gender; // gender: 0 male, 1 female
+  const Gen4Trainer({
+    required this.name,
+    required this.tid,
+    required this.sid,
+    required this.money,
+    required this.gender,
+  });
+  Gen4Trainer copyWith({String? name, int? tid, int? sid, int? money, int? gender}) =>
+      Gen4Trainer(
+        name: name ?? this.name,
+        tid: tid ?? this.tid,
+        sid: sid ?? this.sid,
+        money: money ?? this.money,
+        gender: gender ?? this.gender,
+      );
 }
