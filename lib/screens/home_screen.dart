@@ -4,10 +4,8 @@ import '../data/games_data.dart';
 import '../models/game.dart';
 import '../state/app_state.dart';
 import '../widgets/completion_ring.dart';
-import '../widgets/console_art.dart';
 import '../widgets/game_box_art.dart';
 import '../widgets/cartridge_nav.dart';
-import 'console_shelf_screen.dart';
 import 'game_screen.dart';
 import 'updates_screen.dart';
 import 'pokedex_list_screen.dart';
@@ -89,13 +87,8 @@ class _GamesTab extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 24),
       children: [
         _OverallCard(),
-        _ModeToggle(consoleMode: state.consoleMode),
-        if (state.consoleMode)
-          _ConsoleGrid()
-        else ...[
-          _LibraryBar(),
-          for (final gen in gens) _GenShelf(gen: gen, games: byGen[gen]!),
-        ],
+        _LibraryBar(),
+        for (final gen in gens) _GenShelf(gen: gen, games: byGen[gen]!),
       ],
     );
   }
@@ -191,108 +184,6 @@ class _GenShelf extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Toggle between the console shelf and the classic list.
-class _ModeToggle extends StatelessWidget {
-  final bool consoleMode;
-  const _ModeToggle({required this.consoleMode});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: SegmentedButton<bool>(
-          showSelectedIcon: false,
-          style: const ButtonStyle(
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          segments: const [
-            ButtonSegment(
-                value: true,
-                label: Text('Consoles'),
-                icon: Icon(Icons.videogame_asset, size: 18)),
-            ButtonSegment(
-                value: false,
-                label: Text('Shelf'),
-                icon: Icon(Icons.view_day, size: 18)),
-          ],
-          selected: {consoleMode},
-          onSelectionChanged: (s) =>
-              context.read<AppState>().setConsoleMode(s.first),
-        ),
-      ),
-    );
-  }
-}
-
-/// The assortment of consoles the library spans; tap one to open its shelf.
-class _ConsoleGrid extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final byPlatform = <BoxPlatform, List<Game>>{};
-    for (final g in kGames) {
-      byPlatform.putIfAbsent(platformForGame(g), () => []).add(g);
-    }
-    final platforms =
-        kConsoleOrder.where((p) => byPlatform.containsKey(p)).toList();
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 0.92,
-      children: [
-        for (final p in platforms)
-          _ConsoleCard(platform: p, games: byPlatform[p]!),
-      ],
-    );
-  }
-}
-
-class _ConsoleCard extends StatelessWidget {
-  final BoxPlatform platform;
-  final List<Game> games;
-  const _ConsoleCard({required this.platform, required this.games});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                ConsoleShelfScreen(platform: platform, games: games),
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Center(
-                  child: ConsoleArt(platform: platform, size: 96, preview: true),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(kConsoleNames[platform] ?? '',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600)),
-              Text('${games.length} games',
-                  style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-        ),
       ),
     );
   }

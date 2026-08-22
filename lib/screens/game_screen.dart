@@ -20,6 +20,7 @@ import '../state/app_state.dart';
 import 'cartridge_viewer.dart';
 import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
+import 'game_launch.dart';
 import 'pokemon_detail_screen.dart';
 
 class GameScreen extends StatelessWidget {
@@ -34,6 +35,7 @@ class GameScreen extends StatelessWidget {
     return DefaultTabController(
       length: 4,
       child: Scaffold(
+        floatingActionButton: _playButton(context, state, tint),
         appBar: AppBar(
           backgroundColor: tint,
           foregroundColor: Colors.white,
@@ -83,6 +85,51 @@ class GameScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Play (or Download) affordance for this game — mirrors the console shelf so
+  // games opened straight from the list are still playable.
+  Widget? _playButton(BuildContext context, AppState state, Color tint) {
+    if (state.downloadProgress(game.id) != null) {
+      return FloatingActionButton.extended(
+        backgroundColor: Colors.grey,
+        onPressed: null,
+        icon: const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: Colors.white)),
+        label: const Text('Downloading…'),
+      );
+    }
+    if (state.isInstalled(game.id)) {
+      return FloatingActionButton.extended(
+        backgroundColor: tint,
+        foregroundColor: Colors.white,
+        onPressed: () => launchGame(context, game),
+        icon: const Icon(Icons.play_arrow),
+        label: const Text('Play'),
+      );
+    }
+    if (state.canDownload(game.id)) {
+      return FloatingActionButton.extended(
+        backgroundColor: tint,
+        foregroundColor: Colors.white,
+        onPressed: () async {
+          final m = ScaffoldMessenger.of(context);
+          try {
+            await context.read<AppState>().downloadGame(game.id);
+            if (!context.mounted) return;
+            m.showSnackBar(SnackBar(content: Text('Downloaded ${game.title}')));
+          } catch (e) {
+            m.showSnackBar(SnackBar(content: Text('Download failed: $e')));
+          }
+        },
+        icon: const Icon(Icons.download),
+        label: const Text('Download'),
+      );
+    }
+    return null;
   }
 }
 
