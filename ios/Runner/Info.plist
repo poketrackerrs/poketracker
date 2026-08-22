@@ -68,5 +68,7 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>Developer mode runs a local server so your paired computer can pull your saves over Wi-Fi.</string>
 	</dict>
 </plist>

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../data/region_theme.dart';
 import '../state/app_state.dart';
+import 'developer_screen.dart';
 import 'ds_bios_screen.dart';
 import 'emulators_screen.dart';
 import 'updates_screen.dart';
@@ -255,6 +256,26 @@ class SettingsScreen extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const UpdatesScreen()),
           ),
         ),
+
+        if (Platform.isIOS) ...[
+          _header(context, 'Developer'),
+          SwitchListTile(
+            secondary: const Icon(Icons.developer_mode),
+            title: const Text('Developer mode'),
+            subtitle: const Text('Enable the local save server (iPhone only)'),
+            value: state.devMode,
+            onChanged: (v) => context.read<AppState>().setDevMode(v),
+          ),
+          if (state.devMode)
+            ListTile(
+              leading: const Icon(Icons.wifi_tethering),
+              title: const Text('Pull saves (local server)'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const DeveloperScreen()),
+              ),
+            ),
+        ],
 
         _header(context, 'About'),
         FutureBuilder<PackageInfo>(

@@ -67,6 +67,9 @@ class AppState extends ChangeNotifier {
   bool _consoleMode = true; // Games page: console shelf (true) vs classic list
   bool get consoleMode => _consoleMode;
 
+  bool _devMode = false; // developer tools (iOS: local save server)
+  bool get devMode => _devMode;
+
   bool _loaded = false;
   bool get isLoaded => _loaded;
 
@@ -80,6 +83,7 @@ class AppState extends ChangeNotifier {
     _accent = Color(prefs.getInt('accent') ?? defaultAccent.toARGB32());
     _regionTint = prefs.getBool('regiontint') ?? true;
     _consoleMode = prefs.getBool('consolemode') ?? true;
+    _devMode = prefs.getBool('devmode') ?? false;
     await _loadLibrary();
     _loaded = true;
     notifyListeners();
@@ -180,6 +184,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('consolemode', value);
+  }
+
+  Future<void> setDevMode(bool value) async {
+    _devMode = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('devmode', value);
   }
 
   // ---- Home dashboard stats -------------------------------------------
