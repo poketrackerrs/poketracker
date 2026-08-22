@@ -93,7 +93,13 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       final sav = File(_savPath!);
       if (sav.existsSync()) {
         try {
-          emu.writeSaveRam(await sav.readAsBytes());
+          final loaded = await sav.readAsBytes();
+          emu.writeSaveRam(loaded);
+          // Remember the loaded save so we only ever overwrite the .sav once the
+          // game itself writes a *different* save (prevents clobbering a good
+          // save with a fresh/blank one).
+          _loadedSaveSig = _sigOf(loaded);
+          _hadSaveAtBoot = true;
         } catch (_) {}
       }
       _setupAudioStream(emu.sampleRate);
@@ -241,6 +247,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   }
 
   int _lastSaveSig = 0;
+  int _loadedSaveSig = 0; // signature of the .sav loaded at boot
+  bool _hadSaveAtBoot = false;
+  bool _sessionBackupDone = false;
 
   // Cheap change signature over the save bytes (sampled) — lets us skip the
   // live achievement sync when the in-game save hasn't actually changed.
@@ -258,12 +267,24 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     if (emu == null || path == null || !emu.loaded) return;
     final data = emu.readSaveRam();
     if (data == null || data.isEmpty) return;
+    final sig = _sigOf(data);
+    // Only touch the .sav once the in-game save actually changed from what we
+    // loaded — never overwrite a good save with an unchanged/fresh SRAM.
+    if (_hadSaveAtBoot && sig == _loadedSaveSig) return;
     try {
+      // Back up the original save once, the first time the game writes a new one.
+      if (_hadSaveAtBoot && !_sessionBackupDone) {
+        final orig = File(path);
+        if (orig.existsSync()) {
+          final stamp = DateTime.now().millisecondsSinceEpoch;
+          await File('$path.bak-$stamp')
+              .writeAsBytes(await orig.readAsBytes(), flush: true);
+        }
+        _sessionBackupDone = true;
+      }
       await File(path).writeAsBytes(data, flush: true);
     } catch (_) {}
-    // Live achievements: when the committed save changes (i.e. the player
-    // saved in-game), re-sync progress and toast anything that just unlocked.
-    final sig = _sigOf(data);
+    // Live achievements: the committed save changed, so re-sync + toast.
     if (sig != _lastSaveSig) {
       _lastSaveSig = sig;
       _liveSync();
