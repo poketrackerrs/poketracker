@@ -2874,9 +2874,14 @@ class _DexTabState extends State<_DexTab> {
   String? _error;
   bool _showForms = false;
   _DexFilter _filter = _DexFilter.all;
+  String _query = '';
 
   // Memoized obtainability futures so rebuilds (checkbox taps) don't refetch.
   final Map<int, Future<ObtainInfo>> _obtain = {};
+  // Memoized type lookups for the per-entry type chips.
+  final Map<int, Future<List<String>>> _typesFut = {};
+  Future<List<String>> _typesFor(int id) =>
+      _typesFut.putIfAbsent(id, () => _service.typesOf(id));
 
   @override
   void initState() {
@@ -2984,16 +2989,20 @@ class _DexTabState extends State<_DexTab> {
           id: s.id, baseDex: s.id, name: s.name, entryNumber: s.entryNumber));
       if (_showForms) rows.addAll(_formsByDex[s.id] ?? const []);
     }
+    final q = _query.trim().toLowerCase();
     final visible = rows.where((r) {
       final isCaught = state.isCaught(gameId, r.id);
-      switch (_filter) {
-        case _DexFilter.all:
-          return true;
-        case _DexFilter.caught:
-          return isCaught;
-        case _DexFilter.missing:
-          return !isCaught;
-      }
+      final passFilter = switch (_filter) {
+        _DexFilter.all => true,
+        _DexFilter.caught => isCaught,
+        _DexFilter.missing => !isCaught,
+      };
+      if (!passFilter) return false;
+      if (q.isEmpty) return true;
+      // Match on name, national dex number, or entry number.
+      return r.name.toLowerCase().contains(q) ||
+          '${r.baseDex}'.contains(q) ||
+          r.entryNumber.toString().padLeft(3, '0').contains(q);
     }).toList();
 
     return Column(
@@ -3053,6 +3062,23 @@ class _DexTabState extends State<_DexTab> {
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              TextField(
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  hintText: 'Search name or number…',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () => setState(() => _query = ''),
+                        ),
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
             ],
           ),
         ),
@@ -3076,13 +3102,24 @@ class _DexTabState extends State<_DexTab> {
       leading: SizedBox(
         width: 44,
         height: 44,
-        child: CachedNetworkImage(
-          imageUrl: r.spriteUrl,
-          fit: BoxFit.contain,
-          errorWidget: (_, _, _) =>
-              const Icon(Icons.catching_pokemon, color: Colors.grey),
-          placeholder: (_, _) => const SizedBox(),
-        ),
+        child: () {
+          final img = CachedNetworkImage(
+            imageUrl: r.spriteUrl,
+            fit: BoxFit.contain,
+            errorWidget: (_, _, _) =>
+                const Icon(Icons.catching_pokemon, color: Colors.grey),
+            placeholder: (_, _) => const SizedBox(),
+          );
+          // Uncaught entries show as a dark silhouette, like the real Pokédex.
+          return isCaught
+              ? img
+              : ColorFiltered(
+                  colorFilter: ColorFilter.mode(
+                      scheme.onSurface.withValues(alpha: 0.82),
+                      BlendMode.srcATop),
+                  child: Opacity(opacity: 0.85, child: img),
+                );
+        }(),
       ),
       title: r.isForm
           ? Row(
@@ -3105,23 +3142,45 @@ class _DexTabState extends State<_DexTab> {
               ],
             )
           : Text(prettifyName(r.name)),
-      subtitle: r.isForm
-          ? Text('Alternate form', style: TextStyle(color: scheme.onSurfaceVariant))
-          : FutureBuilder<ObtainInfo>(
-              future: _obtainFor(r.id, [widget.game.version]),
-              builder: (context, snap) {
-                return Row(
-                  children: [
-                    Text('#${r.entryNumber.toString().padLeft(3, '0')}'),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 2),
+          FutureBuilder<List<String>>(
+            future: _typesFor(r.id),
+            builder: (context, snap) {
+              final types = snap.data ?? const <String>[];
+              return Row(
+                children: [
+                  if (!r.isForm) ...[
+                    Text('#${r.entryNumber.toString().padLeft(3, '0')}',
+                        style: TextStyle(color: scheme.onSurfaceVariant)),
                     const SizedBox(width: 8),
-                    if (snap.hasData)
-                      _ObtainChip(info: snap.data!)
-                    else
-                      const Text('…', style: TextStyle(color: Colors.grey)),
                   ],
-                );
-              },
-            ),
+                  for (final t in types) ...[
+                    _TypeChip(type: t),
+                    const SizedBox(width: 4),
+                  ],
+                ],
+              );
+            },
+          ),
+          if (!r.isForm)
+            FutureBuilder<ObtainInfo>(
+              future: _obtainFor(r.id, [widget.game.version]),
+              builder: (context, snap) => Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: snap.hasData
+                    ? _ObtainChip(info: snap.data!)
+                    : const Text('…', style: TextStyle(color: Colors.grey)),
+              ),
+            )
+          else
+            Text('Alternate form',
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12)),
+        ],
+      ),
+      isThreeLine: true,
       trailing: Checkbox(
         value: isCaught,
         activeColor: widget.tint,
@@ -3134,9 +3193,35 @@ class _DexTabState extends State<_DexTab> {
             name: r.name,
             generation: widget.game.generation,
             initialFormId: r.isForm ? r.id : null,
+            gameVersion: widget.game.version,
+            gameTitle: widget.game.title.replaceFirst('Pokemon ', ''),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A small colored type chip (Grass, Fire, …).
+class _TypeChip extends StatelessWidget {
+  final String type;
+  const _TypeChip({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = typeColor(type);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      decoration: BoxDecoration(
+        color: c,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(type.toUpperCase(),
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3)),
     );
   }
 }

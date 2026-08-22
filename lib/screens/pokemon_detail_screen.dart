@@ -29,12 +29,21 @@ class PokemonDetailScreen extends StatefulWidget {
   /// When set, auto-selects this form (variety) id after the species loads.
   final int? initialFormId;
 
+  /// The specific game version (e.g. "firered") — enables the game-accurate
+  /// "Where to find" locations section. Null when opened from the global dex.
+  final String? gameVersion;
+
+  /// Human title for [gameVersion] (e.g. "FireRed"), for the section header.
+  final String? gameTitle;
+
   const PokemonDetailScreen({
     super.key,
     required this.id,
     required this.name,
     this.generation,
     this.initialFormId,
+    this.gameVersion,
+    this.gameTitle,
   });
 
   @override
@@ -157,6 +166,15 @@ class _PokemonDetailScreenState extends State<PokemonDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _InfoboxCard(detail: d),
+              if (widget.gameVersion != null) ...[
+                _sectionTitle(context,
+                    'Where to find${widget.gameTitle != null ? ' in ${widget.gameTitle}' : ''}'),
+                _LocationsSection(
+                  key: ValueKey('loc-$currentFormId-${widget.gameVersion}'),
+                  speciesId: currentFormId,
+                  version: widget.gameVersion!,
+                ),
+              ],
               _sectionTitle(context, 'Base stats'),
               _StatsSection(detail: d),
               _sectionTitle(context, 'Type defenses'),
@@ -963,6 +981,161 @@ class _StatBar extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// "Where to find" — game-accurate wild encounter locations for one version.
+class _LocationsSection extends StatefulWidget {
+  final int speciesId;
+  final String version;
+  const _LocationsSection(
+      {super.key, required this.speciesId, required this.version});
+
+  @override
+  State<_LocationsSection> createState() => _LocationsSectionState();
+}
+
+class _LocationsSectionState extends State<_LocationsSection> {
+  final _service = PokedexService();
+  late final Future<
+          List<
+              ({
+                String area,
+                String method,
+                int minLevel,
+                int maxLevel,
+                int chance
+              })>>
+      _future = _service.encountersIn(widget.speciesId, widget.version);
+
+  static String _prettyArea(String a) {
+    var s = a;
+    if (s.endsWith('-area')) s = s.substring(0, s.length - 5);
+    return s
+        .split('-')
+        .where((w) => w.isNotEmpty)
+        .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
+  }
+
+  static ({IconData icon, String label}) _method(String m) => switch (m) {
+        'walk' => (icon: Icons.grass, label: 'Tall grass'),
+        'surf' => (icon: Icons.pool, label: 'Surfing'),
+        'old-rod' => (icon: Icons.phishing, label: 'Old Rod'),
+        'good-rod' => (icon: Icons.phishing, label: 'Good Rod'),
+        'super-rod' => (icon: Icons.phishing, label: 'Super Rod'),
+        'rock-smash' => (icon: Icons.landscape, label: 'Rock Smash'),
+        'headbutt' => (icon: Icons.park, label: 'Headbutt trees'),
+        'gift' || 'only-one' => (icon: Icons.card_giftcard, label: 'Gift'),
+        _ => (icon: Icons.place, label: _prettyArea(m)),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return FutureBuilder<
+        List<
+            ({
+              String area,
+              String method,
+              int minLevel,
+              int maxLevel,
+              int chance
+            })>>(
+      future: _future,
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+                child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))),
+          );
+        }
+        final spots = snap.data!;
+        if (spots.isEmpty) {
+          return Card(
+            margin: EdgeInsets.zero,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                        'Not found in the wild in this game — obtain it by '
+                        'evolution, trade, gift, or a special event.'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        // Group the spots by location area.
+        final byArea =
+            <String, List<({String area, String method, int minLevel, int maxLevel, int chance})>>{};
+        for (final s in spots) {
+          byArea.putIfAbsent(s.area, () => []).add(s);
+        }
+        final areas = byArea.keys.toList()..sort();
+        return Column(
+          children: [
+            for (final area in areas)
+              Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.location_on, size: 18, color: scheme.primary),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(_prettyArea(area),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700, fontSize: 15)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      for (final s in byArea[area]!)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Row(
+                            children: [
+                              Icon(_method(s.method).icon,
+                                  size: 15, color: scheme.onSurfaceVariant),
+                              const SizedBox(width: 6),
+                              Expanded(child: Text(_method(s.method).label)),
+                              Text(
+                                  s.minLevel == s.maxLevel
+                                      ? 'Lv ${s.minLevel}'
+                                      : 'Lv ${s.minLevel}–${s.maxLevel}',
+                                  style: TextStyle(
+                                      color: scheme.onSurfaceVariant,
+                                      fontSize: 13)),
+                              const SizedBox(width: 10),
+                              Text('${s.chance}%',
+                                  style: TextStyle(
+                                      color: scheme.primary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

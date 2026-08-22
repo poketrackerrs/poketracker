@@ -193,6 +193,61 @@ class PokedexService {
     }
   }
 
+  /// Where a Pokémon can be caught in a specific game [version]: one entry per
+  /// (location area, method), with the level range and total encounter chance.
+  /// Empty when it isn't found in the wild in that game.
+  Future<List<({String area, String method, int minLevel, int maxLevel, int chance})>>
+      encountersIn(int id, String version) async {
+    try {
+      final data =
+          await _cachedGetJson('$_base/pokemon/$id/encounters') as List;
+      final out =
+          <({String area, String method, int minLevel, int maxLevel, int chance})>[];
+      for (final area in data) {
+        final areaName = area['location_area']['name'] as String;
+        for (final vd in (area['version_details'] as List)) {
+          if (vd['version']['name'] != version) continue;
+          // Aggregate the raw slots by method → level span + summed chance.
+          final byMethod = <String, (int, int, int)>{}; // min,max,chance
+          for (final ed in (vd['encounter_details'] as List)) {
+            final m = ed['method']['name'] as String;
+            final mn = ed['min_level'] as int;
+            final mx = ed['max_level'] as int;
+            final ch = ed['chance'] as int;
+            final cur = byMethod[m];
+            byMethod[m] = cur == null
+                ? (mn, mx, ch)
+                : (mn < cur.$1 ? mn : cur.$1, mx > cur.$2 ? mx : cur.$2,
+                    cur.$3 + ch);
+          }
+          byMethod.forEach((m, v) => out.add((
+                area: areaName,
+                method: m,
+                minLevel: v.$1,
+                maxLevel: v.$2,
+                chance: v.$3 > 100 ? 100 : v.$3,
+              )));
+        }
+      }
+      return out;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// A Pokémon's (or form's) current types — lightweight, cached. For the
+  /// per-game dex list's type chips.
+  Future<List<String>> typesOf(int id) async {
+    try {
+      final p = await _cachedGet('$_base/pokemon/$id');
+      return [
+        for (final t in (p['types'] as List)) t['type']['name'] as String
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// A species' EXP growth-rate name (for computing level<->exp). Cached.
   Future<String> growthRate(int dex) async {
     try {
