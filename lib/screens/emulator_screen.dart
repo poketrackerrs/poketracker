@@ -658,8 +658,10 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       // Portrait phone: reserve the bottom strip for the compact buttons; the
       // two screens use everything above it (more room when the bar is hidden).
       if (_isMobile && portrait) {
+        // Reserve a bit more than the control panel's height (280) so there's a
+        // clear device-body gap between the screens and the controls.
         return Positioned(
-            top: topInset, left: 0, right: 0, bottom: 280, child: _dsScreens());
+            top: topInset, left: 0, right: 0, bottom: 308, child: _dsScreens());
       }
       return Positioned.fill(child: _dsScreens());
     }
