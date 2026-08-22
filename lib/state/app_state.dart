@@ -490,6 +490,16 @@ class AppState extends ChangeNotifier {
         break;
       }
     }
+    // Game-of-origin must be a valid Gen 3 game (0 flags as illegal); use the
+    // cartridge the event is going onto.
+    final origin = switch (game.version) {
+      'sapphire' => 1,
+      'ruby' => 2,
+      'emerald' => 3,
+      'firered' => 4,
+      'leafgreen' => 5,
+      _ => 4,
+    };
     final pk = Pk3.create(
       otid: otid,
       nationalSpecies: ev.dex,
@@ -505,6 +515,7 @@ class AppState extends ChangeNotifier {
       heldItem: ev.heldItem,
       metLocation: ev.metLocation,
       metLevel: ev.metLevel,
+      gameOfOrigin: origin,
       party: party,
     );
     if (party) {
