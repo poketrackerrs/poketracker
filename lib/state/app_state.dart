@@ -634,6 +634,47 @@ class AppState extends ChangeNotifier {
         '(${bak.uri.pathSegments.last}). Reload it in your emulator to check.';
   }
 
+  /// How many editor backups exist next to a game's save.
+  Future<int> gen3BackupCount(Game game) async {
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 0;
+    return _backupsFor(file).length;
+  }
+
+  List<File> _backupsFor(File save) {
+    final prefix = '${save.path}.bak-';
+    final baks = save.parent
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.startsWith(prefix))
+        .toList();
+    // Newest first, by the millisecond timestamp suffix.
+    int ts(File f) => int.tryParse(f.path.substring(prefix.length)) ?? 0;
+    baks.sort((a, b) => ts(b).compareTo(ts(a)));
+    return baks;
+  }
+
+  /// Restores the most recent editor backup over the current save (only if that
+  /// backup itself has valid checksums). Undoes a bad edit.
+  Future<String> restoreGen3Backup(Game game) async {
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final baks = _backupsFor(file);
+    if (baks.isEmpty) return 'No backup found to restore.';
+    final newest = baks.first;
+    try {
+      final bytes = Uint8List.fromList(await newest.readAsBytes());
+      if (!Gen3SaveEditor.load(bytes).verifyChecksums().ok) {
+        return 'The backup looks corrupt — not restoring.';
+      }
+      await file.writeAsBytes(bytes, flush: true);
+      return 'Restored ${newest.uri.pathSegments.last}. Reload it in your '
+          'emulator.';
+    } catch (_) {
+      return 'Could not read the backup — not restoring.';
+    }
+  }
+
   /// Applies one PartyEdit to a decoded PK3 in place (shared by party + box).
   /// Legal-by-construction: a species change re-derives EXP, stats, moves and
   /// the default nickname; all PokeAPI lookups use National dex.

@@ -363,6 +363,33 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     }
   }
 
+  Future<void> _restoreBackup() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore last backup?'),
+        content: const Text(
+            'This replaces the current save with the most recent backup the '
+            'editor made (before your last Apply). Your latest edits are undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Restore')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    final msg = await context.read<AppState>().restoreGen3Backup(widget.game);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+  }
+
   Future<void> _addEvent() async {
     final ev = await showModalBottomSheet<Gen3Event>(
       context: context,
@@ -604,6 +631,14 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                           : _injectLabels.join(', ')),
                       trailing: const Icon(Icons.add),
                       onTap: _busy ? null : _addEvent,
+                    ),
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.restore, color: Colors.orange),
+                      title: const Text('Restore last backup'),
+                      subtitle: const Text('Undo the last edit if a save broke'),
+                      onTap: _busy ? null : _restoreBackup,
                     ),
                     const SizedBox(height: 4),
                     const Text(
