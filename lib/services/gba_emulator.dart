@@ -224,7 +224,19 @@ class GbaEmulator {
 
   int get apiVersion => core.retroApiVersion();
 
+  // Tracks whether the process-global native core is currently retro_init'd, so
+  // a stale init (e.g. a screen torn down without unload) can't wedge the next
+  // Play.
+  static bool _coreInited = false;
+
   void init(String systemDir) {
+    // Balance any prior retro_init that wasn't torn down before re-initing.
+    if (_coreInited) {
+      try {
+        core.retroDeinit();
+      } catch (_) {}
+      _coreInited = false;
+    }
     gSysDir = systemDir.toNativeUtf8();
     // Hide melonDS's on-screen touch cursor (default 'always' leaves a lingering
     // square on the bottom screen). Registered before the core queries options.
@@ -248,6 +260,7 @@ class GbaEmulator {
     _setVar('melonds_firmware_nds_path', hasNdsBios ? 'firmware.bin' : null);
     core.retroSetEnvironment(Pointer.fromFunction<EnvCbNative>(_env, false));
     core.retroInit();
+    _coreInited = true;
     core.retroSetVideoRefresh(Pointer.fromFunction<VideoCbNative>(_video));
     core.retroSetAudioSample(
         Pointer.fromFunction<AudioSampleCbNative>(_audioSample));
@@ -326,11 +339,17 @@ class GbaEmulator {
   }
 
   void unload() {
-    if (loaded) {
-      try {
-        core.retroUnloadGame();
-      } catch (_) {}
-      loaded = false;
-    }
+    try {
+      if (loaded) core.retroUnloadGame();
+    } catch (_) {}
+    loaded = false;
+    // The libretro core is a process-global singleton (dlopen caches it), so
+    // init()'s retro_init must be balanced with retro_deinit here. Otherwise a
+    // SECOND Play in the same app session re-inits an already-inited core and
+    // retro_load_game then fails ("core could not load this ROM").
+    try {
+      core.retroDeinit();
+    } catch (_) {}
+    _coreInited = false;
   }
 }
