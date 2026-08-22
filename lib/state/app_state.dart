@@ -495,7 +495,7 @@ class AppState extends ChangeNotifier {
     // Moves: explicit list wins; a species change resets to a legal moveset.
     var newMoves = ed.moves;
     if (newMoves == null && speciesChanged) {
-      newMoves = [for (final mv in (await gen3Learnset(dex)).take(4)) mv.id];
+      newMoves = [for (final mv in (await gen3Learnset(dex, gen: 4)).take(4)) mv.id];
     }
     if (newMoves != null) {
       m.setMoves(newMoves);
@@ -796,13 +796,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<List<({int id, String name})>> gen3Learnset(int dex) async {
+  /// The legal move pool for [dex] in generation [gen] (RSE/FRLG = 3, DPPt/HGSS
+  /// = 4, …), deduped + sorted. Defaults to Gen 3.
+  Future<List<({int id, String name})>> gen3Learnset(int dex,
+      {int gen = 3}) async {
     try {
       final d = await _pokedex.fetchDetail(dex);
       final seen = <int>{};
       final out = <({int id, String name})>[];
       for (final mv in d.moves) {
-        if (mv.generation != 3 || mv.id == 0 || !seen.add(mv.id)) continue;
+        if (mv.generation != gen || mv.id == 0 || !seen.add(mv.id)) continue;
         out.add((id: mv.id, name: mv.name));
       }
       out.sort((a, b) => a.name.compareTo(b.name));

@@ -402,7 +402,11 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     final result = await Navigator.of(context).push<PartyEdit>(
       MaterialPageRoute(
           builder: (_) =>
-              _MonEditor(mon: m, initial: _partyEdits[m.slot], strictLegal: true)),
+              _MonEditor(
+                  mon: m,
+                  initial: _partyEdits[m.slot],
+                  strictLegal: true,
+                  generation: widget.game.generation)),
     );
     if (result != null && mounted) {
       setState(() => _partyEdits[m.slot] = result);
@@ -1096,8 +1100,13 @@ class _MonEditor extends StatefulWidget {
   // (strictLegal:false) edits IVs freely and regenerates the PID directly for
   // nature/shiny, and hides the Gen-3-only species picker.
   final bool strictLegal;
+  // The game's generation — selects the legal move pool (Gen 3 vs Gen 4 learnset).
+  final int generation;
   const _MonEditor(
-      {required this.mon, this.initial, this.strictLegal = true});
+      {required this.mon,
+      this.initial,
+      this.strictLegal = true,
+      this.generation = 3});
   @override
   State<_MonEditor> createState() => _MonEditorState();
 }
@@ -1188,7 +1197,9 @@ class _MonEditorState extends State<_MonEditor> {
   }
 
   Future<void> _loadMoves() async {
-    final legal = await context.read<AppState>().gen3Learnset(_speciesDex);
+    final legal = await context
+        .read<AppState>()
+        .gen3Learnset(_speciesDex, gen: widget.generation);
     if (!mounted) return;
     setState(() {
       _legal = legal;
@@ -1208,7 +1219,9 @@ class _MonEditorState extends State<_MonEditor> {
       _legal = null;
       _moves = [0, 0, 0, 0];
     });
-    final legal = await context.read<AppState>().gen3Learnset(dex);
+    final legal = await context
+        .read<AppState>()
+        .gen3Learnset(dex, gen: widget.generation);
     if (!mounted) return;
     setState(() {
       _legal = legal;
