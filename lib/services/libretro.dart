@@ -25,6 +25,7 @@ const int pfRGB565 = 2;
 
 // memory ids
 const int retroMemorySaveRam = 0;
+const int retroMemorySystemRam = 2; // GBA: EWRAM (live working memory)
 
 // ---- structs ----
 final class RetroSystemInfo extends Struct {

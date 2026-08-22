@@ -418,6 +418,31 @@ class Gen3SaveEditor {
     return n;
   }
 
+  int badgeFlagBase(String versionId) => _badgeFlagBase(versionId);
+
+  // --- Live-RAM anchors: locate SaveBlock1/2 inside the emulator's EWRAM ------
+  // The committed save's stable bytes (party PIDs, trainer id) fingerprint the
+  // live copies so we can read flags/dex in real time, version-independently.
+
+  /// Committed SaveBlock1 bytes at a logical offset (straddle-safe).
+  Uint8List sb1Logical(int logical, int len) => Uint8List.fromList(
+      [for (var i = 0; i < len; i++) bytes[_logical(logical + i)]]);
+
+  /// Logical offset of party slot 0's 100-byte block within SaveBlock1.
+  int partySlot0Logical(String v) => _partyOfs(v) + 4;
+
+  /// Logical offset of the event-flag array within SaveBlock1.
+  int eventFlagLogical(String v) => _eventFlagBlock(v);
+
+  /// Committed SaveBlock2 (section 0) bytes at an offset.
+  Uint8List sb2Bytes(int off, int len) {
+    final b = _s(0) + off;
+    return Uint8List.fromList(bytes.sublist(b, b + len));
+  }
+
+  /// Offset of the owned (caught) national-dex bitfield within SaveBlock2.
+  static const int ownedDexOffset = 0x28;
+
   /// Give an event ticket: adds the key item AND sets its enable flag so the
   /// ferry offers the destination. Ticket ids/flags below are per-game; flags
   /// are the part to confirm by testing in the emulator.

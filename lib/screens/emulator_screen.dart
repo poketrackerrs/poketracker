@@ -102,6 +102,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       _startLoop();
       _saveTimer =
           Timer.periodic(const Duration(seconds: 6), (_) => _persistSave());
+      // True-live achievements: poll the core's working RAM (no save needed).
+      _liveRamTimer =
+          Timer.periodic(const Duration(seconds: 2), (_) => _liveRamCheck());
     } catch (e) {
       if (mounted) setState(() => _status = 'Emulator error: $e');
     }
@@ -273,6 +276,29 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   final List<String> _toastQueue = [];
   String? _toast;
   Timer? _toastTimer;
+  Timer? _liveRamTimer;
+  bool _liveRamBusy = false;
+
+  // Read the emulator's working RAM and unlock achievements in real time.
+  Future<void> _liveRamCheck() async {
+    if (_liveRamBusy || !mounted) return;
+    final emu = _emu;
+    if (emu == null || !emu.loaded) return;
+    _liveRamBusy = true;
+    try {
+      final ewram = emu.readSystemRam();
+      if (ewram == null || !mounted) return;
+      final unlocked =
+          await context.read<AppState>().liveRamUnlocks(widget.game, ewram);
+      if (!mounted || unlocked.isEmpty) return;
+      _toastQueue.addAll(unlocked);
+      if (_toast == null) _showNextToast();
+    } catch (_) {
+      // ignore — falls back to the on-save sync
+    } finally {
+      _liveRamBusy = false;
+    }
+  }
 
   Future<void> _liveSync() async {
     if (!mounted) return;
@@ -454,6 +480,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     _timer?.cancel();
     _saveTimer?.cancel();
     _toastTimer?.cancel();
+    _liveRamTimer?.cancel();
     _padSub?.cancel();
     // best-effort synchronous save on teardown
     try {

@@ -17,6 +17,7 @@ import '../services/library_service.dart';
 import '../services/emulator_service.dart';
 import '../services/save_service.dart';
 import '../services/gen3_save_editor.dart';
+import '../services/gen3_live_ram.dart';
 import '../services/gen4_save_editor.dart';
 import '../services/gen4_pkx.dart';
 import '../services/gen4_text.dart';
@@ -1522,14 +1523,24 @@ class AppState extends ChangeNotifier {
     return 'Synced ${parts.join(' · ')}$delta';
   }
 
-  /// Live achievement sync: re-reads the save and applies progress, returning
-  /// the titles of any achievements that just unlocked (for in-game toasts).
-  /// Called periodically while playing in the built-in emulator.
-  Future<List<String>> syncAndDetectUnlocks(Game game) async {
+  /// Applies [data] and returns the titles of any achievements that newly
+  /// unlocked (for toasts). Shared by the on-save and live-RAM paths.
+  Future<List<String>> _detectUnlocks(Game game, SaveData data,
+      {bool team = true}) async {
     final before = <String>{
       for (final s in gameAchievements(game))
         if (s.unlocked) s.achievement.id,
     };
+    await applySaveData(game, data, dex: true, badges: true, team: team);
+    return [
+      for (final s in gameAchievements(game))
+        if (s.unlocked && !before.contains(s.achievement.id))
+          s.achievement.title,
+    ];
+  }
+
+  /// Live achievement sync from the committed save (on in-game save / on exit).
+  Future<List<String>> syncAndDetectUnlocks(Game game) async {
     SaveData? data;
     try {
       data = await scanSave(game);
@@ -1537,12 +1548,73 @@ class AppState extends ChangeNotifier {
       return const [];
     }
     if (data == null) return const [];
-    await applySaveData(game, data, dex: true, badges: true, team: true);
-    return [
-      for (final s in gameAchievements(game))
-        if (s.unlocked && !before.contains(s.achievement.id))
-          s.achievement.title,
-    ];
+    return _detectUnlocks(game, data, team: true);
+  }
+
+  // Cached committed editor used to fingerprint the live RAM (anchors are
+  // stable, so it only needs loading once per game).
+  Gen3SaveEditor? _anchorEditor;
+  String? _anchorGameId;
+
+  /// TRUE-LIVE achievement detection: reads the emulator's working RAM (EWRAM)
+  /// so unlocks fire the instant they happen in-game, without saving. Falls
+  /// back to nothing (callers keep the on-save path) if the RAM can't be read.
+  Future<List<String>> liveRamUnlocks(Game game, Uint8List ewram) async {
+    if (game.generation != 3) return const [];
+    if (_anchorGameId != game.id || _anchorEditor == null) {
+      final file = await _findSaveFile(game.id);
+      if (file == null) return const [];
+      try {
+        _anchorEditor =
+            Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+        _anchorGameId = game.id;
+      } catch (_) {
+        return const [];
+      }
+    }
+    final ed = _anchorEditor!;
+    final live = readGen3LiveRam(ewram, ed, game.version, 386);
+    if (!live.any) return const [];
+
+    final caught = live.caughtDex;
+    final flagOf = live.flagOf;
+    int? badgeCount;
+    final flagAch = <String>{};
+    var gameClear = false;
+    if (flagOf != null) {
+      final bb = ed.badgeFlagBase(game.version);
+      var n = 0;
+      for (var i = 0; i < 8; i++) {
+        if (flagOf(bb + i)) n++;
+      }
+      badgeCount = n;
+      if (game.version == 'firered' || game.version == 'leafgreen') {
+        gameClear = flagOf(kFrlgGameClearFlag);
+        for (final a in kFrlgAchievements) {
+          final f = a.flags;
+          if (f != null && f.any(flagOf)) flagAch.add(a.id);
+        }
+      }
+    }
+
+    // Skip the write+notify unless the live read actually adds something.
+    final p = progressFor(game.id);
+    final newCaught =
+        caught != null && caught.any((id) => !p.caughtSpecies.contains(id));
+    final newFlags = flagAch.any((id) => !p.unlockedAchievements.contains(id));
+    final newBadge = badgeCount != null && badgeCount > badgesEarned(game.id);
+    final newClear = gameClear && p.milestones['Champion'] != true;
+    if (!newCaught && !newFlags && !newBadge && !newClear) return const [];
+
+    final data = SaveData(
+      generation: 3,
+      versionId: game.version,
+      caughtDex: caught ?? const {},
+      badgeCount: badgeCount,
+      flagAchievements: flagAch,
+      gameClear: gameClear,
+    );
+    return _detectUnlocks(game, data, team: false);
   }
 
   /// The installed emulator that can run a game, or null. Switch-era games

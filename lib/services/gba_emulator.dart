@@ -314,6 +314,16 @@ class GbaEmulator {
     return Uint8List.fromList(ptr.cast<Uint8>().asTypedList(size));
   }
 
+  /// Reads the core's system/working RAM (GBA: EWRAM) — live game state,
+  /// updated every frame. Used for real-time achievement detection.
+  Uint8List? readSystemRam() {
+    final size = core.retroGetMemorySize(retroMemorySystemRam);
+    if (size <= 0) return null;
+    final ptr = core.retroGetMemoryData(retroMemorySystemRam);
+    if (ptr == nullptr) return null;
+    return Uint8List.fromList(ptr.cast<Uint8>().asTypedList(size));
+  }
+
   /// Loads a battery save file's bytes into the core's SaveRAM.
   void writeSaveRam(Uint8List bytes) {
     final size = core.retroGetMemorySize(retroMemorySaveRam);
