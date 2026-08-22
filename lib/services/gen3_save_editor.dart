@@ -394,6 +394,30 @@ class Gen3SaveEditor {
     fixChecksum(_secForLogical(l));
   }
 
+  /// Read an event flag (by number) from the SaveBlock1 flag array.
+  bool getEventFlag(String versionId, int flag) {
+    final l = _eventFlagBlock(versionId) + (flag >> 3);
+    return (bytes[_logical(l)] & (1 << (flag & 7))) != 0;
+  }
+
+  // The first of 8 consecutive gym-badge event flags per game (badges are
+  // earned in order). RS = 0x807, Emerald = 0x867, FRLG = 0x820. From PKHeX.
+  int _badgeFlagBase(String v) => switch (v) {
+        'firered' || 'leafgreen' => 0x820,
+        'emerald' => 0x867,
+        _ => 0x807, // ruby / sapphire
+      };
+
+  /// Number of gym badges earned (0..8), read from the badge event flags.
+  int badgeCount(String versionId) {
+    final base = _badgeFlagBase(versionId);
+    var n = 0;
+    for (var i = 0; i < 8; i++) {
+      if (getEventFlag(versionId, base + i)) n++;
+    }
+    return n;
+  }
+
   /// Give an event ticket: adds the key item AND sets its enable flag so the
   /// ferry offers the destination. Ticket ids/flags below are per-game; flags
   /// are the part to confirm by testing in the emulator.

@@ -305,11 +305,33 @@ class AppState extends ChangeNotifier {
     final file = await _findSaveFile(game.id);
     if (file == null) return null;
     final bytes = await file.readAsBytes();
-    final data = _save.parse(
+    var data = _save.parse(
       Uint8List.fromList(bytes),
       generation: game.generation,
       versionId: game.version,
     );
+    // Gen 3: enrich with badges + team (the flat parser doesn't read these).
+    if (game.generation == 3) {
+      try {
+        final e = Gen3SaveEditor.load(Uint8List.fromList(bytes));
+        if (e.verifyChecksums().ok) {
+          final party = await readGen3Party(game) ?? const <Gen3PartyMon>[];
+          data = data.copyWith(
+            badgeCount: e.badgeCount(game.version),
+            money: e.getMoney(game.version),
+            team: [
+              for (final m in party)
+                SaveTeamMon(
+                    dexId: m.dex,
+                    level: m.level,
+                    nickname: m.nickname,
+                    name: m.name),
+            ],
+            notes: const [],
+          );
+        }
+      } catch (_) {/* keep the flat parse */}
+    }
     if (data.team.any((m) => m.dexId != null && m.name == null)) {
       try {
         final index = await _pokedex.loadIndex();
@@ -1049,9 +1071,12 @@ class AppState extends ChangeNotifier {
       if (data.seenCount > p.dexSeen) p.dexSeen = data.seenCount;
     }
     if (badges && data.badgeCount != null) {
-      final n = data.badgeCount!.clamp(0, game.milestones.length);
+      // Mark the first N badge milestones (badges are earned in gym order).
+      final badgeMilestones =
+          game.milestones.where((m) => m.contains('Badge')).toList();
+      final n = data.badgeCount!.clamp(0, badgeMilestones.length);
       for (var i = 0; i < n; i++) {
-        p.milestones[game.milestones[i]] = true;
+        p.milestones[badgeMilestones[i]] = true;
       }
     }
     if (team && data.team.isNotEmpty) {

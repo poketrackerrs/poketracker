@@ -52,6 +52,27 @@ class SaveData {
     this.notes = const [],
   });
 
+  SaveData copyWith({
+    int? badgeCount,
+    List<SaveTeamMon>? team,
+    int? money,
+    List<String>? notes,
+  }) =>
+      SaveData(
+        generation: generation,
+        versionId: versionId,
+        caughtDex: caughtDex,
+        seenCount: seenCount,
+        badgeCount: badgeCount ?? this.badgeCount,
+        team: team ?? this.team,
+        trainerName: trainerName,
+        trainerId: trainerId,
+        secretId: secretId,
+        money: money ?? this.money,
+        playTime: playTime,
+        notes: notes ?? this.notes,
+      );
+
   int get caughtCount => caughtDex.length;
 
   String get playTimeText {

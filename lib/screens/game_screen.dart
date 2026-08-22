@@ -3709,6 +3709,8 @@ class _SaveSyncDialogState extends State<_SaveSyncDialog> {
                   style: muted),
             if (d.playTime != null)
               Text('Play time: ${d.playTimeText}', style: muted),
+            if (d.money != null)
+              Text('Money: ₽${d.money}', style: muted),
             const SizedBox(height: 8),
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
