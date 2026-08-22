@@ -413,6 +413,104 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     }
   }
 
+  // A rich party-list row: sprite, name, level, nature (with stat effect) and a
+  // held-item icon. Reflects any pending edit (shiny/nature/held item).
+  Widget _partyRow(Gen3PartyMon m) {
+    final ed = _partyEdits[m.slot];
+    final shiny = ed?.shiny ?? m.shiny;
+    final nature = ed?.nature ?? m.nature;
+    final held = ed?.heldItem ?? m.heldItem;
+    final up = natureUp(nature);
+    final sprite = 'https://raw.githubusercontent.com/PokeAPI/sprites/master'
+        '/sprites/pokemon${shiny ? '/shiny' : ''}/${m.dex}.png';
+    return InkWell(
+      onTap: () => _editMon(m),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: CachedNetworkImage(
+                imageUrl: sprite,
+                fit: BoxFit.contain,
+                errorWidget: (_, _, _) =>
+                    const Icon(Icons.catching_pokemon, color: Colors.grey),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(m.name ?? '#${m.dex}',
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.w700),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      if (shiny)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Icon(Icons.auto_awesome,
+                              size: 13, color: Colors.amber),
+                        ),
+                      if (ed != null)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 6),
+                          child: Text('edited',
+                              style: TextStyle(
+                                  fontSize: 10, color: Colors.blueAccent)),
+                        ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Text('Lv${m.level}  ·  ${kNatures[nature % 25]}',
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey)),
+                      if (up >= 0) ...[
+                        const SizedBox(width: 5),
+                        Text('+${kNatureStats[up]}',
+                            style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.green,
+                                fontWeight: FontWeight.w600)),
+                        Text(' −${kNatureStats[natureDown(nature)]}',
+                            style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (held != 0) ...[
+              if (!_gen4 && gen3ItemSprite(held) != null)
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CachedNetworkImage(
+                    imageUrl: gen3ItemSprite(held)!,
+                    fit: BoxFit.contain,
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
+                  ),
+                )
+              else
+                const Icon(Icons.circle, size: 8, color: Colors.blueGrey),
+            ],
+            const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _restoreBackup() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -609,39 +707,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                       const Divider(),
                       const Text('Party  ·  tap a Pokémon to edit',
                           style: TextStyle(fontWeight: FontWeight.w600)),
-                      ..._party!.map((m) {
-                        final ed = _partyEdits[m.slot];
-                        final shiny = ed?.shiny ?? m.shiny;
-                        return InkWell(
-                          onTap: () => _editMon(m),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              children: [
-                                Icon(shiny ? Icons.star : Icons.star_border,
-                                    size: 16,
-                                    color:
-                                        shiny ? Colors.amber : Colors.grey),
-                                const SizedBox(width: 6),
-                                Text('Lv${m.level}  ',
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600)),
-                                Expanded(
-                                  child: Text(
-                                    '${m.name ?? '#${m.dex}'}  ·  '
-                                    '${m.natureName}${ed != null ? '  · edited' : ''}',
-                                    style: const TextStyle(fontSize: 12),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const Icon(Icons.chevron_right,
-                                    size: 16, color: Colors.grey),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
+                      ..._party!.map((m) => _partyRow(m)),
                     ],
                     if (!_gen4) ...[
                       const Divider(),
@@ -1125,12 +1191,17 @@ class _MonEditorState extends State<_MonEditor> {
   late List<TextEditingController> _iv; // editable IVs (Gen 4 / non-strict)
   int? _legalPid;
   int _legalSeed = 0;
+  int? _wantAbility; // target ability slot for the strict-legal PID regen
   bool _rolling = false;
   late List<int> _moves;
   late int _speciesDex; // National dex; may change in the editor
   late int _friendship;
   late TextEditingController _otName;
   late int _ball, _metLevel, _otGender, _language, _markings, _pokerus;
+  late int _heldItem; // held item id (Gen 3 item ids; Gen 4 stored byte)
+  late int _abilityId; // Gen 4 stored ability id (Gen 3 ability is PID-derived)
+  // Species abilities (id + name + hidden), slot order, for the ability picker.
+  List<({int id, String name, bool hidden})> _abilities = const [];
   late List<TextEditingController> _contest;
   static const _contestLabels = ['Cool', 'Beauty', 'Cute', 'Smart', 'Tough', 'Sheen'];
   static const _markGlyphs = ['●', '■', '▲', '♥'];
@@ -1167,11 +1238,14 @@ class _MonEditorState extends State<_MonEditor> {
     _language = i?.language ?? mon.language;
     _markings = i?.markings ?? mon.markings;
     _pokerus = i?.pokerus ?? mon.pokerus;
+    _heldItem = i?.heldItem ?? mon.heldItem;
+    _abilityId = i?.ability ?? mon.ability;
     final contest = i?.contest ?? mon.contest;
     _contest = [for (final v in contest) TextEditingController(text: '$v')];
     _loadMoves();
     _loadSpecies();
     _loadTypes();
+    _loadAbilities();
     for (final id in _moves) {
       _ensureMoveInfo(id);
     }
@@ -1182,6 +1256,42 @@ class _MonEditorState extends State<_MonEditor> {
       final d = await context.read<AppState>().pokedexTypes(_speciesDex);
       if (mounted) setState(() => _types = d);
     } catch (_) {/* keep header neutral */}
+  }
+
+  // The mon's ability slot (0/1), from its PID — Gen 3 & 4 both derive the
+  // in-game ability slot from PID bit 0.
+  int get _abilitySlot => (_legalPid ?? widget.mon.pid) & 1;
+
+  Future<void> _loadAbilities() async {
+    final list =
+        await context.read<AppState>().pokedexAbilities(_speciesDex);
+    if (!mounted) return;
+    setState(() {
+      _abilities = list;
+      // Gen 4: if the stored ability id isn't one of this species' abilities
+      // (e.g. after a species change), snap it to the PID-slot's ability.
+      if (widget.generation == 4 && list.isNotEmpty &&
+          !list.any((a) => a.id == _abilityId)) {
+        final normal = [for (final a in list) if (!a.hidden) a];
+        if (normal.isNotEmpty) {
+          _abilityId = normal[_abilitySlot % normal.length].id;
+        }
+      }
+    });
+  }
+
+  // The ability name to display for the current mon.
+  String get _abilityName {
+    if (_abilities.isEmpty) return '…';
+    if (widget.generation == 4) {
+      for (final a in _abilities) {
+        if (a.id == _abilityId) return _pretty(a.name);
+      }
+    }
+    // Gen 3 (and Gen-4 fallback): PID slot picks among the non-hidden abilities.
+    final normal = [for (final a in _abilities) if (!a.hidden) a];
+    if (normal.isEmpty) return _pretty(_abilities.first.name);
+    return _pretty(normal[_abilitySlot % normal.length].name);
   }
 
   Future<void> _ensureMoveInfo(int id) async {
@@ -1218,7 +1328,10 @@ class _MonEditorState extends State<_MonEditor> {
       _nickname.text = name.toUpperCase();
       _legal = null;
       _moves = [0, 0, 0, 0];
+      _abilities = const [];
     });
+    _loadTypes();
+    _loadAbilities();
     final legal = await context
         .read<AppState>()
         .gen3Learnset(dex, gen: widget.generation);
@@ -1240,7 +1353,8 @@ class _MonEditorState extends State<_MonEditor> {
 
   // Regenerate a checker-legal (Method-1 correlated) PID + IVs for the current
   // nature + shininess. [reroll] advances the seed for a different IV spread.
-  Future<void> _regenLegal({bool reroll = false}) async {
+  Future<void> _regenLegal({bool reroll = false, int? abilitySlot}) async {
+    if (abilitySlot != null) _wantAbility = abilitySlot;
     setState(() => _rolling = true);
     final res = await context.read<AppState>().findLegalPidIv(
           dex: _speciesDex,
@@ -1249,6 +1363,7 @@ class _MonEditorState extends State<_MonEditor> {
           nature: _nature,
           shiny: _shiny,
           currentPid: widget.mon.pid,
+          wantAbility: _wantAbility,
           startSeed: reroll ? _legalSeed + 1 : 0,
         );
     if (!mounted) return;
@@ -1445,6 +1560,160 @@ class _MonEditorState extends State<_MonEditor> {
       ),
       onTap: onTap,
     );
+  }
+
+  // Ability row. Gen 4 stores the ability, so it's an editable dropdown of the
+  // species' abilities; Gen 3 derives it from the PID, so it's read-only.
+  Widget _abilityRow() {
+    final normal = [for (final a in _abilities) if (!a.hidden) a];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const SizedBox(
+              width: 90,
+              child: Text('Ability',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
+          if (widget.generation == 4 && normal.isNotEmpty)
+            Expanded(
+              child: DropdownButton<int>(
+                isExpanded: true,
+                isDense: true,
+                value: normal.any((a) => a.id == _abilityId)
+                    ? _abilityId
+                    : normal.first.id,
+                style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).textTheme.bodyLarge?.color),
+                items: [
+                  for (final a in normal)
+                    DropdownMenuItem(
+                        value: a.id, child: Text(_pretty(a.name))),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  final slot = normal.indexWhere((a) => a.id == v);
+                  setState(() => _abilityId = v);
+                  // Keep it legal: regenerate the PID so bit 0 selects this
+                  // ability's slot (the stored ability then matches the PID).
+                  if (widget.strictLegal && slot >= 0) {
+                    _regenLegal(abilitySlot: slot);
+                  }
+                },
+              ),
+            )
+          else
+            Expanded(
+              child: Text(_abilityName,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Held-item row. Editable (with sprites) for Gen 3; Gen 4 item ids differ, so
+  // it's shown read-only there until a Gen-4 item table exists.
+  Widget _heldItemRow() {
+    final gen3 = widget.generation == 3;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const SizedBox(
+              width: 90,
+              child: Text('Held item',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
+          if (gen3) _heldItemImage(_heldItem),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _heldItem == 0
+                  ? 'None'
+                  : gen3
+                      ? gen3ItemName(_heldItem)
+                      : 'Item #$_heldItem',
+              style: const TextStyle(fontSize: 14),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (gen3)
+            TextButton(
+                onPressed: _pickHeldItem, child: const Text('Change')),
+        ],
+      ),
+    );
+  }
+
+  Widget _heldItemImage(int id) {
+    const fallback =
+        Icon(Icons.remove_circle_outline, size: 20, color: Colors.grey);
+    if (id == 0) return const SizedBox(width: 28, child: Center(child: fallback));
+    final url = gen3ItemSprite(id);
+    if (url == null) {
+      return const SizedBox(
+          width: 28, child: Icon(Icons.category_outlined, size: 20));
+    }
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: CachedNetworkImage(
+          imageUrl: url,
+          fit: BoxFit.contain,
+          errorWidget: (_, _, _) =>
+              const Icon(Icons.category_outlined, size: 20)),
+    );
+  }
+
+  Future<void> _pickHeldItem() async {
+    final all = [(id: 0, name: 'None'), ...gen3ItemPicker()];
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final q = query.trim().toLowerCase();
+            final matches = q.isEmpty
+                ? all
+                : all.where((e) => e.name.toLowerCase().contains(q)).toList();
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.7,
+              builder: (_, scroll) => Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Search items…',
+                          isDense: true),
+                      onChanged: (v) => setSheet(() => query = v),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scroll,
+                      itemCount: matches.length,
+                      itemBuilder: (_, i) => ListTile(
+                        leading: _heldItemImage(matches[i].id),
+                        title: Text(matches[i].name),
+                        onTap: () => Navigator.pop(ctx, matches[i].id),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _heldItem = picked);
   }
 
   @override
@@ -1779,7 +2048,10 @@ class _MonEditorState extends State<_MonEditor> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            _abilityRow(),
+            _heldItemRow(),
+            const SizedBox(height: 4),
             Row(
               children: [
                 const SizedBox(
@@ -1938,6 +2210,11 @@ class _MonEditorState extends State<_MonEditor> {
         markings: _markings,
         pokerus: _pokerus,
         contest: _read(_contest, 255),
+        heldItem: _heldItem != widget.mon.heldItem ? _heldItem : null,
+        // Gen 4 only: Gen 3 ability is PID-derived (not stored).
+        ability: (widget.generation == 4 && _abilityId != widget.mon.ability)
+            ? _abilityId
+            : null,
       );
 
   // Dex-entry-style header: type-colored banner with artwork, name, level,

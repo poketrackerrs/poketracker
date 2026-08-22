@@ -240,6 +240,8 @@ class Gen3PartyMon {
   final int markings; // 4-bit marking flags
   final int pokerus; // Pokérus byte
   final List<int> contest; // cool, beauty, cute, smart, tough, sheen
+  final int heldItem; // held item id (Gen 3 item ids; Gen 4 item ids for gen 4)
+  final int ability; // in-game ability id (Gen 4 stored byte; 0 for Gen 3)
   final int? boxSlot; // global PC slot 0..419, or null for a party mon
   String? name; // species name, resolved from the Pokédex index
   Gen3PartyMon({
@@ -265,6 +267,8 @@ class Gen3PartyMon {
     this.markings = 0,
     this.pokerus = 0,
     this.contest = const [0, 0, 0, 0, 0, 0],
+    this.heldItem = 0,
+    this.ability = 0,
     this.boxSlot,
     this.name,
   });
@@ -292,6 +296,8 @@ class Gen3PartyMon {
         markings: markings,
         pokerus: pokerus,
         contest: contest,
+        heldItem: heldItem,
+        ability: ability,
         boxSlot: boxSlot,
         name: name,
       );
@@ -318,6 +324,8 @@ class PartyEdit {
   final int? markings; // 4-bit marking flags
   final int? pokerus; // Pokérus byte
   final List<int>? contest; // cool, beauty, cute, smart, tough, sheen
+  final int? heldItem; // held item id (0 = none)
+  final int? ability; // Gen 4 in-game ability id (Gen 3 ability is PID-derived)
   // Strict-legal: a Method-1 PID applied together with [ivs] (correlated), so a
   // checker accepts the PID/IV pair. When set, it supersedes nature/shiny.
   final int? legalPid;
@@ -340,6 +348,8 @@ class PartyEdit {
       this.markings,
       this.pokerus,
       this.contest,
+      this.heldItem,
+      this.ability,
       this.legalPid});
   bool get changesStats =>
       ivs != null ||

@@ -43,16 +43,33 @@ class SaveServer {
   String? get url => _ip == null ? null : 'http://$_ip:$port/?t=$token';
 
   Future<String?> lanIp() async {
+    // Score each IPv4 so we pick the real Wi-Fi LAN address, not a cellular
+    // (pdp_ip), VPN (utun), link-local (169.254) or special (192.0.0.x) one.
+    int score(String name, String ip) {
+      final wifi = name.startsWith('en'); // en0 = Wi-Fi on iOS
+      final private = ip.startsWith('192.168.') ||
+          ip.startsWith('10.') ||
+          RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(ip);
+      final bad = ip.startsWith('169.254.') || ip.startsWith('192.0.0.');
+      if (bad) return 0;
+      return (wifi ? 2 : 0) + (private ? 1 : 0);
+    }
+
+    String? best;
+    var bestScore = -1;
     for (final iface in await NetworkInterface.list(
         type: InternetAddressType.IPv4, includeLoopback: false)) {
       for (final a in iface.addresses) {
-        if (!a.isLoopback) {
-          _ip = a.address;
-          return _ip;
+        if (a.isLoopback) continue;
+        final s = score(iface.name, a.address);
+        if (s > bestScore) {
+          bestScore = s;
+          best = a.address;
         }
       }
     }
-    return null;
+    _ip = best;
+    return _ip;
   }
 
   Future<void> _handle(HttpRequest req, String root) async {

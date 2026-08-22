@@ -1,0 +1,1 @@
+Pokemon editor -- IV/EV editing. Tap any party Pokemon in the Gen 3 Edit save dialog to open its editor: toggle Shiny, set IVs (0-31, Max button), set EVs (0-255 each, 510 cap). Stats recompute from real base stats so they update in-game. Backup-first, verified on a real Emerald save. Next: move editing, then event Pokemon.

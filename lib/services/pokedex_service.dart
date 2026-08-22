@@ -369,6 +369,8 @@ class PokedexService {
         desc = desc.replaceAll('\n', ' ').replaceAll('\f', ' ').trim();
       } catch (_) {}
       abilities.add(AbilityInfo(
+        id: _idFromUrl(a['ability']['url'] as String) ?? 0,
+        slot: (a['slot'] as num?)?.toInt() ?? 1,
         name: aname,
         isHidden: a['is_hidden'] as bool? ?? false,
         description: desc,

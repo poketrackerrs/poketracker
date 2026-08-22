@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:\\\\Users\\\\darks\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--PokeTracker\" && ls -la */scratchpad/ 2>/dev/null | head -50; echo \"---ALL SCRATCHPADS---\"; find . -maxdepth 3 -name \"box_*.html\" -o -name \"render_box*.js\" -o -name \"*.gif\" 2>/dev/null | head -40)",
+      "Read(//c/Users/darks/.claude/projects/C--PokeTracker/**)",
+      "Bash(mkdir -p /c/dev/poketracker_boxflow)",
+      "Read(//c/Users/darks/AppData/Local/Temp/claude/C--PokeTracker/393046b7-f82f-41f4-a51d-edbb89c0e764/scratchpad/**)",
+      "Bash(cp -f box_scene.html box_flow.html scene_icon.html render_flow.js render_box.js render_box_seq.js render_static.js package.json package-lock.json /c/dev/poketracker_boxflow/)",
+      "Bash(cp -f face_front.png face_back.png face_left.png face_right.png lid_foldover_rgb.png lid_lip_rgb.png side_tab.png /c/dev/poketracker_boxflow/)",
+      "Bash(cp -f gb.glb gb_cart.glb sp_1024.glb /c/dev/poketracker_boxflow/)"
+    ]
+  }
+}

@@ -62,10 +62,14 @@ class MoveEntry {
 
 /// An ability with its hidden flag and effect description.
 class AbilityInfo {
+  final int id; // National ability id (matches the Gen 3/4 in-game ability index)
+  final int slot; // 1-based ability slot (3 = hidden)
   final String name;
   final bool isHidden;
   final String description;
   const AbilityInfo({
+    this.id = 0,
+    this.slot = 1,
     required this.name,
     required this.isHidden,
     this.description = '',

@@ -406,6 +406,8 @@ class AppState extends ChangeNotifier {
           language: m.language,
           markings: m.markings,
           contest: m.contest,
+          heldItem: m.heldItem,
+          ability: m.ability,
         ));
       }
       try {
@@ -492,6 +494,18 @@ class AppState extends ChangeNotifier {
     if (ed.language != null) m.setLanguage(ed.language!);
     if (ed.markings != null) m.setMarkings(ed.markings!);
     if (ed.contest != null) m.setContest(ed.contest!);
+    if (ed.heldItem != null) m.setHeldItem(ed.heldItem!);
+    // Ability: explicit choice wins; a species change resets it to the new
+    // species' ability for this PID's slot (keeps it legal).
+    if (ed.ability != null) {
+      m.setAbility(ed.ability!);
+    } else if (speciesChanged) {
+      final abs = await pokedexAbilities(dex);
+      final normal = [for (final a in abs) if (!a.hidden) a];
+      if (normal.isNotEmpty) {
+        m.setAbility(normal[(m.pid & 1) % normal.length].id);
+      }
+    }
     // Moves: explicit list wins; a species change resets to a legal moveset.
     var newMoves = ed.moves;
     if (newMoves == null && speciesChanged) {
@@ -575,6 +589,7 @@ class AppState extends ChangeNotifier {
           markings: m.markings,
           pokerus: m.pokerus,
           contest: m.contest,
+          heldItem: m.heldItem,
         ));
       }
       try {
@@ -628,6 +643,7 @@ class AppState extends ChangeNotifier {
           markings: m.markings,
           pokerus: m.pokerus,
           contest: m.contest,
+          heldItem: m.heldItem,
         ));
       }
       try {
@@ -746,6 +762,7 @@ class AppState extends ChangeNotifier {
     required int nature,
     required bool shiny,
     required int currentPid,
+    int? wantAbility,
     int startSeed = 0,
   }) async {
     var genderRate = -1;
@@ -761,7 +778,9 @@ class AppState extends ChangeNotifier {
       shiny: shiny,
       genderRate: genderRate,
       wantGender: wantGender,
-      wantAbility: currentPid & 1,
+      // Ability slot lives in PID bit 0 — target the requested slot so the
+      // stored ability stays consistent with the PID (checker-legal).
+      wantAbility: wantAbility ?? (currentPid & 1),
       startSeed: startSeed,
     );
   }
@@ -774,6 +793,18 @@ class AppState extends ChangeNotifier {
   Future<List<String>> pokedexTypes(int dex) async {
     try {
       return (await _pokedex.fetchDetail(dex)).typesForGeneration(3);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// A species' abilities (id + name + hidden flag) in slot order, for the
+  /// editor's ability picker. Ability ids match the in-game (Gen 3/4) index.
+  Future<List<({int id, String name, bool hidden})>> pokedexAbilities(
+      int dex) async {
+    try {
+      final a = (await _pokedex.fetchDetail(dex)).abilities;
+      return [for (final x in a) (id: x.id, name: x.name, hidden: x.isHidden)];
     } catch (_) {
       return const [];
     }
@@ -962,6 +993,7 @@ class AppState extends ChangeNotifier {
       if (ed.markings != null) m.setMarkings(ed.markings!);
       if (ed.pokerus != null) m.setPokerus(ed.pokerus!);
       if (ed.contest != null) m.setContest(ed.contest!);
+      if (ed.heldItem != null) m.setHeldItem(ed.heldItem!);
       // Moves: an explicit list wins; a species change without one resets to a
       // legal moveset (the old moves are illegal on the new species).
       var newMoves = ed.moves;
