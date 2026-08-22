@@ -14,6 +14,7 @@ import '../data/gen3_events.dart';
 import '../data/gen3_items.dart';
 import '../data/type_colors.dart';
 import '../services/gen3_save_editor.dart';
+import '../services/gen4_save_editor.dart';
 import '../services/pk3.dart';
 import '../state/app_state.dart';
 import 'cartridge_viewer.dart';
@@ -38,7 +39,7 @@ class GameScreen extends StatelessWidget {
           foregroundColor: Colors.white,
           title: Text(game.title),
           actions: [
-            if (game.generation == 3)
+            if (game.generation == 3 || game.generation == 4)
               IconButton(
                 tooltip: 'Edit save file',
                 icon: const Icon(Icons.tune),
@@ -294,8 +295,30 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     _load();
   }
 
+  bool get _gen4 => widget.game.generation == 4;
+
   Future<void> _load() async {
     final state = context.read<AppState>();
+    if (_gen4) {
+      final data = await state.readGen4Save(widget.game);
+      final party = await state.readGen4Party(widget.game);
+      if (!mounted) return;
+      setState(() {
+        _party = party;
+        _loading = false;
+        if (data == null) {
+          _error = 'No editable Gen 4 save found. Play and save in-game once.';
+        } else {
+          _money.text = '${data.money}';
+          _otName.text = data.trainer;
+          _tid.text = '${data.tid}';
+          _sid.text = '${data.sid}';
+          _gender = data.gender;
+          _trainerLoaded = true;
+        }
+      });
+      return;
+    }
     final data = await state.readGen3Save(widget.game);
     final party = await state.readGen3Party(widget.game);
     final trainer = await state.readGen3Trainer(widget.game);
@@ -326,6 +349,27 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   Future<void> _apply() async {
     setState(() => _busy = true);
     final money = int.tryParse(_money.text.trim());
+    if (_gen4) {
+      final msg = await context.read<AppState>().writeGen4Save(
+            widget.game,
+            money: money,
+            trainer: _trainerLoaded
+                ? Gen4Trainer(
+                    name: _otName.text.trim(),
+                    tid: int.tryParse(_tid.text.trim()) ?? 0,
+                    sid: int.tryParse(_sid.text.trim()) ?? 0,
+                    money: money ?? 0,
+                    gender: _gender,
+                  )
+                : null,
+            partyEdits: _partyEdits,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+      return;
+    }
     final msg = await context.read<AppState>().writeGen3Save(
           widget.game,
           money: money,
@@ -357,7 +401,8 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   Future<void> _editMon(Gen3PartyMon m) async {
     final result = await Navigator.of(context).push<PartyEdit>(
       MaterialPageRoute(
-          builder: (_) => _MonEditor(mon: m, initial: _partyEdits[m.slot])),
+          builder: (_) => _MonEditor(
+              mon: m, initial: _partyEdits[m.slot], strictLegal: !_gen4)),
     );
     if (result != null && mounted) {
       setState(() => _partyEdits[m.slot] = result);
@@ -505,52 +550,57 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                                   isDense: true, labelText: 'Secret ID'),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          SizedBox(
-                            width: 64,
-                            child: TextField(
-                              controller: _hours,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                  isDense: true, labelText: 'Hours'),
+                          if (!_gen4) ...[
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: 64,
+                              child: TextField(
+                                controller: _hours,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                    isDense: true, labelText: 'Hours'),
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ],
                     const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Complete Pokédex (caught)'),
-                      subtitle: Text('Currently caught: ${_caught ?? '—'} / 386'),
-                      value: _completeDex,
-                      onChanged: (v) => setState(() => _completeDex = v),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Complete Pokédex (seen)'),
-                      subtitle: Text('Currently seen: ${_seen ?? '—'} / 386'),
-                      value: _completeSeenDex || _completeDex,
-                      onChanged: _completeDex
-                          ? null // caught implies seen
-                          : (v) => setState(() => _completeSeenDex = v),
-                    ),
-                    const Divider(),
-                    const Text('Event tickets',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    ...Gen3SaveEditor.ticketsFor(widget.game.version).map(
-                      (t) => CheckboxListTile(
+                    if (!_gen4) ...[
+                      SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(t.label),
-                        subtitle: Text(t.unlocks,
-                            style: const TextStyle(fontSize: 11)),
-                        value: _tickets.contains(t),
-                        onChanged: (v) => setState(() =>
-                            v == true ? _tickets.add(t) : _tickets.remove(t)),
+                        title: const Text('Complete Pokédex (caught)'),
+                        subtitle:
+                            Text('Currently caught: ${_caught ?? '—'} / 386'),
+                        value: _completeDex,
+                        onChanged: (v) => setState(() => _completeDex = v),
                       ),
-                    ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Complete Pokédex (seen)'),
+                        subtitle: Text('Currently seen: ${_seen ?? '—'} / 386'),
+                        value: _completeSeenDex || _completeDex,
+                        onChanged: _completeDex
+                            ? null // caught implies seen
+                            : (v) => setState(() => _completeSeenDex = v),
+                      ),
+                      const Divider(),
+                      const Text('Event tickets',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      ...Gen3SaveEditor.ticketsFor(widget.game.version).map(
+                        (t) => CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(t.label),
+                          subtitle: Text(t.unlocks,
+                              style: const TextStyle(fontSize: 11)),
+                          value: _tickets.contains(t),
+                          onChanged: (v) => setState(() =>
+                              v == true ? _tickets.add(t) : _tickets.remove(t)),
+                        ),
+                      ),
+                    ],
                     if (_party != null && _party!.isNotEmpty) ...[
                       const Divider(),
                       const Text('Party  ·  tap a Pokémon to edit',
@@ -589,58 +639,62 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                         );
                       }),
                     ],
-                    const Divider(),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.inventory_2_outlined),
-                      title: const Text('PC Boxes'),
-                      subtitle: Text(_boxEdits.isEmpty
-                          ? 'Browse & edit stored Pokémon'
-                          : '${_boxEdits.length} edited'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        await Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => _BoxBrowser(
-                              game: widget.game, edits: _boxEdits),
-                        ));
-                        if (mounted) setState(() {});
-                      },
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.backpack_outlined),
-                      title: const Text('Bag'),
-                      subtitle: Text(_bagEdits.isEmpty
-                          ? 'Items, balls, TMs, berries'
-                          : '${_bagEdits.length} pocket(s) edited'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        await Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => _BagEditor(
-                              game: widget.game, edits: _bagEdits),
-                        ));
-                        if (mounted) setState(() {});
-                      },
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading:
-                          const Icon(Icons.auto_awesome, color: Colors.amber),
-                      title: const Text('Event Pokémon'),
-                      subtitle: Text(_injectLabels.isEmpty
-                          ? 'Add Mew, Celebi, Jirachi, Deoxys…'
-                          : _injectLabels.join(', ')),
-                      trailing: const Icon(Icons.add),
-                      onTap: _busy ? null : _addEvent,
-                    ),
-                    const Divider(),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.restore, color: Colors.orange),
-                      title: const Text('Restore last backup'),
-                      subtitle: const Text('Undo the last edit if a save broke'),
-                      onTap: _busy ? null : _restoreBackup,
-                    ),
+                    if (!_gen4) ...[
+                      const Divider(),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.inventory_2_outlined),
+                        title: const Text('PC Boxes'),
+                        subtitle: Text(_boxEdits.isEmpty
+                            ? 'Browse & edit stored Pokémon'
+                            : '${_boxEdits.length} edited'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => _BoxBrowser(
+                                game: widget.game, edits: _boxEdits),
+                          ));
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.backpack_outlined),
+                        title: const Text('Bag'),
+                        subtitle: Text(_bagEdits.isEmpty
+                            ? 'Items, balls, TMs, berries'
+                            : '${_bagEdits.length} pocket(s) edited'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => _BagEditor(
+                                game: widget.game, edits: _bagEdits),
+                          ));
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.auto_awesome,
+                            color: Colors.amber),
+                        title: const Text('Event Pokémon'),
+                        subtitle: Text(_injectLabels.isEmpty
+                            ? 'Add Mew, Celebi, Jirachi, Deoxys…'
+                            : _injectLabels.join(', ')),
+                        trailing: const Icon(Icons.add),
+                        onTap: _busy ? null : _addEvent,
+                      ),
+                      const Divider(),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading:
+                            const Icon(Icons.restore, color: Colors.orange),
+                        title: const Text('Restore last backup'),
+                        subtitle:
+                            const Text('Undo the last edit if a save broke'),
+                        onTap: _busy ? null : _restoreBackup,
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     const Text(
                       'The original save is backed up first. Reload it in your '
@@ -1038,7 +1092,12 @@ class _BagEditorState extends State<_BagEditor> {
 class _MonEditor extends StatefulWidget {
   final Gen3PartyMon mon;
   final PartyEdit? initial;
-  const _MonEditor({required this.mon, this.initial});
+  // Gen 3 uses strict-legal (correlated Method-1 PID+IV, read-only IVs). Gen 4
+  // (strictLegal:false) edits IVs freely and regenerates the PID directly for
+  // nature/shiny, and hides the Gen-3-only species picker.
+  final bool strictLegal;
+  const _MonEditor(
+      {required this.mon, this.initial, this.strictLegal = true});
   @override
   State<_MonEditor> createState() => _MonEditorState();
 }
@@ -1054,6 +1113,7 @@ class _MonEditorState extends State<_MonEditor> {
   // shiny changes and the re-roll button regenerate them. _legalPid non-null
   // means "apply this correlated PID + these IVs".
   late List<int> _ivs;
+  late List<TextEditingController> _iv; // editable IVs (Gen 4 / non-strict)
   int? _legalPid;
   int _legalSeed = 0;
   bool _rolling = false;
@@ -1085,6 +1145,7 @@ class _MonEditorState extends State<_MonEditor> {
     _nickname = TextEditingController(
         text: i?.nickname ?? widget.mon.nickname);
     _ivs = List<int>.from(i?.ivs ?? widget.mon.ivs);
+    _iv = [for (final v in _ivs) TextEditingController(text: '$v')];
     _legalPid = i?.legalPid;
     final evs = i?.evs ?? widget.mon.evs;
     _moves = List<int>.from(i?.moves ?? widget.mon.moves);
@@ -1350,7 +1411,7 @@ class _MonEditorState extends State<_MonEditor> {
 
   @override
   void dispose() {
-    for (final c in [_level, _nickname, _otName, ..._ev, ..._contest]) {
+    for (final c in [_level, _nickname, _otName, ..._iv, ..._ev, ..._contest]) {
       c.dispose();
     }
     super.dispose();
@@ -1553,40 +1614,42 @@ class _MonEditorState extends State<_MonEditor> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-            // Species picker — changing it re-derives stats, legal moves,
-            // growth-rate EXP, and the default nickname (kept legal).
-            Row(
-              children: [
-                const Text('Species  ',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                Expanded(
-                  child: Text(_speciesName,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                      overflow: TextOverflow.ellipsis),
-                ),
-              ],
-            ),
-            Autocomplete<({int id, String name})>(
-              optionsBuilder: (v) {
-                final q = v.text.trim().toLowerCase();
-                if (q.isEmpty) return const Iterable.empty();
-                return _allSpecies
-                    .where((s) => s.name.toLowerCase().contains(q))
-                    .take(40);
-              },
-              displayStringForOption: (o) => _pretty(o.name),
-              onSelected: (o) => _changeSpecies(o.id, o.name),
-              fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
-                controller: ctrl,
-                focusNode: focus,
-                style: const TextStyle(fontSize: 13),
-                decoration: const InputDecoration(
-                    isDense: true,
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    hintText: 'Change species…'),
+            // Species picker (Gen 3 only for now) — changing it re-derives
+            // stats, legal moves, growth-rate EXP, and the default nickname.
+            if (widget.strictLegal) ...[
+              Row(
+                children: [
+                  const Text('Species  ',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  Expanded(
+                    child: Text(_speciesName,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 8),
+              Autocomplete<({int id, String name})>(
+                optionsBuilder: (v) {
+                  final q = v.text.trim().toLowerCase();
+                  if (q.isEmpty) return const Iterable.empty();
+                  return _allSpecies
+                      .where((s) => s.name.toLowerCase().contains(q))
+                      .take(40);
+                },
+                displayStringForOption: (o) => _pretty(o.name),
+                onSelected: (o) => _changeSpecies(o.id, o.name),
+                fieldViewBuilder: (ctx, ctrl, focus, onSubmit) => TextField(
+                  controller: ctrl,
+                  focusNode: focus,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(
+                      isDense: true,
+                      prefixIcon: Icon(Icons.search, size: 18),
+                      hintText: 'Change species…'),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             Row(
               children: [
                 const Text('Nickname  ',
@@ -1608,7 +1671,7 @@ class _MonEditorState extends State<_MonEditor> {
               value: _shiny,
               onChanged: (v) {
                 setState(() => _shiny = v);
-                _regenLegal();
+                if (widget.strictLegal) _regenLegal();
               },
             ),
             const SizedBox(height: 8),
@@ -1652,7 +1715,7 @@ class _MonEditorState extends State<_MonEditor> {
                     ],
                     onChanged: (v) {
                       setState(() => _nature = v ?? _nature);
-                      _regenLegal();
+                      if (widget.strictLegal) _regenLegal();
                     },
                   ),
                 ),
@@ -1680,56 +1743,79 @@ class _MonEditorState extends State<_MonEditor> {
               ],
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('IVs', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(width: 6),
-                Text('total $_ivTotal',
-                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                const Spacer(),
-                if (_rolling)
-                  const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                else
-                  TextButton.icon(
-                    onPressed: () => _regenLegal(reroll: true),
-                    icon: const Icon(Icons.casino, size: 16),
-                    label: const Text('Re-roll'),
-                  ),
-              ],
-            ),
-            // Read-only: IVs are RNG-legal (correlated with the PID). Re-roll to
-            // hunt a better spread; changing nature/shiny re-rolls automatically.
-            Row(
-              children: [
-                for (var k = 0; k < 6; k++)
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(_labels[k], style: const TextStyle(fontSize: 9)),
-                        Text('${_ivs[k]}',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _ivs[k] == 31
-                                    ? Colors.green
-                                    : Theme.of(context).textTheme.bodyLarge?.color)),
-                      ],
+            if (widget.strictLegal) ...[
+              Row(
+                children: [
+                  const Text('IVs',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 6),
+                  Text('total $_ivTotal',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  const Spacer(),
+                  if (_rolling)
+                    const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                  else
+                    TextButton.icon(
+                      onPressed: () => _regenLegal(reroll: true),
+                      icon: const Icon(Icons.casino, size: 16),
+                      label: const Text('Re-roll'),
                     ),
-                  ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                _legalPid == null
-                    ? 'IVs are the Pokémon\'s current legal values.'
-                    : 'Legal PID + IVs generated (checker-safe).',
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ],
               ),
-            ),
+              // Read-only: IVs are RNG-legal (correlated with the PID).
+              Row(
+                children: [
+                  for (var k = 0; k < 6; k++)
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(_labels[k], style: const TextStyle(fontSize: 9)),
+                          Text('${_ivs[k]}',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: _ivs[k] == 31
+                                      ? Colors.green
+                                      : Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.color)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  _legalPid == null
+                      ? 'IVs are the Pokémon\'s current legal values.'
+                      : 'Legal PID + IVs generated (checker-safe).',
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              ),
+            ] else ...[
+              // Gen 4: free IV editing.
+              Row(
+                children: [
+                  const Text('IVs',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      for (final c in _iv) {
+                        c.text = '31';
+                      }
+                    }),
+                    child: const Text('Max'),
+                  ),
+                ],
+              ),
+              _statRow('', _iv, 31),
+            ],
             const SizedBox(height: 16),
             Row(
               children: [
@@ -1774,13 +1860,17 @@ class _MonEditorState extends State<_MonEditor> {
         nature: _nature,
         level: (int.tryParse(_level.text.trim()) ?? widget.mon.level)
             .clamp(1, 100),
-        // Strict-legal: when nature/shiny changed or the user re-rolled, ship
-        // the correlated PID + IVs; otherwise leave the existing PID/IVs alone.
-        legalPid: _legalPid,
-        ivs: _legalPid != null ? _ivs : null,
+        // Gen 3 strict-legal ships a correlated PID+IVs (or nothing if untouched);
+        // Gen 4 ships freely-edited IVs + nature/shiny directly.
+        legalPid: widget.strictLegal ? _legalPid : null,
+        ivs: widget.strictLegal
+            ? (_legalPid != null ? _ivs : null)
+            : _read(_iv, 31),
         evs: _read(_ev, 255),
         moves: _moves,
-        species: _speciesDex == widget.mon.dex ? null : _speciesDex,
+        species: widget.strictLegal && _speciesDex != widget.mon.dex
+            ? _speciesDex
+            : null,
         nickname:
             _nickname.text.trim().isEmpty ? null : _nickname.text.trim(),
         friendship: _friendship,
