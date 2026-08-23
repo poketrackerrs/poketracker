@@ -248,6 +248,25 @@ class PokedexService {
     }
   }
 
+  /// The base (first-stage) species of an evolution line — e.g. Pidgey for
+  /// Pidgeot — by walking `evolves_from_species`. Cached per hop.
+  Future<int> baseSpeciesOf(int dex) async {
+    var cur = dex;
+    for (var i = 0; i < 4; i++) {
+      try {
+        final sp = await _cachedGet('$_base/pokemon-species/$cur');
+        final from = sp['evolves_from_species'];
+        if (from == null) break;
+        final id = _idFromUrl(from['url'] as String);
+        if (id == null || id == cur) break;
+        cur = id;
+      } catch (_) {
+        break;
+      }
+    }
+    return cur;
+  }
+
   /// A species' EXP growth-rate name (for computing level<->exp). Cached.
   Future<String> growthRate(int dex) async {
     try {

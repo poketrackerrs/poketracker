@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
 import '../data/gen3_events.dart';
 import '../data/frlg_achievements.dart';
+import '../data/gen3_metloc.dart';
 import '../models/achievement.dart';
 import '../models/game.dart';
 import '../models/progress.dart';
@@ -1119,6 +1120,30 @@ class AppState extends ChangeNotifier {
     try {
       genderRate = (await _pokedex.fetchDetail(dex)).genderRate;
     } catch (_) {}
+    // Met location: use the evolution line's BASE species' wild encounter spot
+    // (so an evolved mon reads as "caught as the base here, then evolved").
+    // Falls back to the species' own encounters, then a "fateful" special value.
+    int metLocation = kMetlocFateful;
+    int metLevel = level;
+    try {
+      final baseDex = await _pokedex.baseSpeciesOf(dex);
+      var enc = await _pokedex.encountersIn(baseDex, game.version);
+      if (enc.isEmpty && baseDex != dex) {
+        enc = await _pokedex.encountersIn(dex, game.version);
+      }
+      if (enc.isNotEmpty) {
+        // Prefer the lowest-level encounter (where you'd first catch the base).
+        enc.sort((a, b) => a.minLevel.compareTo(b.minLevel));
+        for (final e in enc) {
+          final loc = gen3MapsecForArea(e.area);
+          if (loc != null) {
+            metLocation = loc;
+            metLevel = e.minLevel.clamp(2, level); // caught level ≤ current
+            break;
+          }
+        }
+      }
+    } catch (_) {/* keep the fateful fallback */}
     // Deterministic-but-varied nature; PID+IVs correlated so a checker accepts.
     final nature = (dex * 31 + level * 7) % 25;
     final legal = gen3Method1Find(
@@ -1154,8 +1179,8 @@ class AppState extends ChangeNotifier {
       otName: trainer.name,
       nature: nature,
       ball: 4,
-      metLocation: 0,
-      metLevel: level,
+      metLocation: metLocation,
+      metLevel: metLevel,
       otGender: trainer.gender,
       gameOfOrigin: origin,
       party: false, // box mon (80-byte block)

@@ -1,0 +1,83 @@
+// Gen 3 met-location (MAPSEC) resolution: maps a PokéAPI encounter location-area
+// name (e.g. "kanto-route-1-area") to the game's internal met-location index,
+// so injected Pokémon record a sensible catch location. Data from pokefirered;
+// Hoenn indices (0–87) match RSE/Emerald, Kanto/Sevii (88+) match FR/LG.
+
+// Special met-location values (shared value space with MAPSECs).
+const int kMetlocInGameTrade = 0xFE;
+const int kMetlocFateful = 0xFF;
+
+const Map<String, int> kGen3Mapsec = {
+  'LITTLEROOT_TOWN': 0, 'OLDALE_TOWN': 1, 'DEWFORD_TOWN': 2, 'LAVARIDGE_TOWN': 3,
+  'FALLARBOR_TOWN': 4, 'VERDANTURF_TOWN': 5, 'PACIFIDLOG_TOWN': 6, 'PETALBURG_CITY': 7,
+  'SLATEPORT_CITY': 8, 'MAUVILLE_CITY': 9, 'RUSTBORO_CITY': 10, 'FORTREE_CITY': 11,
+  'LILYCOVE_CITY': 12, 'MOSSDEEP_CITY': 13, 'SOOTOPOLIS_CITY': 14, 'EVER_GRANDE_CITY': 15,
+  'ROUTE_101': 16, 'ROUTE_102': 17, 'ROUTE_103': 18, 'ROUTE_104': 19, 'ROUTE_105': 20,
+  'ROUTE_106': 21, 'ROUTE_107': 22, 'ROUTE_108': 23, 'ROUTE_109': 24, 'ROUTE_110': 25,
+  'ROUTE_111': 26, 'ROUTE_112': 27, 'ROUTE_113': 28, 'ROUTE_114': 29, 'ROUTE_115': 30,
+  'ROUTE_116': 31, 'ROUTE_117': 32, 'ROUTE_118': 33, 'ROUTE_119': 34, 'ROUTE_120': 35,
+  'ROUTE_121': 36, 'ROUTE_122': 37, 'ROUTE_123': 38, 'ROUTE_124': 39, 'ROUTE_125': 40,
+  'ROUTE_126': 41, 'ROUTE_127': 42, 'ROUTE_128': 43, 'ROUTE_129': 44, 'ROUTE_130': 45,
+  'ROUTE_131': 46, 'ROUTE_132': 47, 'ROUTE_133': 48, 'ROUTE_134': 49, 'UNDERWATER_124': 50,
+  'UNDERWATER_125': 51, 'UNDERWATER_126': 52, 'UNDERWATER_127': 53,
+  'UNDERWATER_SOOTOPOLIS': 54, 'GRANITE_CAVE': 55, 'MT_CHIMNEY': 56, 'SAFARI_ZONE': 57,
+  'BATTLE_FRONTIER': 58, 'PETALBURG_WOODS': 59, 'RUSTURF_TUNNEL': 60, 'ABANDONED_SHIP': 61,
+  'NEW_MAUVILLE': 62, 'METEOR_FALLS': 63, 'METEOR_FALLS2': 64, 'MT_PYRE': 65,
+  'AQUA_HIDEOUT_OLD': 66, 'SHOAL_CAVE': 67, 'SEAFLOOR_CAVERN': 68, 'UNDERWATER_128': 69,
+  'VICTORY_ROAD': 70, 'MIRAGE_ISLAND': 71, 'CAVE_OF_ORIGIN': 72, 'SOUTHERN_ISLAND': 73,
+  'FIERY_PATH': 74, 'FIERY_PATH2': 75, 'JAGGED_PASS': 76, 'JAGGED_PASS2': 77,
+  'SEALED_CHAMBER': 78, 'UNDERWATER_SEALED_CHAMBER': 79, 'SCORCHED_SLAB': 80,
+  'ISLAND_CAVE': 81, 'DESERT_RUINS': 82, 'ANCIENT_TOMB': 83, 'INSIDE_OF_TRUCK': 84,
+  'SKY_PILLAR': 85, 'SECRET_BASE': 86, 'DYNAMIC': 87, 'PALLET_TOWN': 88, 'VIRIDIAN_CITY': 89,
+  'PEWTER_CITY': 90, 'CERULEAN_CITY': 91, 'LAVENDER_TOWN': 92, 'VERMILION_CITY': 93,
+  'CELADON_CITY': 94, 'FUCHSIA_CITY': 95, 'CINNABAR_ISLAND': 96, 'INDIGO_PLATEAU': 97,
+  'SAFFRON_CITY': 98, 'ROUTE_4_POKECENTER': 99, 'ROUTE_10_POKECENTER': 100, 'ROUTE_1': 101,
+  'ROUTE_2': 102, 'ROUTE_3': 103, 'ROUTE_4': 104, 'ROUTE_5': 105, 'ROUTE_6': 106,
+  'ROUTE_7': 107, 'ROUTE_8': 108, 'ROUTE_9': 109, 'ROUTE_10': 110, 'ROUTE_11': 111,
+  'ROUTE_12': 112, 'ROUTE_13': 113, 'ROUTE_14': 114, 'ROUTE_15': 115, 'ROUTE_16': 116,
+  'ROUTE_17': 117, 'ROUTE_18': 118, 'ROUTE_19': 119, 'ROUTE_20': 120, 'ROUTE_21': 121,
+  'ROUTE_22': 122, 'ROUTE_23': 123, 'ROUTE_24': 124, 'ROUTE_25': 125, 'VIRIDIAN_FOREST': 126,
+  'MT_MOON': 127, 'S_S_ANNE': 128, 'UNDERGROUND_PATH': 129, 'UNDERGROUND_PATH_2': 130,
+  'DIGLETTS_CAVE': 131, 'KANTO_VICTORY_ROAD': 132, 'ROCKET_HIDEOUT': 133, 'SILPH_CO': 134,
+  'POKEMON_MANSION': 135, 'KANTO_SAFARI_ZONE': 136, 'POKEMON_LEAGUE': 137, 'ROCK_TUNNEL': 138,
+  'SEAFOAM_ISLANDS': 139, 'POKEMON_TOWER': 140, 'CERULEAN_CAVE': 141, 'POWER_PLANT': 142,
+  'ONE_ISLAND': 143, 'TWO_ISLAND': 144, 'THREE_ISLAND': 145, 'FOUR_ISLAND': 146,
+  'FIVE_ISLAND': 147, 'SEVEN_ISLAND': 148, 'SIX_ISLAND': 149, 'KINDLE_ROAD': 150,
+  'TREASURE_BEACH': 151, 'CAPE_BRINK': 152, 'BOND_BRIDGE': 153, 'THREE_ISLE_PORT': 154,
+  'SEVII_ISLE_6': 155, 'SEVII_ISLE_7': 156, 'SEVII_ISLE_8': 157, 'SEVII_ISLE_9': 158,
+  'RESORT_GORGEOUS': 159, 'WATER_LABYRINTH': 160, 'FIVE_ISLE_MEADOW': 161,
+  'MEMORIAL_PILLAR': 162, 'OUTCAST_ISLAND': 163, 'GREEN_PATH': 164, 'WATER_PATH': 165,
+  'RUIN_VALLEY': 166, 'TRAINER_TOWER': 167, 'CANYON_ENTRANCE': 168, 'SEVAULT_CANYON': 169,
+  'TANOBY_RUINS': 170, 'SEVII_ISLE_22': 171, 'SEVII_ISLE_23': 172, 'SEVII_ISLE_24': 173,
+  'NAVEL_ROCK': 174, 'MT_EMBER': 175, 'BERRY_FOREST': 176, 'ICEFALL_CAVE': 177,
+  'ROCKET_WAREHOUSE': 178, 'TRAINER_TOWER_2': 179, 'DOTTED_HOLE': 180, 'LOST_CAVE': 181,
+  'PATTERN_BUSH': 182, 'ALTERING_CAVE': 183, 'TANOBY_CHAMBERS': 184, 'THREE_ISLE_PATH': 185,
+  'TANOBY_KEY': 186, 'BIRTH_ISLAND': 187, 'MONEAN_CHAMBER': 188, 'LIPTOO_CHAMBER': 189,
+  'WEEPTH_CHAMBER': 190, 'DILFORD_CHAMBER': 191, 'SCUFIB_CHAMBER': 192, 'RIXY_CHAMBER': 193,
+  'VIAPOIS_CHAMBER': 194, 'EMBER_SPA': 195, 'SPECIAL_AREA': 196,
+};
+
+/// Resolve a PokéAPI location-area name to a Gen 3 met-location index, or null.
+/// Tries the normalized name, stripping floor/sub-area suffixes, and also with a
+/// leading "KANTO_" removed (routes are ROUTE_n, not KANTO_ROUTE_n).
+int? gen3MapsecForArea(String area) {
+  var s = area.toUpperCase().replaceAll('-', '_');
+  if (s.endsWith('_AREA')) s = s.substring(0, s.length - 5);
+  // Common name mismatches between PokéAPI and the decomp.
+  const aliases = {
+    'SS_ANNE': 'S_S_ANNE',
+    'SEROUTE': 'ROUTE',
+  };
+  for (var base in [s, s.startsWith('KANTO_') ? s.substring(6) : s]) {
+    base = aliases[base] ?? base;
+    var k = base;
+    while (true) {
+      final v = kGen3Mapsec[k];
+      if (v != null) return v;
+      final i = k.lastIndexOf('_');
+      if (i < 0) break;
+      k = k.substring(0, i);
+    }
+  }
+  return null;
+}
