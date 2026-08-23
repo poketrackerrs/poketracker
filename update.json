@@ -1,6 +1,6 @@
 {
-  "version": "1.0.68",
-  "notes": "Move saves between devices over Wi-Fi. Settings → 'Transfer saves (Wi-Fi)': on the device you want the save ON, open Receive (it shows an IP + code); on the device that HAS the save, open Send, enter that IP + code, pick the game, and send. Both devices must be on the same Wi-Fi. The receiving device backs up its existing save first.",
+  "version": "1.0.69",
+  "notes": "Save transfer is easier now: fixed the false 'not on Wi-Fi' error when starting Receive, and Send now DISCOVERS devices — tap 'Find devices' and pick the one you want, no typing IPs or codes (manual entry is still there as a fallback). The receiving device must have its Receive tab open on the same Wi-Fi.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

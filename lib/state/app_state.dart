@@ -980,6 +980,44 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Scans the local /24 subnet for other devices in Receive mode (they answer
+  /// /ping). Returns each one's name, IP and pairing token — so the UI can list
+  /// them and send with one tap, no typing.
+  Future<List<({String ip, String name, String token})>>
+      discoverReceivers() async {
+    final myIp = await saveServer.lanIp();
+    if (myIp == null) return const [];
+    final base = myIp.substring(0, myIp.lastIndexOf('.') + 1);
+    final found = <({String ip, String name, String token})>[];
+    Future<void> probe(String ip) async {
+      try {
+        final client = HttpClient()
+          ..connectionTimeout = const Duration(milliseconds: 600);
+        final req = await client
+            .getUrl(Uri.parse('http://$ip:${SaveServer.port}/ping'))
+            .timeout(const Duration(milliseconds: 700));
+        final resp = await req.close().timeout(const Duration(seconds: 1));
+        if (resp.statusCode == 200) {
+          final j = jsonDecode(await resp.transform(utf8.decoder).join());
+          if (j['app'] == 'poketracker') {
+            found.add((
+              ip: ip,
+              name: (j['name'] as String?) ?? ip,
+              token: j['token'] as String,
+            ));
+          }
+        }
+        client.close();
+      } catch (_) {/* host not a receiver / unreachable */}
+    }
+
+    await Future.wait([
+      for (var i = 1; i <= 254; i++)
+        if ('$base$i' != myIp) probe('$base$i'),
+    ]);
+    return found;
+  }
+
   /// Sends [game]'s save to a peer running the receiver at [host] with [token].
   Future<String> sendSaveToPeer(Game game, String host, String token) async {
     final file = await _findSaveFile(game.id);

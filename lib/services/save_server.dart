@@ -20,6 +20,15 @@ class SaveServer {
 
   bool get running => _server != null;
 
+  /// This device's name, shown in the other device's discovery list.
+  String name = () {
+    try {
+      return Platform.localHostname;
+    } catch (_) {
+      return 'PokeTracker device';
+    }
+  }();
+
   /// Set to accept incoming saves (device→device transfer). Given the game id,
   /// suggested filename and bytes, it should back up + write and return a short
   /// status string. When null, /put is refused.
@@ -30,6 +39,7 @@ class SaveServer {
   Future<String?> start() async {
     if (_server != null) return url;
     try {
+      await lanIp(); // populate _ip so url is non-null after a successful bind
       final dir = await getApplicationDocumentsDirectory();
       _server = await HttpServer.bind(InternetAddress.anyIPv4, port);
       _server!.listen((req) => _handle(req, dir.path));
@@ -80,6 +90,15 @@ class SaveServer {
 
   Future<void> _handle(HttpRequest req, String root) async {
     final res = req.response;
+    // Unauthenticated discovery: lets a scanner identify this as a PokeTracker
+    // receiver and learn its name + pairing token (same-LAN, personal use).
+    if (req.uri.path == '/ping') {
+      res.headers.contentType = ContentType.json;
+      res.write(jsonEncode(
+          {'app': 'poketracker', 'name': name, 'token': token}));
+      await res.close();
+      return;
+    }
     if (req.uri.queryParameters['t'] != token) {
       res.statusCode = HttpStatus.forbidden;
       await res.close();
