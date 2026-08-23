@@ -108,6 +108,12 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       _startLoop();
       _saveTimer =
           Timer.periodic(const Duration(seconds: 15), (_) => _persistSave());
+      // True-live achievements: poll the core's working RAM (GBA only) so
+      // unlocks pop the instant they happen, without an in-game save.
+      if (!_isDs) {
+        _liveRamTimer =
+            Timer.periodic(const Duration(seconds: 2), (_) => _liveRamCheck());
+      }
     } catch (e) {
       if (mounted) setState(() => _status = 'Emulator error: $e');
     }
@@ -313,6 +319,31 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   final List<String> _achievementToasts = [];
   OverlayEntry? _toastEntry;
   Timer? _toastTimer;
+  Timer? _liveRamTimer;
+  bool _liveRamBusy = false;
+
+  // Reads the core's working RAM and unlocks achievements in real time. Reads
+  // are synchronous + guarded; on any failure it silently leaves the on-save
+  // path in charge (never breaks the emulator).
+  Future<void> _liveRamCheck() async {
+    if (_liveRamBusy || !mounted) return;
+    final emu = _emu;
+    if (emu == null || !emu.loaded) return;
+    _liveRamBusy = true;
+    try {
+      final ewram = emu.readSystemRam();
+      if (ewram == null || !mounted) return;
+      final unlocked =
+          await context.read<AppState>().liveRamUnlocks(widget.game, ewram);
+      if (!mounted || unlocked.isEmpty) return;
+      _achievementToasts.addAll(unlocked);
+      _showNextToast();
+    } catch (_) {
+      // ignore — on-save sync remains the fallback
+    } finally {
+      _liveRamBusy = false;
+    }
+  }
 
   void _showNextToast() {
     if (_toastEntry != null) return; // one at a time
@@ -487,6 +518,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     _timer?.cancel();
     _saveTimer?.cancel();
     _toastTimer?.cancel();
+    _liveRamTimer?.cancel();
     _toastEntry?.remove();
     _toastEntry = null;
     _padSub?.cancel();

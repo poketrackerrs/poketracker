@@ -318,7 +318,9 @@ class GbaEmulator {
   /// updated every frame. Used for real-time achievement detection.
   Uint8List? readSystemRam() {
     final size = core.retroGetMemorySize(retroMemorySystemRam);
-    if (size <= 0) return null;
+    // Sanity-guard the size (GBA EWRAM is 256 KB) so a bogus value can't cause
+    // an out-of-bounds read. Anything outside a sane range → skip (fall back).
+    if (size < 0x1000 || size > 0x1000000) return null;
     final ptr = core.retroGetMemoryData(retroMemorySystemRam);
     if (ptr == nullptr) return null;
     return Uint8List.fromList(ptr.cast<Uint8>().asTypedList(size));
