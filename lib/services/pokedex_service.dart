@@ -248,6 +248,37 @@ class PokedexService {
     }
   }
 
+  /// The lowest level a species can legally exist at from its evolutions — the
+  /// highest level-up evolution requirement along its chain (e.g. Pidgeot = 36,
+  /// since Pidgeotto→Pidgeot is level 36). 0 when no level requirement applies
+  /// (base species, or stone/trade/friendship evolutions).
+  Future<int> evolutionMinLevel(int dex) async {
+    try {
+      final sp = await _cachedGet('$_base/pokemon-species/$dex');
+      final chain = await _cachedGet(sp['evolution_chain']['url'] as String);
+      int? result;
+      void walk(Map node, int reqSoFar) {
+        if (result != null) return;
+        if (_idFromUrl(node['species']['url'] as String) == dex) {
+          result = reqSoFar;
+          return;
+        }
+        for (final child in (node['evolves_to'] as List)) {
+          var childReq = reqSoFar;
+          for (final d in (child['evolution_details'] as List)) {
+            final lv = d['min_level'];
+            if (lv is int && lv > childReq) childReq = lv;
+          }
+          walk(child as Map, childReq);
+        }
+      }
+      walk(chain['chain'] as Map, 0);
+      return result ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   /// The base (first-stage) species of an evolution line — e.g. Pidgey for
   /// Pidgeot — by walking `evolves_from_species`. Cached per hop.
   Future<int> baseSpeciesOf(int dex) async {

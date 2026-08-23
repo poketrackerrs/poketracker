@@ -2937,7 +2937,11 @@ class _DexTabState extends State<_DexTab> {
   }
 
   Future<void> _addToBox(_DexRow r) async {
-    final levelCtrl = TextEditingController(text: '5');
+    // The lowest level this species can legally be (its evolution requirement).
+    final minLevel =
+        await context.read<AppState>().minAddLevel(widget.game, r.baseDex);
+    if (!mounted) return;
+    final levelCtrl = TextEditingController(text: '$minLevel');
     final go = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -2956,16 +2960,25 @@ class _DexTabState extends State<_DexTab> {
                 const Text('Level  ',
                     style: TextStyle(fontWeight: FontWeight.w600)),
                 SizedBox(
-                  width: 64,
+                  width: 72,
                   child: TextField(
                     controller: levelCtrl,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    decoration: const InputDecoration(isDense: true),
+                    decoration: InputDecoration(
+                        isDense: true, helperText: 'min $minLevel'),
                   ),
                 ),
               ],
             ),
+            if (minLevel > 5)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                    '${prettifyName(r.name)} can\'t legally exist below Lv $minLevel '
+                    '(its evolution level).',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ),
           ],
         ),
         actions: [
@@ -2979,7 +2992,8 @@ class _DexTabState extends State<_DexTab> {
       ),
     );
     if (go != true || !mounted) return;
-    final level = (int.tryParse(levelCtrl.text.trim()) ?? 5).clamp(2, 100);
+    final level =
+        (int.tryParse(levelCtrl.text.trim()) ?? minLevel).clamp(minLevel, 100);
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(const SnackBar(content: Text('Building a legal Pokémon…')));
     final state = context.read<AppState>();

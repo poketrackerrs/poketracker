@@ -1096,12 +1096,30 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// The minimum level a freshly-added [dex] can legally be: the max of its
+  /// evolution requirement and its base species' lowest wild level (≥ 2).
+  Future<int> minAddLevel(Game game, int dex) async {
+    var m = 2;
+    try {
+      final evo = await _pokedex.evolutionMinLevel(dex);
+      if (evo > m) m = evo;
+      final base = await _pokedex.baseSpeciesOf(dex);
+      final enc = await _pokedex.encountersIn(base, game.version);
+      if (enc.isNotEmpty) {
+        final wildMin = enc.map((e) => e.minLevel).reduce((a, b) => a < b ? a : b);
+        if (wildMin > m) m = wildMin;
+      }
+    } catch (_) {}
+    return m.clamp(2, 100);
+  }
+
   /// Builds a legal-by-construction Gen 3 Pokémon of [dex] at [level] (Method-1
   /// correlated PID+IVs, level-appropriate moves, the player as OT) and injects
   /// it into the first free PC box slot. Backs up + checksum-guards the write.
   Future<String> addLegalMonToBox(Game game, int dex, {int level = 5}) async {
     if (game.generation != 3) return 'Adding to the box is Gen 3-only for now.';
-    level = level.clamp(2, 100);
+    // Never below the species' minimum legal level (evolution requirement).
+    level = level.clamp(await minAddLevel(game, dex), 100);
     final trainer = await readGen3Trainer(game);
     if (trainer == null) {
       return 'No save found — play and save in-game once first.';
