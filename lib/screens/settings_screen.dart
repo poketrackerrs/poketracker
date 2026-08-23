@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import 'developer_screen.dart';
 import 'ds_bios_screen.dart';
 import 'emulators_screen.dart';
+import 'save_transfer_screen.dart';
 import 'updates_screen.dart';
 
 /// A recommended emulator link (store page or download page).
@@ -126,6 +127,15 @@ class SettingsScreen extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const EmulatorsScreen()),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.wifi_tethering),
+          title: const Text('Transfer saves (Wi-Fi)'),
+          subtitle: const Text('Move a game\'s save to another device'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SaveTransferScreen()),
           ),
         ),
         Padding(

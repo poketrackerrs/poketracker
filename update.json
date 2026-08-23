@@ -1,6 +1,6 @@
 {
-  "version": "1.0.67",
-  "notes": "Event Pokémon fix: added Pokémon (Mew, Deoxys, Jirachi, Celebi) now get the fateful-encounter flag, so Mew and Deoxys actually obey in battle and read as legitimate event catches instead of being flagged. Everything else from 1.0.66 is unchanged.",
+  "version": "1.0.68",
+  "notes": "Move saves between devices over Wi-Fi. Settings → 'Transfer saves (Wi-Fi)': on the device you want the save ON, open Receive (it shows an IP + code); on the device that HAS the save, open Send, enter that IP + code, pick the game, and send. Both devices must be on the same Wi-Fi. The receiving device backs up its existing save first.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

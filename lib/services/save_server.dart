@@ -20,6 +20,12 @@ class SaveServer {
 
   bool get running => _server != null;
 
+  /// Set to accept incoming saves (device→device transfer). Given the game id,
+  /// suggested filename and bytes, it should back up + write and return a short
+  /// status string. When null, /put is refused.
+  Future<String> Function(String gameId, String name, List<int> bytes)?
+      onReceive;
+
   /// Starts the server and returns the base URL (with token), or null on error.
   Future<String?> start() async {
     if (_server != null) return url;
@@ -104,6 +110,20 @@ class SaveServer {
           }
           res.headers.contentType = ContentType.binary;
           await res.addStream(f.openRead());
+        case '/put':
+          if (req.method != 'POST' || onReceive == null) {
+            res.statusCode = HttpStatus.methodNotAllowed;
+            break;
+          }
+          final game = req.uri.queryParameters['game'] ?? '';
+          final name = req.uri.queryParameters['name'] ?? 'save.sav';
+          final body = <int>[];
+          await for (final chunk in req) {
+            body.addAll(chunk);
+          }
+          final msg = await onReceive!(game, name, body);
+          res.headers.contentType = ContentType.text;
+          res.write(msg);
         default:
           res.headers.contentType = ContentType.html;
           res.write('<h3>PokeTracker save server</h3>'

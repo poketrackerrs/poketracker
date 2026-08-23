@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
@@ -17,6 +19,7 @@ import '../services/emulator_bios.dart';
 import '../services/library_service.dart';
 import '../services/emulator_service.dart';
 import '../services/save_service.dart';
+import '../services/save_server.dart';
 import '../services/gen3_save_editor.dart';
 import '../services/gen3_live_ram.dart';
 import '../services/gen4_save_editor.dart';
@@ -926,6 +929,82 @@ class AppState extends ChangeNotifier {
           g('speed'), g('special-attack'), g('special-defense'),
         ]);
       } catch (_) {/* offline: stored stats stay until the next in-game heal */}
+    }
+  }
+
+  // ------------------------------------------------ save transfer over Wi-Fi
+  final SaveServer saveServer = SaveServer();
+
+  /// Start receiving saves: returns this device's LAN IP + pairing token, or
+  /// null if the server couldn't bind / no Wi-Fi address was found.
+  Future<({String ip, String token})?> startSaveReceiver() async {
+    saveServer.onReceive = _receiveSave;
+    if (await saveServer.start() == null) return null;
+    final ip = await saveServer.lanIp();
+    if (ip == null) {
+      await saveServer.stop();
+      return null;
+    }
+    notifyListeners();
+    return (ip: ip, token: saveServer.token);
+  }
+
+  Future<void> stopSaveReceiver() async {
+    await saveServer.stop();
+    notifyListeners();
+  }
+
+  // Places an incoming save: overwrites the game's existing save (backup first),
+  // else drops it in the canonical Games/<id>/ folder.
+  Future<String> _receiveSave(String gameId, String name, List<int> bytes) async {
+    if (bytes.length < 0x2000) return 'Rejected: file too small for a save.';
+    if (!kGames.any((g) => g.id == gameId)) return 'Rejected: unknown game.';
+    try {
+      File target;
+      final existing = await _findSaveFile(gameId);
+      if (existing != null) {
+        final stamp = DateTime.now().millisecondsSinceEpoch;
+        await File('${existing.path}.bak-$stamp')
+            .writeAsBytes(await existing.readAsBytes(), flush: true);
+        target = existing;
+      } else {
+        final docs = await getApplicationDocumentsDirectory();
+        final dir = Directory('${docs.path}/PokeTracker/Games/$gameId');
+        await dir.create(recursive: true);
+        target = File('${dir.path}/${name.isEmpty ? 'save.sav' : name}');
+      }
+      await target.writeAsBytes(bytes, flush: true);
+      return 'OK — wrote ${bytes.length} bytes.';
+    } catch (e) {
+      return 'Receiver error: $e';
+    }
+  }
+
+  /// Sends [game]'s save to a peer running the receiver at [host] with [token].
+  Future<String> sendSaveToPeer(Game game, String host, String token) async {
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final bytes = await file.readAsBytes();
+    final name = file.uri.pathSegments.last;
+    final uri = Uri.parse('http://${host.trim()}:${SaveServer.port}/put'
+        '?t=${token.trim()}&game=${game.id}&name=$name');
+    try {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 8);
+      final req = await client.postUrl(uri);
+      req.add(bytes);
+      final resp = await req.close();
+      final body = await resp.transform(utf8.decoder).join();
+      client.close();
+      if (resp.statusCode == 200) {
+        return 'Sent ${game.title} (${bytes.length} bytes). Peer: $body';
+      }
+      if (resp.statusCode == HttpStatus.forbidden) {
+        return 'Rejected: wrong code. Re-check the code on the other device.';
+      }
+      return 'Send failed (HTTP ${resp.statusCode}).';
+    } catch (_) {
+      return 'Send failed: could not reach $host on the same Wi-Fi.';
     }
   }
 
