@@ -71,8 +71,24 @@ void main(List<String> args) {
   print('IV/EV edit: ivs=${mon3b.ivs.join('/')} evs=${mon3b.evs.join('/')} '
       'checksumOk=${mon3b.computeChecksum() == mon3b.storedChecksum}');
 
+  // event mon: build a Mew-like PK3, set fateful, round-trip
+  final mew = Pk3.create(
+    otid: 6930, nationalSpecies: 151, level: 10,
+    totalExp: gen3Exp('medium-slow', 10),
+    moves: [1, 144, 5, 118], pp: [35, 10, 20, 10],
+    ivs: [31, 31, 31, 31, 31, 31], nickname: 'MEW', otName: 'MYSTRY',
+    nature: 0, ball: 4, metLevel: 10, gameOfOrigin: 3, party: false,
+  );
+  mew.setFateful(true);
+  final mewBack = Pk3.decode(mew.encode());
+  final eventOk = mewBack.species == 151 &&
+      mewBack.fatefulEncounter &&
+      mewBack.computeChecksum() == mewBack.storedChecksum;
+  print('event mon: species=${mewBack.species} fateful=${mewBack.fatefulEncounter} '
+      'checksumOk=${mewBack.computeChecksum() == mewBack.storedChecksum}');
+
   final pass = v0.ok && v1.ok && v2.ok && v3.ok && csumMatch && identical &&
-      shinyOk && ivevOk && mon.species == 283 &&
+      shinyOk && ivevOk && eventOk && mon.species == 283 &&
       e.getMoney('emerald') == 123456 && e.caughtCount == 386;
   print(pass ? '\nPASS ✓ edits + PK3 codec round-trip' : '\nFAIL ✗');
   exitCode = pass ? 0 : 1;

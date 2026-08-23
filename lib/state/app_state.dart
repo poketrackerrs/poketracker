@@ -1255,6 +1255,7 @@ class AppState extends ChangeNotifier {
       gameOfOrigin: origin,
       party: party,
     );
+    pk.setFateful(ev.fateful); // Mew/Deoxys need this to obey + read as legit
     if (party) {
       try {
         final st = (await _pokedex.fetchDetail(ev.dex)).stats;

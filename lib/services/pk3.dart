@@ -501,6 +501,14 @@ class Pk3 {
   int get otGender => (_origins >> 15) & 1; // 0 = male, 1 = female
   int get metLocation => data[_sub('M') + 0x01];
   int get ribbons => _u32(data, _sub('M') + 0x08);
+  // Fateful encounter / obedience = bit 31 of the ribbon word (M+0x08). Event
+  // Pokémon set it; Mew & Deoxys REQUIRE it to obey and to read as legit.
+  bool get fatefulEncounter => (_u32(data, _sub('M') + 0x08) >> 31) & 1 == 1;
+  void setFateful(bool v) {
+    final o = _sub('M') + 0x08;
+    final r = _u32(data, o);
+    _sU32(data, o, v ? (r | 0x80000000) : (r & 0x7FFFFFFF));
+  }
   // Contest condition (E+0x06..0x0B): cool, beauty, cute, smart, tough, sheen.
   List<int> get contest => [for (var k = 0; k < 6; k++) data[_sub('E') + 6 + k]];
   List<int> get moves =>

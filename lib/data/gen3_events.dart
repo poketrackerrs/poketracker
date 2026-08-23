@@ -18,6 +18,7 @@ class Gen3Event {
   final int heldItem;
   final int metLocation; // met-location id
   final int metLevel;
+  final bool fateful; // fateful-encounter/obedience flag (all real distros set it)
   final String note;
   const Gen3Event({
     required this.label,
@@ -32,6 +33,7 @@ class Gen3Event {
     this.heldItem = 0,
     this.metLocation = 255,
     required this.metLevel,
+    this.fateful = true,
     this.note = '',
   });
 }
