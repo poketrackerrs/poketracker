@@ -1,6 +1,6 @@
 {
-  "version": "1.0.65",
-  "notes": "Pokémon editor — IV/EV editing. In a Gen 3 game's Edit save dialog, tap any party Pokémon to open its editor: toggle Shiny, set IVs (0–31, with a Max button), and set EVs (0–255 each, capped at 510 total). Stats are recomputed from the game's real base stats (via the Pokédex) so they update in-game too, and the save is backed up first. Verified on a real Emerald save. Next: move editing, then one-tap event Pokémon.",
+  "version": "1.0.66",
+  "notes": "Pokédex overhaul: search, type chips, uncaught silhouettes, and game-accurate 'Where to find' wild locations. Add any Pokémon straight to your PC box as a legal catch. Achievements: per-game Trophies + a global page, the FireRed set, and in-game unlock pop-ups. Save sync reads Gen 3 badges; organize PC boxes by Dex; real badge art; editor adds abilities/held items/Done button; plus save-loss protection in the built-in emulator.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
