@@ -1070,6 +1070,105 @@ class AppState extends ChangeNotifier {
 
   /// Builds an event Pokémon into an encoded PK3 block (party or box variant),
   /// pulling EXP/PP/base-stats from PokeAPI. Legal-by-construction.
+  /// The level-up moveset a species would know at [level] in generation [gen]:
+  /// the (up to) 4 highest-level moves it has learned by then.
+  Future<List<int>> legalLevelUpMoves(int dex, int gen, int level) async {
+    try {
+      final d = await _pokedex.fetchDetail(dex);
+      final lv = [
+        for (final m in d.moves)
+          if (m.method == 'level-up' &&
+              m.generation == gen &&
+              m.level > 0 &&
+              m.level <= level)
+            m
+      ]..sort((a, b) => a.level.compareTo(b.level));
+      final seen = <int>{};
+      final out = <int>[];
+      for (final m in lv.reversed) {
+        if (seen.add(m.id)) out.add(m.id);
+        if (out.length == 4) break;
+      }
+      return out.reversed.toList(); // lowest-level first
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Builds a legal-by-construction Gen 3 Pokémon of [dex] at [level] (Method-1
+  /// correlated PID+IVs, level-appropriate moves, the player as OT) and injects
+  /// it into the first free PC box slot. Backs up + checksum-guards the write.
+  Future<String> addLegalMonToBox(Game game, int dex, {int level = 5}) async {
+    if (game.generation != 3) return 'Adding to the box is Gen 3-only for now.';
+    level = level.clamp(2, 100);
+    final trainer = await readGen3Trainer(game);
+    if (trainer == null) {
+      return 'No save found — play and save in-game once first.';
+    }
+    final otid = (trainer.tid & 0xFFFF) | ((trainer.sid & 0xFFFF) << 16);
+    final rate = await _pokedex.growthRate(dex);
+    var moves = await legalLevelUpMoves(dex, game.generation, level);
+    if (moves.isEmpty) {
+      moves = [
+        for (final m in (await gen3Learnset(dex, gen: game.generation)).take(4))
+          m.id
+      ];
+    }
+    final pp = [for (final m in moves) await _pokedex.movePP(m)];
+    var genderRate = -1;
+    try {
+      genderRate = (await _pokedex.fetchDetail(dex)).genderRate;
+    } catch (_) {}
+    // Deterministic-but-varied nature; PID+IVs correlated so a checker accepts.
+    final nature = (dex * 31 + level * 7) % 25;
+    final legal = gen3Method1Find(
+        tid: otid & 0xFFFF,
+        sid: otid >> 16,
+        nature: nature,
+        shiny: false,
+        genderRate: genderRate);
+    var name = '';
+    for (final s in await _pokedex.loadIndex()) {
+      if (s.id == dex) {
+        name = s.name;
+        break;
+      }
+    }
+    final origin = switch (game.version) {
+      'sapphire' => 1,
+      'ruby' => 2,
+      'emerald' => 3,
+      'firered' => 4,
+      'leafgreen' => 5,
+      _ => 4,
+    };
+    final pk = Pk3.create(
+      otid: otid,
+      nationalSpecies: dex,
+      level: level,
+      totalExp: gen3Exp(rate, level),
+      moves: [for (var i = 0; i < 4; i++) i < moves.length ? moves[i] : 0],
+      pp: [for (var i = 0; i < 4; i++) i < pp.length ? pp[i] : 0],
+      ivs: legal?.ivs ?? const [31, 31, 31, 31, 31, 31],
+      nickname: name.isEmpty ? 'POKEMON' : name.toUpperCase(),
+      otName: trainer.name,
+      nature: nature,
+      ball: 4,
+      metLocation: 0,
+      metLevel: level,
+      otGender: trainer.gender,
+      gameOfOrigin: origin,
+      party: false, // box mon (80-byte block)
+    );
+    if (legal != null) pk.setPidAndIvs(legal.pid, legal.ivs);
+    final res = await writeGen3Save(game, boxInjects: [pk.encode()]);
+    if (!res.startsWith('Saved')) return res;
+    final pretty = name.isEmpty
+        ? '#$dex'
+        : name[0].toUpperCase() + name.substring(1).replaceAll('-', ' ');
+    return 'Added $pretty (Lv $level) to the PC box.';
+  }
+
   Future<Uint8List> buildEventMon(Game game, Gen3Event ev,
       {required bool party}) async {
     final otid = (ev.otTid & 0xFFFF) | ((ev.otSid & 0xFFFF) << 16);

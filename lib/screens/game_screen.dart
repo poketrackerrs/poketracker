@@ -2936,6 +2936,63 @@ class _DexTabState extends State<_DexTab> {
     }
   }
 
+  Future<void> _addToBox(_DexRow r) async {
+    final levelCtrl = TextEditingController(text: '5');
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Add ${prettifyName(r.name)} to PC box'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+                'Creates a legal Pokémon (correlated PID/IVs, level-appropriate '
+                'moves, you as the OT) in the first free box slot. A backup is '
+                'written first.'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Text('Level  ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(
+                  width: 64,
+                  child: TextField(
+                    controller: levelCtrl,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    decoration: const InputDecoration(isDense: true),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Add')),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    final level = (int.tryParse(levelCtrl.text.trim()) ?? 5).clamp(2, 100);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(content: Text('Building a legal Pokémon…')));
+    final state = context.read<AppState>();
+    final msg = await state.addLegalMonToBox(widget.game, r.baseDex, level: level);
+    if (!mounted) return;
+    if (msg.startsWith('Added')) {
+      state.setCaught(widget.game.id, r.baseDex, true); // reflect in the dex now
+    }
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 5)));
+  }
+
   int? _baseDexForForm(String formName, Map<String, int> baseNameToDex) {
     final parts = formName.split('-');
     for (var take = parts.length - 1; take >= 1; take--) {
@@ -3181,10 +3238,23 @@ class _DexTabState extends State<_DexTab> {
         ],
       ),
       isThreeLine: true,
-      trailing: Checkbox(
-        value: isCaught,
-        activeColor: widget.tint,
-        onChanged: (v) => state.setCaught(gameId, r.id, v ?? false),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Add a legal copy to the PC box (Gen 3 base species only).
+          if (widget.game.generation == 3 && !r.isForm)
+            IconButton(
+              tooltip: 'Add a legal one to your PC box',
+              icon: const Icon(Icons.add_box_outlined),
+              color: widget.tint,
+              onPressed: () => _addToBox(r),
+            ),
+          Checkbox(
+            value: isCaught,
+            activeColor: widget.tint,
+            onChanged: (v) => state.setCaught(gameId, r.id, v ?? false),
+          ),
+        ],
       ),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
