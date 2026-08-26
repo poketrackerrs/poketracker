@@ -1201,6 +1201,7 @@ class AppState extends ChangeNotifier {
       pokerus: m.pokerus,
       contest: m.contest,
       heldItem: m.heldItem,
+      gameOfOrigin: m.gameOfOrigin,
     );
     pm.name = vault[index].name;
     return pm;
@@ -1441,6 +1442,7 @@ class AppState extends ChangeNotifier {
           pokerus: m.pokerus,
           contest: m.contest,
           heldItem: m.heldItem,
+          gameOfOrigin: m.gameOfOrigin,
         ));
       }
       try {
@@ -1495,6 +1497,7 @@ class AppState extends ChangeNotifier {
           pokerus: m.pokerus,
           contest: m.contest,
           heldItem: m.heldItem,
+          gameOfOrigin: m.gameOfOrigin,
         ));
       }
       try {

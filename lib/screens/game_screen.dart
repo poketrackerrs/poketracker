@@ -12,6 +12,7 @@ import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../data/gen3_events.dart';
 import '../data/gen3_items.dart';
+import '../data/gen3_metloc.dart';
 import '../data/shiny_locks.dart';
 import '../data/type_colors.dart';
 import '../services/gen3_save_editor.dart';
@@ -2009,6 +2010,75 @@ class _MonEditorState extends State<_MonEditor> {
         ],
       );
 
+  static const _gen3Origins = {
+    1: 'Sapphire', 2: 'Ruby', 3: 'Emerald', 4: 'FireRed', 5: 'LeafGreen',
+    15: 'Colosseum / XD',
+  };
+
+  // Read-only origin & trainer identity — the fields that travel with a mon
+  // (OT id, origin game, where it was met) but aren't meant to be edited.
+  Widget _originInfo() {
+    final mon = widget.mon;
+    final tid = mon.otid & 0xFFFF;
+    final sid = mon.otid >> 16;
+    final scheme = Theme.of(context).colorScheme;
+    Widget row(String label, String value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                  width: 108,
+                  child: Text(label,
+                      style: TextStyle(
+                          fontSize: 12.5, color: scheme.onSurfaceVariant))),
+              Expanded(
+                  child: Text(value,
+                      style: const TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w600))),
+            ],
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.badge_outlined, size: 15, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text('ORIGIN & IDs',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                        color: scheme.onSurfaceVariant)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            row('OT',
+                '${mon.otName.isEmpty ? '—' : mon.otName}  (${mon.otGender == 1 ? '♀' : '♂'})'),
+            row('Trainer ID', tid.toString().padLeft(5, '0')),
+            row('Secret ID', sid.toString().padLeft(5, '0')),
+            if (mon.gameOfOrigin != 0)
+              row('Origin game',
+                  _gen3Origins[mon.gameOfOrigin] ?? '#${mon.gameOfOrigin}'),
+            row('Met', gen3MetLocationName(mon.metLocation) +
+                (mon.metLevel > 0 ? '  ·  Lv ${mon.metLevel}' : '')),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Advanced fields — OT, ball, met, language, Pokérus, markings, contest.
   Widget _moreSection() => ExpansionTile(
         tilePadding: EdgeInsets.zero,
@@ -2418,6 +2488,7 @@ class _MonEditorState extends State<_MonEditor> {
               ],
             ),
             for (var k = 0; k < 4; k++) _moveRow(k),
+                  if (widget.generation == 3) _originInfo(),
                   _moreSection(),
                   ],
                 ),

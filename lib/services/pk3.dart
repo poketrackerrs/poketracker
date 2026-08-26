@@ -252,6 +252,7 @@ class Gen3PartyMon {
   final List<int> contest; // cool, beauty, cute, smart, tough, sheen
   final int heldItem; // held item id (Gen 3 item ids; Gen 4 item ids for gen 4)
   final int ability; // in-game ability id (Gen 4 stored byte; 0 for Gen 3)
+  final int gameOfOrigin; // Gen 3 origin-game code (1=Sapphire … 5=LeafGreen)
   final int? boxSlot; // global PC slot 0..419, or null for a party mon
   String? name; // species name, resolved from the Pokédex index
   Gen3PartyMon({
@@ -279,6 +280,7 @@ class Gen3PartyMon {
     this.contest = const [0, 0, 0, 0, 0, 0],
     this.heldItem = 0,
     this.ability = 0,
+    this.gameOfOrigin = 0,
     this.boxSlot,
     this.name,
   });
@@ -308,6 +310,7 @@ class Gen3PartyMon {
         contest: contest,
         heldItem: heldItem,
         ability: ability,
+        gameOfOrigin: gameOfOrigin,
         boxSlot: boxSlot,
         name: name,
       );

@@ -81,3 +81,25 @@ int? gen3MapsecForArea(String area) {
   }
   return null;
 }
+
+final Map<int, String> _mapsecByIndex = {
+  for (final e in kGen3Mapsec.entries) e.value: e.key
+};
+
+/// A human name for a Gen 3 met-location index (for read-only display).
+String gen3MetLocationName(int index) {
+  switch (index) {
+    case 0xFD:
+      return 'Hatched (Egg)';
+    case 0xFE:
+      return 'In-game trade';
+    case 0xFF:
+      return 'Special / event';
+  }
+  final n = _mapsecByIndex[index];
+  if (n == null) return 'Location #$index';
+  return n
+      .split('_')
+      .map((w) => w.isEmpty ? w : '${w[0]}${w.substring(1).toLowerCase()}')
+      .join(' ');
+}
