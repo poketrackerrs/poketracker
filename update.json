@@ -1,6 +1,6 @@
 {
-  "version": "1.0.73",
-  "notes": "Pokémon Vault multi-select: long-press to start selecting, tap to add more, then copy them all into a game (one backup) or remove them in one go. Also removed the external-emulator download links from Settings — Gen 1–5 games play in the built-in emulator; 3DS file handling is unchanged.",
+  "version": "1.0.74",
+  "notes": "Side-by-side boxes (PKHeX-style): in a Gen 3 game's Edit save → PC Boxes, tap the ⟷ button to see your game's boxes next to the Vault, with real Pokémon sprites. Click-drag a rubber-band to select several at once in either panel (or tap to toggle one), then hit 'Copy → Vault' or 'Copy → game' to move the whole selection across. Copies into a game back up the save first.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

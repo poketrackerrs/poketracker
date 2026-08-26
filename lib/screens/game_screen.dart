@@ -19,6 +19,7 @@ import '../services/pk3.dart';
 import '../state/app_state.dart';
 import 'achievements_screen.dart';
 import 'cartridge_viewer.dart';
+import 'dual_box_screen.dart';
 import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
 import 'game_launch.dart';
@@ -1034,6 +1035,12 @@ class _BoxBrowserState extends State<_BoxBrowser> {
                 ),
               ),
         actions: [
+          IconButton(
+            tooltip: 'Boxes ⟷ Vault (side by side)',
+            icon: const Icon(Icons.swap_horiz),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => DualBoxScreen(game: widget.game))),
+          ),
           IconButton(
             tooltip: 'Make all shiny (skips events)',
             icon: const Icon(Icons.auto_awesome),

@@ -1071,7 +1071,7 @@ class AppState extends ChangeNotifier {
         _vaultKey, jsonEncode([for (final v in vault) v.toJson()]));
   }
 
-  Future<void> _addBlockToVault(Uint8List block) async {
+  Future<void> _addBlockToVault(Uint8List block, {bool persist = true}) async {
     final m = Pk3.decode(block);
     final dex = m.nationalDex;
     String name = '#$dex';
@@ -1093,8 +1093,36 @@ class AppState extends ChangeNotifier {
         name: name,
         level: level,
         shiny: m.isShiny));
-    await _saveVault();
-    notifyListeners();
+    if (persist) {
+      await _saveVault();
+      notifyListeners();
+    }
+  }
+
+  /// Copies several of [game]'s box slots into the Vault (one save read).
+  Future<String> copyGameBoxesToVault(Game game, List<int> boxIndices) async {
+    if (game.generation != 3) return 'Gen 3 only for now.';
+    if (boxIndices.isEmpty) return 'Nothing selected.';
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found.';
+    final Gen3SaveEditor e;
+    try {
+      e = Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+    } catch (_) {
+      return 'Could not read the save.';
+    }
+    var n = 0;
+    for (final idx in boxIndices) {
+      final block = e.boxSlot(idx);
+      if (Pk3.decode(block).isEmpty) continue;
+      await _addBlockToVault(block, persist: false);
+      n++;
+    }
+    if (n > 0) {
+      await _saveVault();
+      notifyListeners();
+    }
+    return 'Saved $n Pokémon to the Vault.';
   }
 
   /// Copies the Pokémon in [game]'s PC box slot [boxIndex] into the Vault.
