@@ -95,6 +95,11 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         try {
           final loaded = await sav.readAsBytes();
           emu.writeSaveRam(loaded);
+          // melonDS (DS) reads its flash into the running console at loadRom —
+          // BEFORE the writeSaveRam above — so a freshly-loaded/edited save is
+          // otherwise ignored until relaunch. Reset re-reads the save RAM we
+          // just wrote, so the DS actually boots from the correct save.
+          if (_isDs) emu.reset();
           // Remember the loaded save so we only ever overwrite the .sav once the
           // game itself writes a *different* save (prevents clobbering a good
           // save with a fresh/blank one).

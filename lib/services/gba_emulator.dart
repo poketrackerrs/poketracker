@@ -305,6 +305,16 @@ class GbaEmulator {
 
   void runFrame() => core.retroRun();
 
+  /// Power-cycle the core (retro_reset). The battery save RAM persists across a
+  /// reset, so calling this AFTER [writeSaveRam] makes the DS core boot from the
+  /// just-loaded save (melonDS reads its flash at load, before writeSaveRam, so
+  /// without a reset a freshly-loaded save is ignored until next launch).
+  void reset() {
+    try {
+      core.retroReset();
+    } catch (_) {}
+  }
+
   /// Reads the cartridge battery save (SRAM/Flash) out of the core.
   Uint8List? readSaveRam() {
     final size = core.retroGetMemorySize(retroMemorySaveRam);
