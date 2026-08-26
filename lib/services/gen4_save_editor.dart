@@ -134,10 +134,13 @@ class Gen4SaveEditor {
   static const int _partyData = 0xA0;
   static const int partySlotSize = 236;
 
-  // PC storage: box slots pack from the storage block's start.
+  // PC storage: a 4-byte header (current-box index) precedes the box slots,
+  // then 18 boxes × 30 × 136-byte slots. Verified against a real Platinum save
+  // (a deposited Pokémon sat at storageOfs + 4, not +0).
   static const int boxCount = 18;
   static const int perBox = 30;
   static const int boxSlotSize = 136;
+  static const int boxDataOffset = 4; // skip the current-box header
 
   Gen4Trainer trainer() => Gen4Trainer(
         name: gen4DecodeText(bytes, generalOfs + _otName, 8),
@@ -191,7 +194,7 @@ class Gen4SaveEditor {
 
   // ---- PC boxes (in the storage block) ----
   Uint8List boxSlot(int globalIndex) {
-    final o = storageOfs + globalIndex * boxSlotSize;
+    final o = storageOfs + boxDataOffset + globalIndex * boxSlotSize;
     return Uint8List.fromList(bytes.sublist(o, o + boxSlotSize));
   }
 
@@ -200,14 +203,14 @@ class Gen4SaveEditor {
   void clearAllBoxes() {
     final zero = Uint8List(boxSlotSize);
     for (var g = 0; g < boxCount * perBox; g++) {
-      final o = storageOfs + g * boxSlotSize;
+      final o = storageOfs + boxDataOffset + g * boxSlotSize;
       bytes.setRange(o, o + boxSlotSize, zero);
     }
     fixStorage();
   }
 
   void writeBoxSlot(int globalIndex, Uint8List block) {
-    final o = storageOfs + globalIndex * boxSlotSize;
+    final o = storageOfs + boxDataOffset + globalIndex * boxSlotSize;
     bytes.setRange(o, o + block.length.clamp(0, boxSlotSize), block);
     fixStorage();
   }

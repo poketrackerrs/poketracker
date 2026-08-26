@@ -3946,10 +3946,11 @@ class _DexTabState extends State<_DexTab> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Add a legal copy to the PC box. Gen 3 only for now — the Gen
-          // 1/2/4/5 box-inject write paths are being re-verified against real
-          // saves after a corruption report; re-enabled per gen once safe.
-          if (widget.game.generation == 3 && !r.isForm)
+          // Add a legal copy to the PC box. Gen 3 + Gen 4 are verified against
+          // real saves (Gen 4's box offset was fixed: storage + 4). Gen 1/2/5
+          // stay off until their box offsets are likewise real-save-verified.
+          if ((widget.game.generation == 3 || widget.game.generation == 4) &&
+              !r.isForm)
             IconButton(
               tooltip: 'Add a legal one to your PC box',
               icon: const Icon(Icons.add_box_outlined),
