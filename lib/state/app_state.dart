@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
 import '../data/gen3_events.dart';
 import '../data/gen4_events.dart';
+import '../data/gen4_items.dart';
 import '../data/frlg_achievements.dart';
 import '../data/gen3_metloc.dart';
 import '../models/achievement.dart';
@@ -809,6 +810,7 @@ class AppState extends ChangeNotifier {
       {int? money,
       Gen4Trainer? trainer,
       Map<int, PartyEdit> partyEdits = const {},
+      Map<Gen4Pocket, List<({int id, int qty})>>? bag,
       List<Uint8List> boxInjects = const []}) async {
     if (game.generation != 4) return 'Gen 4 editing only.';
     final file = await _findSaveFile(game.id);
@@ -825,6 +827,26 @@ class AppState extends ChangeNotifier {
     }
     if (money != null) e.setMoney(money);
     if (trainer != null) e.setTrainer(trainer);
+    if (bag != null) {
+      // Safety: only write a pocket whose CURRENT contents validate as that
+      // pocket. If our offsets were wrong we'd be reading random bytes, whose
+      // "item ids" wouldn't route back to this pocket — so abort rather than
+      // corrupt the save. (A genuinely empty pocket passes trivially.)
+      for (final entry in bag.entries) {
+        final cur = e.readPocket(game.version, entry.key.index);
+        if (cur.isEmpty) continue;
+        final bad =
+            cur.where((it) => gen4PocketOf(it.id) != entry.key).length;
+        if (bad * 2 > cur.length) {
+          return 'Bag layout self-check failed for ${entry.key.name} — '
+              'refusing to write (save was NOT changed).';
+        }
+      }
+      for (final entry in bag.entries) {
+        e.writePocket(game.version, entry.key.index, entry.value);
+      }
+      e.fixGeneral();
+    }
     final t = e.trainer();
     for (final entry in partyEdits.entries) {
       final m = Pkx.decode(e.partyBlock(entry.key));
@@ -1558,6 +1580,26 @@ class AppState extends ChangeNotifier {
           Uint8List.fromList(await file.readAsBytes()), game.version);
       if (!e.verifyChecksums().ok) return null;
       return e.trainer();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reads all eight Gen 4 bag pockets for the editor, keyed by pocket. Null if
+  /// there's no readable save.
+  Future<Map<Gen4Pocket, List<({int id, int qty})>>?> readGen4Bag(
+      Game game) async {
+    if (game.generation != 4) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen4SaveEditor.load(
+          Uint8List.fromList(await file.readAsBytes()), game.version);
+      if (!e.verifyChecksums().ok) return null;
+      return {
+        for (final p in Gen4Pocket.values)
+          p: e.readPocket(game.version, p.index),
+      };
     } catch (_) {
       return null;
     }

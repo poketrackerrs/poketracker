@@ -201,6 +201,82 @@ class Gen4SaveEditor {
     fixStorage();
   }
 
+  // ---- Bag (in the general block) ----------------------------------------
+  // Verified against PKHeX PlayerBag4Pt/DP/HGSS. Bag base + per-pocket
+  // (relative offset, slot count), all relative to the general-block base.
+  // A slot is 4 bytes: u16 itemId (LE) + u16 quantity (LE).
+  static const Map<String, int> _bagBase = {
+    'platinum': 0x630,
+    'diamond': 0x624,
+    'pearl': 0x624,
+    'heartgold': 0x644,
+    'soulsilver': 0x644,
+  };
+
+  // Pocket layouts keyed by family. (relOffset, slotCount) in pocket order:
+  // items, keyItems, tmHm, mail, medicine, berries, balls, battle.
+  static const List<({int off, int count})> _pouchDPPt = [
+    (off: 0x000, count: 162),
+    (off: 0x294, count: 40),
+    (off: 0x35C, count: 100),
+    (off: 0x4EC, count: 12),
+    (off: 0x51C, count: 38),
+    (off: 0x5BC, count: 64),
+    (off: 0x6BC, count: 15),
+    (off: 0x6F8, count: 13),
+  ];
+  static const List<({int off, int count})> _pouchHGSS = [
+    (off: 0x000, count: 162),
+    (off: 0x294, count: 43),
+    (off: 0x35C, count: 100),
+    (off: 0x4F0, count: 12),
+    (off: 0x520, count: 38),
+    (off: 0x5C0, count: 64),
+    (off: 0x6C0, count: 24),
+    (off: 0x720, count: 13),
+  ];
+
+  List<({int off, int count})> _pouches(String version) =>
+      (version == 'heartgold' || version == 'soulsilver')
+          ? _pouchHGSS
+          : _pouchDPPt;
+
+  /// Absolute offset of pocket [index] (0..7) for [version].
+  int _pouchBase(String version, int index) =>
+      generalOfs + (_bagBase[version] ?? 0x630) + _pouches(version)[index].off;
+
+  /// Read one bag pocket by its order index (0=items … 7=battle). Returns the
+  /// non-empty (id, qty) entries, packed.
+  List<({int id, int qty})> readPocket(String version, int index) {
+    final base = _pouchBase(version, index);
+    final count = _pouches(version)[index].count;
+    final out = <({int id, int qty})>[];
+    for (var i = 0; i < count; i++) {
+      final o = base + i * 4;
+      final id = _u16(bytes, o);
+      final qty = _u16(bytes, o + 2);
+      if (id != 0) out.add((id: id, qty: qty));
+    }
+    return out;
+  }
+
+  /// Overwrite one bag pocket with [entries] (packed from slot 0; remaining
+  /// slots zero-filled). Silently drops entries past the pocket's capacity.
+  /// Caller must call [fixGeneral] afterwards.
+  void writePocket(String version, int index, List<({int id, int qty})> entries) {
+    final base = _pouchBase(version, index);
+    final count = _pouches(version)[index].count;
+    for (var i = 0; i < count; i++) {
+      final o = base + i * 4;
+      final id = i < entries.length ? entries[i].id & 0xFFFF : 0;
+      final qty = i < entries.length ? entries[i].qty & 0xFFFF : 0;
+      bytes[o] = id & 0xFF;
+      bytes[o + 1] = (id >> 8) & 0xFF;
+      bytes[o + 2] = qty & 0xFF;
+      bytes[o + 3] = (qty >> 8) & 0xFF;
+    }
+  }
+
   Uint8List toBytes() => bytes;
 }
 

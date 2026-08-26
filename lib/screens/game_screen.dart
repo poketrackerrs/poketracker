@@ -12,6 +12,7 @@ import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../data/gen3_events.dart';
 import '../data/gen4_events.dart';
+import '../data/gen4_items.dart';
 import '../data/gen3_items.dart';
 import '../data/gen3_metloc.dart';
 import '../data/shiny_locks.dart';
@@ -369,6 +370,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   bool _trainerLoaded = false;
   // Bag: pockets the user edited (empty = leave the bag untouched)
   final Map<Gen3Pocket, List<({int id, int qty})>> _bagEdits = {};
+  final Map<Gen4Pocket, List<({int id, int qty})>> _gen4BagEdits = {};
   // Event Pokémon queued for injection (built blocks + labels for display)
   final List<Uint8List> _partyInjects = [];
   final List<Uint8List> _boxInjects = [];
@@ -449,6 +451,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                   )
                 : null,
             partyEdits: _partyEdits,
+            bag: _gen4BagEdits.isEmpty ? null : _gen4BagEdits,
             boxInjects: _boxInjects,
           );
       if (!mounted) return;
@@ -913,6 +916,23 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                         },
                       ),
                     ],
+                    if (_gen4)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.backpack_outlined),
+                        title: const Text('Bag'),
+                        subtitle: Text(_gen4BagEdits.isEmpty
+                            ? 'Items, balls, TMs, berries, key items'
+                            : '${_gen4BagEdits.length} pocket(s) edited'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => _Gen4BagEditor(
+                                game: widget.game, edits: _gen4BagEdits),
+                          ));
+                          if (mounted) setState(() {});
+                        },
+                      ),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading:
@@ -1443,6 +1463,237 @@ class _BagEditorState extends State<_BagEditor> {
       }
     });
     _commit();
+  }
+}
+
+/// Gen 4 bag editor — the eight Gen 4 pockets. Adds only items valid for the
+/// open pocket; quantities capped per pocket (Key items & HMs = 1). Mutates the
+/// parent's [edits] map (only pockets the user touches are written).
+class _Gen4BagEditor extends StatefulWidget {
+  final Game game;
+  final Map<Gen4Pocket, List<({int id, int qty})>> edits;
+  const _Gen4BagEditor({required this.game, required this.edits});
+  @override
+  State<_Gen4BagEditor> createState() => _Gen4BagEditorState();
+}
+
+class _Gen4BagEditorState extends State<_Gen4BagEditor> {
+  final Map<Gen4Pocket, List<({int id, int qty})>> _local = {};
+  Gen4Pocket _pocket = Gen4Pocket.items;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final bag = await context.read<AppState>().readGen4Bag(widget.game);
+    if (!mounted) return;
+    setState(() {
+      for (final p in Gen4Pocket.values) {
+        _local[p] = List.of(widget.edits[p] ?? bag?[p] ?? const []);
+      }
+      _loading = false;
+    });
+  }
+
+  void _commit() =>
+      setState(() => widget.edits[_pocket] = List.of(_local[_pocket]!));
+
+  int _maxQty(Gen4Pocket p, int id) {
+    if (p == Gen4Pocket.keyItems) return 1;
+    if (p == Gen4Pocket.tmHm && id >= 420 && id <= 427) return 1; // HMs
+    return 999;
+  }
+
+  Future<void> _editQty(int index) async {
+    final cur = _local[_pocket]![index];
+    final cap = _maxQty(_pocket, cur.id);
+    final ctrl = TextEditingController(text: '${cur.qty}');
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(gen4ItemName(cur.id)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: 'Quantity (1–$cap)'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, -1),
+              child:
+                  const Text('Remove', style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx,
+                  (int.tryParse(ctrl.text.trim()) ?? cur.qty).clamp(1, cap)),
+              child: const Text('OK')),
+        ],
+      ),
+    );
+    if (result == null) return;
+    setState(() {
+      if (result < 0) {
+        _local[_pocket]!.removeAt(index);
+      } else {
+        _local[_pocket]![index] = (id: cur.id, qty: result);
+      }
+    });
+    _commit();
+  }
+
+  Future<void> _addItem() async {
+    final all = gen4ItemsInPocket(_pocket);
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final q = query.trim().toLowerCase();
+            final matches = q.isEmpty
+                ? all
+                : all.where((e) => e.name.toLowerCase().contains(q)).toList();
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.7,
+              builder: (_, scroll) => Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: 'Search items…',
+                          isDense: true),
+                      onChanged: (v) => setSheet(() => query = v),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scroll,
+                      itemCount: matches.length,
+                      itemBuilder: (_, i) => ListTile(
+                        leading: const SizedBox(
+                            width: 34,
+                            child: Icon(Icons.category_outlined,
+                                size: 22, color: Colors.grey)),
+                        title: Text(matches[i].name),
+                        onTap: () => Navigator.pop(ctx, matches[i].id),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    final cap = _maxQty(_pocket, picked);
+    final idx = _local[_pocket]!.indexWhere((e) => e.id == picked);
+    setState(() {
+      if (idx >= 0) {
+        final cur = _local[_pocket]![idx];
+        _local[_pocket]![idx] = (id: cur.id, qty: (cur.qty + 1).clamp(1, cap));
+      } else {
+        _local[_pocket]!.add((id: picked, qty: 1));
+      }
+    });
+    _commit();
+  }
+
+  void _bump(int index, int delta) {
+    final cur = _local[_pocket]![index];
+    final q = (cur.qty + delta).clamp(0, _maxQty(_pocket, cur.id));
+    setState(() {
+      if (q == 0) {
+        _local[_pocket]!.removeAt(index);
+      } else {
+        _local[_pocket]![index] = (id: cur.id, qty: q);
+      }
+    });
+    _commit();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = _local[_pocket] ?? const <({int id, int qty})>[];
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bag')),
+      floatingActionButton: _loading
+          ? null
+          : FloatingActionButton(
+              onPressed: _addItem, child: const Icon(Icons.add)),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                SizedBox(
+                  height: 46,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    children: [
+                      for (final p in Gen4Pocket.values)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 3, vertical: 6),
+                          child: ChoiceChip(
+                            label: Text(kGen4PocketNames[p]!),
+                            selected: _pocket == p,
+                            onSelected: (_) => setState(() => _pocket = p),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: list.isEmpty
+                      ? const Center(
+                          child: Text('Empty pocket. Tap + to add.'))
+                      : ListView.builder(
+                          itemCount: list.length,
+                          itemBuilder: (_, i) => ListTile(
+                            leading: const Icon(Icons.category_outlined,
+                                color: Colors.grey),
+                            title: Text(gen4ItemName(list[i].id)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: () => _bump(i, -1),
+                                ),
+                                SizedBox(
+                                  width: 34,
+                                  child: Text('${list[i].qty}',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700)),
+                                ),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.add_circle_outline),
+                                  onPressed: () => _bump(i, 1),
+                                ),
+                              ],
+                            ),
+                            onTap: () => _editQty(i),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+    );
   }
 }
 
