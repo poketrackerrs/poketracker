@@ -33,15 +33,21 @@ class _DualBoxScreenState extends State<DualBoxScreen> {
   }
 
   Future<void> _load() async {
-    final mons = await context.read<AppState>().readGen3Boxes(widget.game);
+    final state = context.read<AppState>();
+    final mons = await state.readGen3Boxes(widget.game);
+    final party = await state.readGen3Party(widget.game);
     if (!mounted) return;
     setState(() {
       _game = {
         for (final m in (mons ?? const []))
-          m.boxSlot!: (dex: m.dex, shiny: m.shiny)
+          m.boxSlot!: (dex: m.dex, shiny: m.shiny),
+        // party at global slots 420..425 (shown as the "Party" box, index 14)
+        for (final m in (party ?? const []))
+          420 + (m.slot as int): (dex: m.dex, shiny: m.shiny),
       };
       _loading = false;
-      if (_game.isNotEmpty) _gameBox = _game.keys.first ~/ _perBox;
+      final pcKeys = _game.keys.where((k) => k < 420);
+      if (pcKeys.isNotEmpty) _gameBox = pcKeys.first ~/ _perBox;
     });
   }
 
@@ -62,9 +68,9 @@ class _DualBoxScreenState extends State<DualBoxScreen> {
 
   Future<void> _vaultToGame() async {
     if (_vaultSel.isEmpty) return;
-    await _msg(context
-        .read<AppState>()
-        .copyVaultMultiToGame(widget.game, _vaultSel.toList()));
+    await _msg(context.read<AppState>().copyVaultMultiToGame(
+        widget.game, _vaultSel.toList(),
+        party: _gameBox == 14));
     if (mounted) {
       setState(_vaultSel.clear);
       await _load(); // refresh the game side after injecting
@@ -90,7 +96,8 @@ class _DualBoxScreenState extends State<DualBoxScreen> {
                         child: _panel(
                           title: widget.game.title,
                           box: _gameBox,
-                          boxCount: 14,
+                          boxCount: 15, // 14 PC boxes + Party
+                          partyBox: 14,
                           onBox: (b) => setState(() => _gameBox = b),
                           sel: _gameSel,
                           dataAt: (g) => _game[g],
@@ -164,6 +171,7 @@ class _DualBoxScreenState extends State<DualBoxScreen> {
     required String title,
     required int box,
     required int boxCount,
+    int? partyBox,
     required ValueChanged<int> onBox,
     required Set<int> sel,
     required ({int dex, bool shiny})? Function(int globalIndex) dataAt,
@@ -182,7 +190,7 @@ class _DualBoxScreenState extends State<DualBoxScreen> {
               icon: const Icon(Icons.chevron_left),
               onPressed: box > 0 ? () => onBox(box - 1) : null,
             ),
-            Text('Box ${box + 1}/$boxCount'),
+            Text(box == partyBox ? 'Party' : 'Box ${box + 1}/$boxCount'),
             IconButton(
               icon: const Icon(Icons.chevron_right),
               onPressed: box < boxCount - 1 ? () => onBox(box + 1) : null,

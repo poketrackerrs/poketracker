@@ -10,6 +10,7 @@ class VaultMon {
   final String name;
   final int level;
   final bool shiny;
+  final String origin; // title of the game it was pulled from ('' if unknown)
 
   VaultMon({
     required this.block,
@@ -17,6 +18,7 @@ class VaultMon {
     required this.name,
     required this.level,
     required this.shiny,
+    this.origin = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +27,7 @@ class VaultMon {
         'n': name,
         'l': level,
         's': shiny,
+        'o': origin,
       };
 
   factory VaultMon.fromJson(Map<String, dynamic> m) => VaultMon(
@@ -33,5 +36,6 @@ class VaultMon {
         name: (m['n'] as String?) ?? '#${m['d']}',
         level: (m['l'] as int?) ?? 0,
         shiny: (m['s'] as bool?) ?? false,
+        origin: (m['o'] as String?) ?? '',
       );
 }

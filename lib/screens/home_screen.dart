@@ -10,8 +10,8 @@ import 'achievements_screen.dart';
 import 'game_screen.dart';
 import 'updates_screen.dart';
 import 'pokedex_list_screen.dart';
-import 'emulators_screen.dart';
 import 'settings_screen.dart';
+import 'vault_screen.dart';
 
 /// Root scaffold with a bottom nav switching between the game tracker and the
 /// built-in Pokedex.
@@ -25,8 +25,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
 
-  static const _titles = ['PokeTracker', 'Pokedex', 'Settings'];
-  static const _icons = [Icons.catching_pokemon, Icons.menu_book, Icons.settings];
+  static const _titles = ['PokeTracker', 'Pokedex', 'Vault', 'Settings'];
+  static const _icons = [
+    Icons.catching_pokemon,
+    Icons.menu_book,
+    Icons.inventory_2,
+    Icons.settings,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -48,13 +53,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Emulators',
-            icon: const Icon(Icons.sports_esports),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const EmulatorsScreen()),
-            ),
-          ),
-          IconButton(
             tooltip: 'Check for updates',
             icon: const Icon(Icons.system_update),
             onPressed: () => Navigator.of(context).push(
@@ -68,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: const [
           _GamesTab(),
           PokedexListScreen(),
+          VaultScreen(),
           SettingsScreen(),
         ],
       ),

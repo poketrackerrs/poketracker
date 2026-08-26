@@ -8,7 +8,6 @@ import 'developer_screen.dart';
 import 'ds_bios_screen.dart';
 import 'save_transfer_screen.dart';
 import 'updates_screen.dart';
-import 'vault_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -87,15 +86,6 @@ class SettingsScreen extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const SaveTransferScreen()),
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.inventory_2_outlined),
-          title: const Text('Pokémon Vault'),
-          subtitle: const Text('Store Pokémon and clone them between games'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const VaultScreen()),
           ),
         ),
 

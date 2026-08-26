@@ -1071,7 +1071,8 @@ class AppState extends ChangeNotifier {
         _vaultKey, jsonEncode([for (final v in vault) v.toJson()]));
   }
 
-  Future<void> _addBlockToVault(Uint8List block, {bool persist = true}) async {
+  Future<void> _addBlockToVault(Uint8List block,
+      {bool persist = true, String origin = ''}) async {
     final m = Pk3.decode(block);
     final dex = m.nationalDex;
     String name = '#$dex';
@@ -1092,7 +1093,8 @@ class AppState extends ChangeNotifier {
         dex: dex,
         name: name,
         level: level,
-        shiny: m.isShiny));
+        shiny: m.isShiny,
+        origin: origin));
     if (persist) {
       await _saveVault();
       notifyListeners();
@@ -1113,9 +1115,13 @@ class AppState extends ChangeNotifier {
     }
     var n = 0;
     for (final idx in boxIndices) {
-      final block = e.boxSlot(idx);
+      // idx >= 420 = party slot (idx-420); take its 80-byte box structure.
+      final block = idx >= 420
+          ? Uint8List.fromList(
+              e.partyBlock(game.version, idx - 420).sublist(0, 80))
+          : e.boxSlot(idx);
       if (Pk3.decode(block).isEmpty) continue;
-      await _addBlockToVault(block, persist: false);
+      await _addBlockToVault(block, persist: false, origin: game.title);
       n++;
     }
     if (n > 0) {
@@ -1135,7 +1141,7 @@ class AppState extends ChangeNotifier {
           Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
       final block = e.boxSlot(boxIndex);
       if (Pk3.decode(block).isEmpty) return 'That slot is empty.';
-      await _addBlockToVault(block);
+      await _addBlockToVault(block, origin: game.title);
       return 'Saved to Vault.';
     } catch (_) {
       return 'Could not read that Pokémon.';
@@ -1159,7 +1165,8 @@ class AppState extends ChangeNotifier {
             dex: v.dex,
             name: v.name,
             level: v.level,
-            shiny: v.shiny));
+            shiny: v.shiny,
+            origin: v.origin));
     _saveVault();
     notifyListeners();
   }
@@ -1243,6 +1250,15 @@ class AppState extends ChangeNotifier {
     return 'Copied $added Pokémon into ${game.title}'
         "${party ? "'s party" : "'s PC box"}"
         '${full ? ' (stopped — target filled up)' : ''}. Backup saved.';
+  }
+
+  /// Sort the Vault by National Dex (shiny after non-shiny within a species).
+  void sortVaultByDex() {
+    vault.sort((a, b) => a.dex != b.dex
+        ? a.dex.compareTo(b.dex)
+        : (a.shiny ? 1 : 0) - (b.shiny ? 1 : 0));
+    _saveVault();
+    notifyListeners();
   }
 
   void removeFromVaultMulti(List<int> indices) {

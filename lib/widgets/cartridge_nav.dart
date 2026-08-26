@@ -10,6 +10,7 @@ class CartridgeNavBar extends StatelessWidget {
   static const _items = <(IconData, String)>[
     (Icons.videogame_asset, 'GAMES'),
     (Icons.menu_book, 'DEX'),
+    (Icons.inventory_2, 'VAULT'),
     (Icons.settings, 'SETTINGS'),
   ];
 
@@ -28,15 +29,16 @@ class CartridgeNavBar extends StatelessWidget {
         border: Border(top: BorderSide(color: Color(0xFF4A3220), width: 2)),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (var i = 0; i < _items.length; i++)
-            _CartTab(
-              icon: _items[i].$1,
-              label: _items[i].$2,
-              active: i == index,
-              onTap: () => onSelect(i),
+            Expanded(
+              child: _CartTab(
+                icon: _items[i].$1,
+                label: _items[i].$2,
+                active: i == index,
+                onTap: () => onSelect(i),
+              ),
             ),
         ],
       ),
@@ -62,8 +64,10 @@ class _CartTab extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: SizedBox(
-        width: 104,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 104),
+          child: SizedBox(
         height: 86,
         child: Stack(
           clipBehavior: Clip.none,
@@ -156,6 +160,8 @@ class _CartTab extends StatelessWidget {
               ),
             ),
           ],
+        ),
+          ),
         ),
       ),
     );

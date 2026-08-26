@@ -1,6 +1,6 @@
 {
-  "version": "1.0.74",
-  "notes": "Side-by-side boxes (PKHeX-style): in a Gen 3 game's Edit save → PC Boxes, tap the ⟷ button to see your game's boxes next to the Vault, with real Pokémon sprites. Click-drag a rubber-band to select several at once in either panel (or tap to toggle one), then hit 'Copy → Vault' or 'Copy → game' to move the whole selection across. Copies into a game back up the save first.",
+  "version": "1.0.75",
+  "notes": "New Vault tab (bottom bar): a game-independent home for your Pokémon. Pull Pokémon in from any Gen 3 game — PC boxes AND party — with the side-by-side marquee-select view, sort the whole Vault by National Dex, duplicate or delete, and multi-select to clone into another game's box or party. Each Pokémon now shows which game it came from. Copies into a game still back the save up first and verify checksums.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
