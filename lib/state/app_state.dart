@@ -1670,7 +1670,8 @@ class AppState extends ChangeNotifier {
       totalExp: gen3Exp(rate, level),
       moves: [for (var i = 0; i < 4; i++) i < moves.length ? moves[i] : 0],
       pp: [for (var i = 0; i < 4; i++) i < pp.length ? pp[i] : 0],
-      ivs: legal?.ivs ?? const [31, 31, 31, 31, 31, 31],
+      // Non-perfect fallback if the RNG search fails (perfect IVs read as fake).
+      ivs: legal?.ivs ?? [for (var k = 0; k < 6; k++) (dex * 7 + k * 13 + level) % 32],
       nickname: name.isEmpty ? 'POKEMON' : name.toUpperCase(),
       otName: trainer.name,
       nature: nature,
@@ -1715,6 +1716,18 @@ class AppState extends ChangeNotifier {
       'leafgreen' => 5,
       _ => 4,
     };
+    // Real events had RANDOM IVs — never a flat 31/31/31/31/31/31 (that reads
+    // as hacked). Use a Method-1 correlated PID+IV for the event's OT + nature
+    // so the IVs are legal *and* realistic (not perfect).
+    final legal = gen3Method1Find(
+        tid: ev.otTid & 0xFFFF,
+        sid: ev.otSid & 0xFFFF,
+        nature: ev.nature,
+        shiny: false);
+    // Deterministic non-perfect fallback if the RNG search comes up empty.
+    final fallbackIvs = [
+      for (var k = 0; k < 6; k++) (ev.dex * 7 + k * 13 + ev.level) % 32
+    ];
     final pk = Pk3.create(
       otid: otid,
       nationalSpecies: ev.dex,
@@ -1722,7 +1735,7 @@ class AppState extends ChangeNotifier {
       totalExp: gen3Exp(rate, ev.level),
       moves: ev.moves,
       pp: pp,
-      ivs: const [31, 31, 31, 31, 31, 31],
+      ivs: legal?.ivs ?? fallbackIvs,
       nickname: name.isEmpty ? 'EVENT' : name.toUpperCase(),
       otName: ev.otName,
       nature: ev.nature,
@@ -1733,6 +1746,7 @@ class AppState extends ChangeNotifier {
       gameOfOrigin: origin,
       party: party,
     );
+    if (legal != null) pk.setPidAndIvs(legal.pid, legal.ivs);
     pk.setFateful(ev.fateful); // Mew/Deoxys need this to obey + read as legit
     if (party) {
       try {

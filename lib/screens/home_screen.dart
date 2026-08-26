@@ -7,6 +7,7 @@ import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
 import '../widgets/cartridge_nav.dart';
 import 'achievements_screen.dart';
+import 'events_screen.dart';
 import 'game_screen.dart';
 import 'updates_screen.dart';
 import 'pokedex_list_screen.dart';
@@ -45,6 +46,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Event Pokémon',
+            icon: const Icon(Icons.card_giftcard),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const EventsReferenceScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Achievements',
             icon: const Icon(Icons.military_tech),
