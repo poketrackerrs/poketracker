@@ -87,8 +87,32 @@ void main(List<String> args) {
   print('event mon: species=${mewBack.species} fateful=${mewBack.fatefulEncounter} '
       'checksumOk=${mewBack.computeChecksum() == mewBack.storedChecksum}');
 
+  // species conversion (Chimecho quirk): Jirachi 385, Deoxys 386, Chimecho 358
+  var speciesOk = true;
+  for (final nat in [258, 357, 358, 359, 385, 386, 25]) {
+    final internal = gen3NationalToInternal(nat);
+    final back = gen3InternalToNational(internal);
+    if (back != nat) {
+      speciesOk = false;
+      print('  species MAP FAIL nat=$nat internal=$internal back=$back');
+    }
+  }
+  final jir = Pk3.create(
+      otid: 20043, nationalSpecies: 385, level: 5, totalExp: gen3Exp('slow', 5),
+      moves: [93], pp: [25], ivs: [31, 31, 31, 31, 31, 31], nickname: 'JIRACHI',
+      otName: 'WISHMKR', nature: 3, party: false);
+  final deo = Pk3.create(
+      otid: 6930, nationalSpecies: 386, level: 30, totalExp: gen3Exp('slow', 30),
+      moves: [94], pp: [10], ivs: [31, 31, 31, 31, 31, 31], nickname: 'DEOXYS',
+      otName: 'MYSTRY', nature: 10, party: false);
+  final jirOk = Pk3.decode(jir.encode()).nationalDex == 385;
+  final deoOk = Pk3.decode(deo.encode()).nationalDex == 386;
+  print('species: map ok=$speciesOk  Jirachi->${Pk3.decode(jir.encode()).nationalDex} '
+      'Deoxys->${Pk3.decode(deo.encode()).nationalDex}');
+
   final pass = v0.ok && v1.ok && v2.ok && v3.ok && csumMatch && identical &&
-      shinyOk && ivevOk && eventOk && mon.species == 283 &&
+      shinyOk && ivevOk && eventOk && speciesOk && jirOk && deoOk &&
+      mon.species == 283 &&
       e.getMoney('emerald') == 123456 && e.caughtCount == 386;
   print(pass ? '\nPASS ✓ edits + PK3 codec round-trip' : '\nFAIL ✗');
   exitCode = pass ? 0 : 1;

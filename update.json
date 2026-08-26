@@ -1,6 +1,6 @@
 {
-  "version": "1.0.70",
-  "notes": "Mass make-shiny: open a Gen 3 game's Edit save → PC Boxes and tap the sparkle to make every boxed Pokémon legally shiny at once (nature, gender, ability and IVs are all preserved). Event Pokémon (Mew, Deoxys, Jirachi, Celebi) are skipped, since a shiny event Pokémon would be illegal. Backs up your save first.",
+  "version": "1.0.71",
+  "notes": "Fixes: event Pokémon came in as the wrong species (Jirachi showed as Deoxys, Deoxys as Chimecho) — a Gen 3 internal-index quirk where Chimecho occupies the last slot; now Jirachi/Deoxys and every Hoenn Pokémon map correctly. And mass make-shiny now regenerates correlated, checker-legal IVs (the IVs change to a legal spread), while still preserving nature and ability and skipping event Pokémon.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

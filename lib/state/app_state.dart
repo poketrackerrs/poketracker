@@ -1075,7 +1075,23 @@ class AppState extends ChangeNotifier {
         already++;
         continue;
       }
-      m.setShiny(true);
+      // Regenerate a Method-1 correlated shiny PID + IVs (checker-legal),
+      // preserving nature + ability; fall back to the simple toggle if no
+      // shiny frame is found within budget.
+      final res = await findLegalPidIv(
+        dex: m.nationalDex,
+        tid: m.otid & 0xFFFF,
+        sid: m.otid >> 16,
+        nature: m.nature,
+        shiny: true,
+        currentPid: m.pid,
+        wantAbility: m.pid & 1,
+      );
+      if (res != null) {
+        m.setPidAndIvs(res.pid, res.ivs);
+      } else {
+        m.setShiny(true);
+      }
       e.writeBoxSlot(g, m.encode());
       changed++;
     }

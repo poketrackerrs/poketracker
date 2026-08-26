@@ -165,14 +165,24 @@ int gen3GenderOf(int pid, int genderRate) {
 /// Gen 3 stores its own internal species order: #1–251 match the National dex
 /// 1:1, then 25 unused slots, then Hoenn (#252–386) sits at internal 277–411
 /// (National + 25). These convert between the two.
+// CHIMECHO QUIRK: Chimecho (Nat 358) was added late and sits at the LAST
+// internal slot (411), not 358+25=383. So Nat 359–386 shift down by one
+// (internal = Nat + 24, not +25). Without this, e.g. Jirachi (385) was stored
+// at 410 = Deoxys, and Deoxys (386) at 411 = Chimecho.
 int gen3InternalToNational(int internal) {
   if (internal <= 251) return internal;
-  if (internal >= 277 && internal <= 411) return internal - 25;
+  if (internal == 411) return 358; // Chimecho
+  if (internal >= 277 && internal <= 382) return internal - 25; // Nat 252–357
+  if (internal >= 383 && internal <= 410) return internal - 24; // Nat 359–386
   return 0; // an unused/glitch internal slot
 }
 
-int gen3NationalToInternal(int national) =>
-    national <= 251 ? national : national + 25;
+int gen3NationalToInternal(int national) {
+  if (national <= 251) return national;
+  if (national == 358) return 411; // Chimecho — special last slot
+  if (national <= 357) return national + 25; // Nat 252–357
+  return national + 24; // Nat 359–386
+}
 
 /// Gen 3 (Western) character table ⇄ ASCII, for nicknames and OT names. Only the
 /// printable letters/digits/space/common punctuation are mapped; 0xFF ends a
