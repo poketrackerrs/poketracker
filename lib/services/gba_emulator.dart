@@ -19,6 +19,17 @@ Uint8List? gRgba; // latest frame as RGBA8888
 bool gFrameReady = false;
 int gVideoFrames = 0;
 Pointer<Utf8> gSysDir = nullptr;
+// The libretro SAVE directory, answered separately from the SYSTEM directory so
+// the DS core writes its battery save next to the game (the same .sav the
+// editor/tracker use) instead of in the hidden cores/system folder.
+Pointer<Utf8> gSaveDir = nullptr;
+
+/// Point the core's SAVE directory at [dir] (freeing any previous value). Must
+/// be set BEFORE loadRom so the core loads its save from the right place.
+void setEmuSaveDir(String dir) {
+  if (gSaveDir != nullptr) malloc.free(gSaveDir);
+  gSaveDir = dir.toNativeUtf8();
+}
 
 // Pending PCM chunks (int16 stereo, little-endian) to feed the audio engine.
 final List<Uint8List> gAudioChunks = <Uint8List>[];
@@ -64,9 +75,16 @@ bool _env(int cmd, Pointer<Void> data) {
       gPixelFormat = data.cast<Int32>().value;
       return true;
     case envGetSystemDirectory:
-    case envGetSaveDirectory:
       if (gSysDir != nullptr) {
         data.cast<Pointer<Utf8>>().value = gSysDir;
+        return true;
+      }
+      return false;
+    case envGetSaveDirectory:
+      // Save dir = the game folder when set, else fall back to the system dir.
+      final sd = gSaveDir != nullptr ? gSaveDir : gSysDir;
+      if (sd != nullptr) {
+        data.cast<Pointer<Utf8>>().value = sd;
         return true;
       }
       return false;

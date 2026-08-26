@@ -81,6 +81,10 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       final (dll, sys) = await GbaEmulator.provision(coreBase);
       final emu = GbaEmulator(dll);
       emu.init(sys);
+      // Point the core's SAVE directory at the game folder so the DS core reads
+      // and writes the SAME .sav the editor/tracker use (its filename matches
+      // the ROM basename). MUST be before loadRom. Keeps BIOS in the sys dir.
+      setEmuSaveDir(File(widget.romPath).parent.path);
       final ok = emu.loadRom(widget.romPath);
       if (!ok) {
         if (mounted) setState(() => _status = 'The core could not load this ROM.');
