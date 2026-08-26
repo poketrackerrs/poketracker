@@ -1023,6 +1023,16 @@ class _BoxBrowserState extends State<_BoxBrowser> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('PC Boxes'),
+        bottom: mons.isEmpty
+            ? null
+            : const PreferredSize(
+                preferredSize: Size.fromHeight(20),
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 4),
+                  child: Text('Tap to edit  ·  long-press to save to Vault',
+                      style: TextStyle(fontSize: 11, color: Colors.white70)),
+                ),
+              ),
         actions: [
           IconButton(
             tooltip: 'Make all shiny (skips events)',
@@ -1092,7 +1102,17 @@ class _BoxBrowserState extends State<_BoxBrowser> {
           style: const TextStyle(fontSize: 11)),
       trailing: const Icon(Icons.chevron_right, size: 18),
       onTap: () => _edit(m),
+      onLongPress: () => _toVault(m),
     );
+  }
+
+  Future<void> _toVault(Gen3PartyMon m) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final msg = await context
+        .read<AppState>()
+        .copyGameBoxToVault(widget.game, m.boxSlot!);
+    if (!mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 }
 

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.71",
-  "notes": "Fixes: event Pokémon came in as the wrong species (Jirachi showed as Deoxys, Deoxys as Chimecho) — a Gen 3 internal-index quirk where Chimecho occupies the last slot; now Jirachi/Deoxys and every Hoenn Pokémon map correctly. And mass make-shiny now regenerates correlated, checker-legal IVs (the IVs change to a legal spread), while still preserving nature and ability and skipping event Pokémon.",
+  "version": "1.0.72",
+  "notes": "Pokémon Vault (PKHeX-style storage): an app-side box that isn't tied to any game. In a Gen 3 game's Edit save → PC Boxes, long-press a Pokémon to 'Save to Vault'. Then Settings → Pokémon Vault to copy or clone it into any other Gen 3 game (Ruby/Sapphire/Emerald/FireRed/LeafGreen), duplicate it, or remove it. Copies are backed up first and marked caught in the target game's Pokédex. Cross-generation (to DS) is a future step.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

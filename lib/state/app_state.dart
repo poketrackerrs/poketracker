@@ -14,6 +14,7 @@ import '../models/achievement.dart';
 import '../models/game.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
+import '../models/vault_mon.dart';
 import '../services/storage_service.dart';
 import '../services/emulator_bios.dart';
 import '../services/library_service.dart';
@@ -94,6 +95,7 @@ class AppState extends ChangeNotifier {
     _regionTint = prefs.getBool('regiontint') ?? true;
     _consoleMode = prefs.getBool('consolemode') ?? true;
     _devMode = prefs.getBool('devmode') ?? false;
+    _loadVaultFrom(prefs);
     await _loadLibrary();
     _loaded = true;
     notifyListeners();
@@ -1044,6 +1046,128 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       return 'Send failed: could not reach $host on the same Wi-Fi.';
     }
+  }
+
+  // ---------------------------------------------- Pokémon Vault (app storage)
+  // A game-independent store of PK3 blocks. Copy Pokémon out of any Gen 3 game
+  // into the Vault, then clone/copy them into other Gen 3 games.
+  static const _vaultKey = 'poketracker_vault_v1';
+  final List<VaultMon> vault = [];
+
+  void _loadVaultFrom(SharedPreferences prefs) {
+    vault.clear();
+    final raw = prefs.getString(_vaultKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      for (final e in jsonDecode(raw) as List) {
+        vault.add(VaultMon.fromJson(Map<String, dynamic>.from(e as Map)));
+      }
+    } catch (_) {/* corrupt store — start empty */}
+  }
+
+  Future<void> _saveVault() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        _vaultKey, jsonEncode([for (final v in vault) v.toJson()]));
+  }
+
+  Future<void> _addBlockToVault(Uint8List block) async {
+    final m = Pk3.decode(block);
+    final dex = m.nationalDex;
+    String name = '#$dex';
+    var level = m.level;
+    try {
+      for (final s in await _pokedex.loadIndex()) {
+        if (s.id == dex) {
+          name = s.name;
+          break;
+        }
+      }
+      if (level == 0) {
+        level = gen3LevelFromExp(await _pokedex.growthRate(dex), m.exp);
+      }
+    } catch (_) {/* offline: keep #dex + raw level */}
+    vault.add(VaultMon(
+        block: Uint8List.fromList(block),
+        dex: dex,
+        name: name,
+        level: level,
+        shiny: m.isShiny));
+    await _saveVault();
+    notifyListeners();
+  }
+
+  /// Copies the Pokémon in [game]'s PC box slot [boxIndex] into the Vault.
+  Future<String> copyGameBoxToVault(Game game, int boxIndex) async {
+    if (game.generation != 3) return 'Gen 3 only for now.';
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found.';
+    try {
+      final e =
+          Gen3SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+      final block = e.boxSlot(boxIndex);
+      if (Pk3.decode(block).isEmpty) return 'That slot is empty.';
+      await _addBlockToVault(block);
+      return 'Saved to Vault.';
+    } catch (_) {
+      return 'Could not read that Pokémon.';
+    }
+  }
+
+  void removeFromVault(int index) {
+    if (index < 0 || index >= vault.length) return;
+    vault.removeAt(index);
+    _saveVault();
+    notifyListeners();
+  }
+
+  void duplicateInVault(int index) {
+    if (index < 0 || index >= vault.length) return;
+    final v = vault[index];
+    vault.insert(
+        index + 1,
+        VaultMon(
+            block: Uint8List.fromList(v.block),
+            dex: v.dex,
+            name: v.name,
+            level: v.level,
+            shiny: v.shiny));
+    _saveVault();
+    notifyListeners();
+  }
+
+  /// Copies (clones) Vault mon [index] into [game]'s PC box (or party).
+  Future<String> copyVaultToGame(Game game, int index,
+      {bool party = false}) async {
+    if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
+    if (index < 0 || index >= vault.length) return 'No such Vault Pokémon.';
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    final Gen3SaveEditor e;
+    try {
+      e = Gen3SaveEditor.load(raw);
+    } catch (_) {
+      return 'Not a readable GBA save.';
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Save checksums look wrong — refusing to edit it.';
+    }
+    final block = Uint8List.fromList(vault[index].block);
+    final ok = party
+        ? e.addPartyMon(game.version, block)
+        : e.addBoxMon(block) >= 0;
+    if (!ok) return party ? 'Party is full.' : 'PC boxes are full.';
+    e.markCaught(game.version, Pk3.decode(block).nationalDex);
+    if (!e.verifyChecksums().ok) {
+      return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+    }
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    await File('${file.path}.bak-$stamp').writeAsBytes(raw, flush: true);
+    await file.writeAsBytes(e.toBytes(), flush: true);
+    notifyListeners();
+    return 'Copied ${vault[index].name} into ${game.title}'
+        "${party ? "'s party" : "'s PC box"}. Backup saved.";
   }
 
   /// Makes every PC-box Pokémon legally shiny — EXCEPT event Pokémon (anything
