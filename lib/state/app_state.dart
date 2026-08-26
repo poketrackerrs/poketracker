@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/games_data.dart';
 import '../data/gen3_events.dart';
+import '../data/gen4_events.dart';
 import '../data/frlg_achievements.dart';
 import '../data/gen3_metloc.dart';
 import '../models/achievement.dart';
@@ -807,7 +808,8 @@ class AppState extends ChangeNotifier {
   Future<String> writeGen4Save(Game game,
       {int? money,
       Gen4Trainer? trainer,
-      Map<int, PartyEdit> partyEdits = const {}}) async {
+      Map<int, PartyEdit> partyEdits = const {},
+      List<Uint8List> boxInjects = const []}) async {
     if (game.generation != 4) return 'Gen 4 editing only.';
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
@@ -829,6 +831,22 @@ class AppState extends ChangeNotifier {
       if (m.isEmpty) continue;
       await _applyGen4MonEdit(m, entry.value, t.tid, t.sid);
       e.writePartyBlock(entry.key, m.encode());
+    }
+    // Drop each injected mon into the first empty PC box slot (18 boxes × 30).
+    var injected = 0;
+    if (boxInjects.isNotEmpty) {
+      const totalSlots = 18 * 30;
+      var slot = 0;
+      for (final block in boxInjects) {
+        while (slot < totalSlots && !Pkx.decode(e.boxSlot(slot)).isEmpty) {
+          slot++;
+        }
+        if (slot >= totalSlots) break; // boxes full
+        e.writeBoxSlot(slot, block);
+        slot++;
+        injected++;
+      }
+      if (injected == 0) return 'PC boxes are full — nothing added.';
     }
     if (!e.verifyChecksums().ok) {
       return 'Edit produced bad checksums — aborted, your save was NOT changed.';
@@ -1529,6 +1547,22 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Reads the Gen 4 trainer card (name/gender/ID) for the editor / event
+  /// builder. Null if there's no readable save.
+  Future<Gen4Trainer?> readGen4Trainer(Game game) async {
+    if (game.generation != 4) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen4SaveEditor.load(
+          Uint8List.fromList(await file.readAsBytes()), game.version);
+      if (!e.verifyChecksums().ok) return null;
+      return e.trainer();
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Reads the five bag pockets for the editor. Keyed by pocket.
   Future<Map<Gen3Pocket, List<({int id, int qty})>>?> readGen3Bag(
       Game game) async {
@@ -1758,6 +1792,109 @@ class AppState extends ChangeNotifier {
         ]);
       } catch (_) {/* offline: stats stay 0 until first heal */}
     }
+    return pk.encode();
+  }
+
+  /// Gen 4 game-of-origin (hometown) value for a version id.
+  static int _gen4Origin(String version) => switch (version) {
+        'heartgold' => 7,
+        'soulsilver' => 8,
+        'diamond' => 10,
+        'pearl' => 11,
+        'platinum' => 12,
+        _ => 10,
+      };
+
+  /// Builds a legal Gen 4 event PK4 (136-byte box block) from [ev], ready to
+  /// inject into a PC box. Mirrors the Gen 3 event builder: Method-1 correlated
+  /// non-perfect IVs, fateful flag set, game-of-origin = the receiving
+  /// cartridge. For key-item / egg events ([Gen4Event.ownTrainer]) the OT /
+  /// TID / SID come from the player's own save. Returns null if a needed save
+  /// isn't readable. Met location is a generic event value for now.
+  Future<Uint8List?> buildGen4EventMon(Game game, Gen4Event ev) async {
+    if (game.generation != 4) return null;
+
+    var tid = ev.otTid & 0xFFFF, sid = ev.otSid & 0xFFFF, otGender = 0;
+    var otName = ev.otName;
+    if (ev.ownTrainer) {
+      final t = await readGen4Trainer(game);
+      if (t == null) return null;
+      tid = t.tid & 0xFFFF;
+      sid = t.sid & 0xFFFF;
+      otGender = t.gender;
+      otName = t.name;
+    }
+
+    final level = ev.level;
+    final rate = await _pokedex.growthRate(ev.dex);
+    final pp = <int>[];
+    for (final mid in ev.moves) {
+      pp.add(mid == 0 ? 0 : await _pokedex.movePP(mid));
+    }
+    var name = '';
+    for (final s in await _pokedex.loadIndex()) {
+      if (s.id == ev.dex) {
+        name = s.name;
+        break;
+      }
+    }
+    var genderRate = -1;
+    try {
+      genderRate = (await _pokedex.fetchDetail(ev.dex)).genderRate;
+    } catch (_) {/* offline: don't constrain gender */}
+
+    // Nature: fixed when the card fixed it, else a realistic deterministic pick.
+    final nature = ev.nature >= 0 ? ev.nature : (ev.dex * 31 + level * 7) % 25;
+
+    // Method-1 correlated PID + non-perfect IVs for this OT + nature (Method 1
+    // is how Gen 4 gift Pokémon are generated). Never a flat 31 (reads as fake).
+    final legal = gen3Method1Find(
+        tid: tid, sid: sid, nature: nature, shiny: false, genderRate: genderRate);
+    final ivs = legal?.ivs ??
+        [for (var k = 0; k < 6; k++) (ev.dex * 7 + k * 13 + level) % 32];
+    // Fallback PID still satisfies the wanted nature (pid % 25 == nature).
+    var pid = legal?.pid ??
+        (() {
+          var p =
+              (ev.dex * 0x41C64E6D + level * 0x3039 + 0x60730000) & 0xFFFFFFFF;
+          return (p - (p % 25) + nature) & 0xFFFFFFFF;
+        })();
+    // Guaranteed-shiny events: the real cards' SID isn't published, so choose
+    // an SID that makes this PID shiny (TID^SID^PIDhi^PIDlo == 0 < 8).
+    if (ev.shiny && !ev.ownTrainer) {
+      sid = (tid ^ (pid >> 16) ^ (pid & 0xFFFF)) & 0xFFFF;
+    }
+
+    // Ability slot lives in PID bit 0; gender derives from PID + species ratio.
+    var ability = 0;
+    try {
+      final abs = await pokedexAbilities(ev.dex);
+      final normal = [for (final a in abs) if (!a.hidden) a];
+      if (normal.isNotEmpty) ability = normal[(pid & 1) % normal.length].id;
+    } catch (_) {/* offline: leave ability 0 */}
+    final gender = genderRate < 0 ? 2 : gen3GenderOf(pid, genderRate);
+
+    final pk = Pkx.create(
+      species: ev.dex,
+      pid: pid,
+      tid: tid,
+      sid: sid,
+      exp: gen3Exp(rate, level),
+      moves: [for (var i = 0; i < 4; i++) i < ev.moves.length ? ev.moves[i] : 0],
+      pp: [for (var i = 0; i < 4; i++) i < pp.length ? pp[i] : 0],
+      ivs: ivs,
+      ability: ability,
+      nickname: name.isEmpty ? 'EVENT' : name.toUpperCase(),
+      otName: otName,
+      heldItem: ev.heldItem,
+      ball: ev.ball,
+      metLocation: 2000, // generic "Pokémon event" arrival (DPPt range)
+      metLevel: ev.metLevel,
+      otGender: otGender,
+      gender: gender,
+      originGame: _gen4Origin(game.version),
+      fateful: ev.fateful,
+    );
     return pk.encode();
   }
 
