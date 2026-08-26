@@ -645,7 +645,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
               child: Text('Add an event Pokémon',
                   style: TextStyle(fontWeight: FontWeight.w700)),
             ),
-            for (final e in kGen3Events)
+            for (final e in gen3EventsFor(widget.game.version))
               ListTile(
                 leading: const Icon(Icons.auto_awesome, color: Colors.amber),
                 title: Text('${e.label}  ·  Lv${e.level}'),
