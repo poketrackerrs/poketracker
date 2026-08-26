@@ -873,15 +873,11 @@ class AppState extends ChangeNotifier {
       for (var g = 0; g < total; g++) {
         final m = Pkx.decode(e.boxSlot(g));
         if (m.isEmpty) continue;
-        var level = 0;
-        try {
-          level = gen3LevelFromExp(await _pokedex.growthRate(m.species), m.exp);
-        } catch (_) {}
         out.add(Gen3PartyMon(
           slot: g % Gen4SaveEditor.perBox,
           boxSlot: g,
           dex: m.species,
-          level: level,
+          level: 0, // derived from exp when opened for editing
           shiny: m.isShiny(t.tid, t.sid),
           nature: m.nature,
           ivs: m.ivs,
@@ -1009,15 +1005,11 @@ class AppState extends ChangeNotifier {
       for (var g = 0; g < total; g++) {
         final m = Pk5.decode(e.boxSlotGlobal(g));
         if (m.isEmpty) continue;
-        var level = 0;
-        try {
-          level = gen3LevelFromExp(await _pokedex.growthRate(m.species), m.exp);
-        } catch (_) {}
         out.add(Gen3PartyMon(
           slot: g % Gen5SaveEditor.perBox,
           boxSlot: g,
           dex: m.species,
-          level: level,
+          level: 0, // derived from exp when opened for editing
           shiny: m.isShiny(t.tid, t.sid),
           nature: m.nature,
           ivs: m.ivs,
@@ -2707,17 +2699,36 @@ class AppState extends ChangeNotifier {
 
   /// Restores the most recent editor backup over the current save (only if that
   /// backup itself has valid checksums). Undoes a bad edit.
-  Future<String> restoreGen3Backup(Game game) async {
+  Future<String> restoreGen3Backup(Game game) => restoreBackup(game);
+
+  /// Does [bytes] pass checksums for [game]'s generation? Used to pick a valid
+  /// backup to restore (skips corrupt ones).
+  bool _saveChecksumsOk(Uint8List bytes, Game game) {
+    try {
+      return switch (game.generation) {
+        1 => Gen1SaveEditor.load(bytes).verifyChecksums().ok,
+        2 => Gen2SaveEditor.load(bytes, game.version).verifyChecksums().ok,
+        3 => Gen3SaveEditor.load(bytes).verifyChecksums().ok,
+        4 => Gen4SaveEditor.load(bytes, game.version).verifyChecksums().ok,
+        5 => Gen5SaveEditor.load(bytes, game.version).verifyChecksums().ok,
+        _ => false,
+      };
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Restores the newest backup (`.sav.bak-<ts>`) that passes checksums for
+  /// this game's generation, skipping corrupt ones. Works for Gens 1–5.
+  Future<String> restoreBackup(Game game) async {
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
     final baks = _backupsFor(file);
     if (baks.isEmpty) return 'No backup found to restore.';
-    // Restore the newest backup that actually passes checksums — skip any
-    // corrupt ones (e.g. a bad save the emulator may have backed up).
     for (final bak in baks) {
       try {
         final bytes = Uint8List.fromList(await bak.readAsBytes());
-        if (!Gen3SaveEditor.load(bytes).verifyChecksums().ok) continue;
+        if (!_saveChecksumsOk(bytes, game)) continue;
         await file.writeAsBytes(bytes, flush: true);
         return 'Restored ${bak.uri.pathSegments.last}. Reload it in your '
             'emulator.';

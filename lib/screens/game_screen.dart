@@ -65,6 +65,39 @@ class GameScreen extends StatelessWidget {
                   builder: (_) => _BoxBrowser(game: game, edits: const {}),
                 )),
               ),
+            // Recover a save from the automatic pre-edit backup (Gens 1–5).
+            if (game.generation >= 1 && game.generation <= 5)
+              IconButton(
+                tooltip: 'Restore last backup',
+                icon: const Icon(Icons.settings_backup_restore),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final state = context.read<AppState>();
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Restore last backup?'),
+                      content: Text(
+                          'Replaces the current ${game.title} save with the '
+                          'newest valid backup taken before an edit. Use this '
+                          'to undo a bad edit. Reload it in your emulator after.'),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel')),
+                        FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Restore')),
+                      ],
+                    ),
+                  );
+                  if (ok != true) return;
+                  final msg = await state.restoreBackup(game);
+                  messenger.showSnackBar(SnackBar(
+                      content: Text(msg),
+                      duration: const Duration(seconds: 6)));
+                },
+              ),
             IconButton(
               tooltip: 'Sync from save file',
               icon: const Icon(Icons.sync),
@@ -3833,10 +3866,10 @@ class _DexTabState extends State<_DexTab> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Add a legal copy to the PC box (base species; Gens 1–5).
-          if (widget.game.generation >= 1 &&
-              widget.game.generation <= 5 &&
-              !r.isForm)
+          // Add a legal copy to the PC box. Gen 3 only for now — the Gen
+          // 1/2/4/5 box-inject write paths are being re-verified against real
+          // saves after a corruption report; re-enabled per gen once safe.
+          if (widget.game.generation == 3 && !r.isForm)
             IconButton(
               tooltip: 'Add a legal one to your PC box',
               icon: const Icon(Icons.add_box_outlined),
