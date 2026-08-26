@@ -68,6 +68,7 @@ const _sunnyDay = 241, _mistBall = 296, _psychic = 94, _charm = 204;
 const _lusterPurge = 295, _dragonDance = 349;
 
 const int _salacBerry = 170; // berries start at 133; Salac = index 37
+const int _lightBall = 202; // Gen 3 item id (gen3_items.dart)
 
 /// Verified English Generation III distributions.
 const kGen3Events = <Gen3Event>[
@@ -88,8 +89,8 @@ const kGen3Events = <Gen3Event>[
     label: 'Jirachi (WISHMKR)',
     dex: 385, level: 5, otName: 'WISHMKR', otTid: 20043, otSid: 0,
     moves: [_wish, _confusion, _rest], nature: 3, metLevel: 5,
-    heldItem: _salacBerry,
-    note: 'Wish-Maker bonus-disc Jirachi.',
+    heldItem: _salacBerry, games: {'rs'},
+    note: 'Wish-Maker bonus-disc Jirachi (R/S only — 2004 Colosseum disc).',
   ),
   Gen3Event(
     label: 'Deoxys (SPACE C)',
@@ -109,7 +110,8 @@ const kGen3Events = <Gen3Event>[
     label: 'Pikachu (10ANNIV)', dex: 25, level: 70, otName: '10ANNIV',
     otTid: 6227, otSid: 0,
     moves: [_thunderbolt, _agility, _thunder, _lightScreen],
-    nature: 15, metLevel: 70, note: '10th Anniversary distribution.',
+    nature: 15, metLevel: 70, heldItem: _lightBall,
+    note: '10th Anniversary distribution (held a Light Ball).',
   ),
   Gen3Event(
     label: 'Articuno (10ANNIV)', dex: 144, level: 70, otName: '10ANNIV',
