@@ -6,50 +6,9 @@ import '../data/region_theme.dart';
 import '../state/app_state.dart';
 import 'developer_screen.dart';
 import 'ds_bios_screen.dart';
-import 'emulators_screen.dart';
 import 'save_transfer_screen.dart';
 import 'updates_screen.dart';
 import 'vault_screen.dart';
-
-/// A recommended emulator link (store page or download page).
-class _EmuLink {
-  final String name;
-  final String systems;
-  final String url;
-  const _EmuLink(this.name, this.systems, this.url);
-}
-
-// Android → Google Play pages (maintained, modern-Android compatible).
-// Launchers first (the Play button boots ROMs straight into these), then
-// Lemuroid, which is a library browser used via the folder sync below.
-const _androidEmus = [
-  _EmuLink('My OldBoy! Lite', 'Gen 1–2 · GB · GBC · one-tap launch',
-      'https://play.google.com/store/apps/details?id=com.fastemulator.gbcfree'),
-  _EmuLink('My Boy! Lite', 'Gen 3 · Game Boy Advance · one-tap launch',
-      'https://play.google.com/store/apps/details?id=com.fastemulator.gbafree'),
-  _EmuLink('melonDS', 'Gen 4–5 · Nintendo DS',
-      'https://play.google.com/store/apps/details?id=me.magnum.melonds'),
-  _EmuLink('Lemuroid', 'Library browser · GB → DS',
-      'https://play.google.com/store/apps/details?id=com.swordfish.lemuroid'),
-];
-
-// iOS / iPadOS → App Store pages.
-const _iosEmus = [
-  _EmuLink('Delta', 'GB · GBC · GBA · DS · N64 · SNES',
-      'https://apps.apple.com/us/app/delta-game-emulator/id1048524688'),
-  _EmuLink('RetroArch', 'multi-system',
-      'https://apps.apple.com/us/app/retroarch/id6499539433'),
-];
-
-// Windows → official download pages.
-const _windowsEmus = [
-  _EmuLink('mGBA', 'GB · GBC · GBA', 'https://mgba.io/downloads.html'),
-  _EmuLink('melonDS', 'DS', 'https://melonds.kuribo64.net/downloads.php'),
-  _EmuLink('DeSmuME', 'DS', 'https://desmume.org/download/'),
-  _EmuLink('Azahar', '3DS', 'https://azahar-emu.org/'),
-  _EmuLink('RetroArch', 'multi-system',
-      'https://www.retroarch.com/?page=platforms'),
-];
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -120,16 +79,7 @@ class SettingsScreen extends StatelessWidget {
           onChanged: (v) => context.read<AppState>().setRegionTint(v),
         ),
 
-        _header(context, 'Emulators'),
-        ListTile(
-          leading: const Icon(Icons.sports_esports),
-          title: const Text('Detect installed emulators'),
-          subtitle: const Text('Scan this device, or get one below'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const EmulatorsScreen()),
-          ),
-        ),
+        _header(context, 'Saves & tools'),
         ListTile(
           leading: const Icon(Icons.wifi_tethering),
           title: const Text('Transfer saves (Wi-Fi)'),
@@ -148,36 +98,6 @@ class SettingsScreen extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const VaultScreen()),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-          child: Text(
-            _emuStoreBlurb(),
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-        for (final e in _emusForPlatform())
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: ListTile(
-              leading: Icon(_platformIcon()),
-              title: Text(e.name),
-              subtitle: Text(e.systems),
-              trailing: FilledButton.icon(
-                icon: Icon(_storeButtonIcon(), size: 16),
-                label: Text(_storeButtonLabel()),
-                onPressed: () => context.read<AppState>().openExternal(e.url),
-              ),
-            ),
-          ),
-        if (!Platform.isWindows)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            child: Text(
-              'Note: 3DS games (Gen 6–7) are best played on a desktop emulator '
-              'like Azahar.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
 
         if (Platform.isWindows || Platform.isAndroid) ...[
           _header(context, 'Built-in DS player'),
@@ -544,33 +464,6 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  List<_EmuLink> _emusForPlatform() {
-    if (Platform.isAndroid) return _androidEmus;
-    if (Platform.isIOS) return _iosEmus;
-    return _windowsEmus;
-  }
-
-  String _emuStoreBlurb() {
-    if (Platform.isAndroid) return 'Get an emulator from Google Play:';
-    if (Platform.isIOS) return 'Get an emulator from the App Store:';
-    return 'Download an emulator for Windows:';
-  }
-
-  IconData _platformIcon() {
-    if (Platform.isAndroid) return Icons.android;
-    if (Platform.isIOS) return Icons.phone_iphone;
-    return Icons.desktop_windows;
-  }
-
-  IconData _storeButtonIcon() =>
-      (Platform.isAndroid || Platform.isIOS) ? Icons.shop : Icons.download;
-
-  String _storeButtonLabel() {
-    if (Platform.isAndroid) return 'Play Store';
-    if (Platform.isIOS) return 'App Store';
-    return 'Download';
   }
 
   Widget _header(BuildContext context, String text) => Padding(

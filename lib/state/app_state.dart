@@ -1170,6 +1170,62 @@ class AppState extends ChangeNotifier {
         "${party ? "'s party" : "'s PC box"}. Backup saved.";
   }
 
+  /// Copies (clones) several Vault mons into [game] in one write (single backup).
+  Future<String> copyVaultMultiToGame(Game game, List<int> indices,
+      {bool party = false}) async {
+    if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
+    if (indices.isEmpty) return 'Nothing selected.';
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    final Gen3SaveEditor e;
+    try {
+      e = Gen3SaveEditor.load(raw);
+    } catch (_) {
+      return 'Not a readable GBA save.';
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Save checksums look wrong — refusing to edit it.';
+    }
+    var added = 0;
+    var full = false;
+    for (final idx in indices) {
+      if (idx < 0 || idx >= vault.length) continue;
+      final block = Uint8List.fromList(vault[idx].block);
+      final ok = party
+          ? e.addPartyMon(game.version, block)
+          : e.addBoxMon(block) >= 0;
+      if (!ok) {
+        full = true;
+        break;
+      }
+      e.markCaught(game.version, Pk3.decode(block).nationalDex);
+      added++;
+    }
+    if (added == 0) {
+      return party ? 'Party is full.' : 'PC boxes are full.';
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+    }
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    await File('${file.path}.bak-$stamp').writeAsBytes(raw, flush: true);
+    await file.writeAsBytes(e.toBytes(), flush: true);
+    notifyListeners();
+    return 'Copied $added Pokémon into ${game.title}'
+        "${party ? "'s party" : "'s PC box"}"
+        '${full ? ' (stopped — target filled up)' : ''}. Backup saved.';
+  }
+
+  void removeFromVaultMulti(List<int> indices) {
+    final sorted = [...indices]..sort((a, b) => b.compareTo(a)); // high → low
+    for (final i in sorted) {
+      if (i >= 0 && i < vault.length) vault.removeAt(i);
+    }
+    _saveVault();
+    notifyListeners();
+  }
+
   /// Makes every PC-box Pokémon legally shiny — EXCEPT event Pokémon (anything
   /// flagged fateful-encounter, e.g. Mew/Deoxys/Jirachi/Celebi, which are
   /// shiny-locked and would become illegal). Backup-first + checksum-guarded.

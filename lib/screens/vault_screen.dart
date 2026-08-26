@@ -6,16 +6,52 @@ import '../state/app_state.dart';
 
 /// The Pokémon Vault: a game-independent store. Copy Pokémon here from any
 /// Gen 3 game (PC Boxes → Save to Vault), then copy or clone them into other
-/// Gen 3 games from here.
-class VaultScreen extends StatelessWidget {
+/// Gen 3 games. Supports multi-select for batch copy/remove.
+class VaultScreen extends StatefulWidget {
   const VaultScreen({super.key});
+  @override
+  State<VaultScreen> createState() => _VaultScreenState();
+}
+
+class _VaultScreenState extends State<VaultScreen> {
+  final Set<int> _sel = {};
+  bool get _selecting => _sel.isNotEmpty;
+
+  void _toggle(int i) => setState(() {
+        if (!_sel.remove(i)) _sel.add(i);
+      });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Pokémon Vault')),
+      appBar: _selecting
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(_sel.clear),
+              ),
+              title: Text('${_sel.length} selected'),
+              actions: [
+                IconButton(
+                  tooltip: 'Copy to a game',
+                  icon: const Icon(Icons.send_to_mobile),
+                  onPressed: () => _copyTo(context, _sel.toList()),
+                ),
+                IconButton(
+                  tooltip: 'Remove',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () {
+                    context.read<AppState>().removeFromVaultMulti(_sel.toList());
+                    setState(_sel.clear);
+                  },
+                ),
+              ],
+            )
+          : AppBar(title: const Text('Pokémon Vault')),
       body: Consumer<AppState>(
         builder: (context, state, _) {
+          // keep selection valid if the list shrank
+          _sel.removeWhere((i) => i >= state.vault.length);
           if (state.vault.isEmpty) {
             return const Center(
               child: Padding(
@@ -23,7 +59,8 @@ class VaultScreen extends StatelessWidget {
                 child: Text(
                   'Your Vault is empty.\n\nOpen a Gen 3 game → Edit save → '
                   'PC Boxes, tap a Pokémon and "Save to Vault". Then copy or '
-                  'clone it into any other Gen 3 game from here.',
+                  'clone it into any other Gen 3 game from here.\n\n'
+                  'Tip: long-press to select several at once.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey),
                 ),
@@ -35,13 +72,21 @@ class VaultScreen extends StatelessWidget {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final v = state.vault[i];
+              final selected = _sel.contains(i);
               return ListTile(
-                leading: Icon(v.shiny ? Icons.star : Icons.catching_pokemon,
-                    color: v.shiny ? Colors.amber : null),
+                selected: selected,
+                leading: _selecting
+                    ? Icon(selected
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked)
+                    : Icon(v.shiny ? Icons.star : Icons.catching_pokemon,
+                        color: v.shiny ? Colors.amber : null),
                 title: Text('${v.name}${v.shiny ? '  ★' : ''}'),
                 subtitle: Text('Lv ${v.level}  ·  #${v.dex}'),
-                trailing: const Icon(Icons.more_vert),
-                onTap: () => _actions(context, state, i),
+                trailing: _selecting ? null : const Icon(Icons.more_vert),
+                onTap: () =>
+                    _selecting ? _toggle(i) : _actions(context, state, i),
+                onLongPress: () => _toggle(i),
               );
             },
           );
@@ -63,7 +108,7 @@ class VaultScreen extends StatelessWidget {
               subtitle: const Text('Clone into another Gen 3 game'),
               onTap: () {
                 Navigator.pop(context);
-                _copyTo(context, state, i);
+                _copyTo(context, [i]);
               },
             ),
             ListTile(
@@ -89,7 +134,8 @@ class VaultScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _copyTo(BuildContext context, AppState state, int i) async {
+  Future<void> _copyTo(BuildContext context, List<int> indices) async {
+    final state = context.read<AppState>();
     final gen3 = [
       for (final g in kGames)
         if (g.generation == 3 && state.isInstalled(g.id)) g
@@ -105,7 +151,9 @@ class VaultScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
-          title: const Text('Copy to a game'),
+          title: Text(indices.length == 1
+              ? 'Copy to a game'
+              : 'Copy ${indices.length} to a game'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -139,8 +187,9 @@ class VaultScreen extends StatelessWidget {
       ),
     );
     if (go != true || game == null || !context.mounted) return;
-    final msg = await state.copyVaultToGame(game!, i, party: party);
+    final msg = await state.copyVaultMultiToGame(game!, indices, party: party);
     if (!context.mounted) return;
+    setState(_sel.clear);
     ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), duration: const Duration(seconds: 5)));
   }
