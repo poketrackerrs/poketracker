@@ -98,6 +98,45 @@ class GameScreen extends StatelessWidget {
                       duration: const Duration(seconds: 6)));
                 },
               ),
+            // Erase the save and start a fresh new game (Gens 1–5).
+            if (game.generation >= 1 && game.generation <= 5)
+              IconButton(
+                tooltip: 'Start a new game (erase save)',
+                icon: const Icon(Icons.restart_alt),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final state = context.read<AppState>();
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      icon: const Icon(Icons.warning_amber,
+                          color: Colors.red, size: 36),
+                      title: const Text('Start a new game?'),
+                      content: Text(
+                          'This ERASES your ${game.title} save so the game '
+                          'boots a brand-new game — your team, badges and '
+                          'progress will be gone.\n\nA backup is kept first, so '
+                          'you can undo with "Restore last backup". Fully close '
+                          'and relaunch the game afterwards.'),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel')),
+                        FilledButton(
+                            style: FilledButton.styleFrom(
+                                backgroundColor: Colors.red),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Erase & start new')),
+                      ],
+                    ),
+                  );
+                  if (ok != true) return;
+                  final msg = await state.eraseSaveForNewGame(game);
+                  messenger.showSnackBar(SnackBar(
+                      content: Text(msg),
+                      duration: const Duration(seconds: 6)));
+                },
+              ),
             IconButton(
               tooltip: 'Sync from save file',
               icon: const Icon(Icons.sync),

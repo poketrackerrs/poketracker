@@ -2780,6 +2780,71 @@ class AppState extends ChangeNotifier {
         'Reopen the game in your emulator.';
   }
 
+  /// Erases every save file for [game] so the game boots a fresh new game.
+  /// The main .sav is backed up first (recover it via Restore). Deletes the
+  /// save next to the ROM AND the copy the DS core keeps in the cores/system
+  /// dir, across every known save extension.
+  Future<String> eraseSaveForNewGame(Game game) async {
+    final rom = _installed[game.id];
+    if (rom == null) return 'No ROM found for ${game.title}.';
+    final dot = rom.lastIndexOf('.');
+    final romBase = dot == -1 ? rom : rom.substring(0, dot);
+    final romName = romBase.split(Platform.pathSeparator).last;
+    const exts = ['.sav', '.dsv', '.srm', '.sav1', '.sa1', '.fla', '.dst'];
+    var deleted = 0;
+
+    // Back up the primary .sav first so this is recoverable.
+    try {
+      final main = File('$romBase.sav');
+      if (main.existsSync()) {
+        final stamp = DateTime.now().millisecondsSinceEpoch;
+        await File('$romBase.sav.bak-$stamp')
+            .writeAsBytes(await main.readAsBytes(), flush: true);
+      }
+    } catch (_) {}
+
+    // 1. Save files next to the ROM (the tracked location).
+    for (final e in exts) {
+      final f = File('$romBase$e');
+      if (f.existsSync()) {
+        try {
+          await f.delete();
+          deleted++;
+        } catch (_) {}
+      }
+    }
+    // 2. A manually-set save path, if any.
+    final manual = await savePath(game.id);
+    if (manual != null && manual.isNotEmpty && File(manual).existsSync()) {
+      try {
+        await File(manual).delete();
+        deleted++;
+      } catch (_) {}
+    }
+    // 3. The DS core's own save copy in <AppSupport>/cores.
+    try {
+      final support = await getApplicationSupportDirectory();
+      final coresDir = Directory('${support.path}/cores');
+      if (coresDir.existsSync()) {
+        for (final f in coresDir.listSync().whereType<File>()) {
+          final name = f.path.split(Platform.pathSeparator).last;
+          if (name.startsWith(romName) &&
+              exts.any((e) => name.toLowerCase().endsWith(e))) {
+            try {
+              await f.delete();
+              deleted++;
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+
+    return deleted > 0
+        ? 'Erased $deleted save file(s) (backup kept). Launch the game to '
+            'start fresh; restore the backup to undo.'
+        : 'No save files found to erase.';
+  }
+
   Future<void> _backupThenWrite(
       File file, Uint8List original, Uint8List updated) async {
     final stamp = DateTime.now().millisecondsSinceEpoch;
