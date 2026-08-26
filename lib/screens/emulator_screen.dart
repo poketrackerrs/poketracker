@@ -522,13 +522,19 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     _toastEntry?.remove();
     _toastEntry = null;
     _padSub?.cancel();
-    // best-effort synchronous save on teardown
+    // best-effort synchronous save on teardown — but ONLY if the in-game save
+    // actually changed since boot. Otherwise closing the game would clobber an
+    // externally-edited .sav (e.g. Clear Boxes / Restore) with stale SRAM.
     try {
       final emu = _emu;
       final path = _savPath;
       if (emu != null && path != null && emu.loaded) {
         final d = emu.readSaveRam();
-        if (d != null && d.isNotEmpty) File(path).writeAsBytesSync(d);
+        if (d != null &&
+            d.isNotEmpty &&
+            (!_hadSaveAtBoot || _sigOf(d) != _loadedSaveSig)) {
+          File(path).writeAsBytesSync(d);
+        }
       }
     } catch (_) {}
     try {
