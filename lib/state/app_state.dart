@@ -1046,6 +1046,55 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Makes every PC-box Pokémon legally shiny — EXCEPT event Pokémon (anything
+  /// flagged fateful-encounter, e.g. Mew/Deoxys/Jirachi/Celebi, which are
+  /// shiny-locked and would become illegal). Backup-first + checksum-guarded.
+  Future<String> makeAllBoxShiny(Game game) async {
+    if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    final Gen3SaveEditor e;
+    try {
+      e = Gen3SaveEditor.load(raw);
+    } catch (_) {
+      return 'Not a readable GBA save.';
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Save checksums look wrong — refusing to edit it.';
+    }
+    var changed = 0, skipped = 0, already = 0;
+    for (var g = 0; g < 420; g++) {
+      final m = Pk3.decode(e.boxSlot(g));
+      if (m.isEmpty) continue;
+      if (m.fatefulEncounter) {
+        skipped++; // event Pokémon — leave it alone
+        continue;
+      }
+      if (m.isShiny) {
+        already++;
+        continue;
+      }
+      m.setShiny(true);
+      e.writeBoxSlot(g, m.encode());
+      changed++;
+    }
+    if (changed == 0) {
+      return 'Nothing to change — $skipped event Pokémon skipped, '
+          '$already already shiny.';
+    }
+    if (!e.verifyChecksums().ok) {
+      return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+    }
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    await File('${file.path}.bak-$stamp').writeAsBytes(raw, flush: true);
+    await file.writeAsBytes(e.toBytes(), flush: true);
+    notifyListeners();
+    return 'Made $changed box Pokémon shiny (skipped $skipped event Pokémon'
+        '${already > 0 ? ', $already already shiny' : ''}). Backup saved — '
+        'reload in your emulator to check.';
+  }
+
   /// Reads a Gen 3 party (decrypting each PK3) for the editor's Pokémon view.
   Future<List<Gen3PartyMon>?> readGen3Party(Game game) async {
     if (game.generation != 3) return null;

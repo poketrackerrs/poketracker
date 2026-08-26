@@ -964,6 +964,37 @@ class _BoxBrowserState extends State<_BoxBrowser> {
     messenger.showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  Future<void> _makeAllShiny() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Make all box Pokémon shiny?'),
+        content: const Text(
+            'Every Pokémon in your PC boxes becomes shiny (kept legal — nature, '
+            'gender, ability and IVs are preserved). Event Pokémon (Mew, Deoxys, '
+            'Jirachi, Celebi) are skipped, since a shiny event Pokémon would be '
+            'illegal. A backup is written next to your save first.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Make shiny')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final msg = await context.read<AppState>().makeAllBoxShiny(widget.game);
+    if (!mounted) return;
+    widget.edits.clear(); // PIDs changed; queued slot edits are stale
+    setState(() => _loading = true);
+    await _load();
+    messenger.showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+  }
+
   Future<void> _edit(Gen3PartyMon m) async {
     final state = context.read<AppState>();
     // Boxed mons store no level byte — derive it from EXP for the editor.
@@ -993,6 +1024,11 @@ class _BoxBrowserState extends State<_BoxBrowser> {
       appBar: AppBar(
         title: const Text('PC Boxes'),
         actions: [
+          IconButton(
+            tooltip: 'Make all shiny (skips events)',
+            icon: const Icon(Icons.auto_awesome),
+            onPressed: _loading || mons.isEmpty ? null : _makeAllShiny,
+          ),
           IconButton(
             tooltip: 'Organize by Dex',
             icon: const Icon(Icons.sort),
