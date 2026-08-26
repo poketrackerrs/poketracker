@@ -2714,42 +2714,70 @@ class AppState extends ChangeNotifier {
   /// backup itself has valid checksums). Undoes a bad edit.
   Future<String> restoreGen3Backup(Game game) => restoreBackup(game);
 
-  /// Does [bytes] pass checksums for [game]'s generation? Used to pick a valid
-  /// backup to restore (skips corrupt ones).
-  bool _saveChecksumsOk(Uint8List bytes, Game game) {
+  /// A rough "how much progress is in this save" score (party + Pokédex), used
+  /// to pick the RIGHT backup to restore — so we recover your team, not a blank
+  /// "new game" save that happens to be newer and checksum-valid. -1 = invalid.
+  int _saveContentScore(Uint8List bytes, Game game) {
     try {
-      return switch (game.generation) {
-        1 => Gen1SaveEditor.load(bytes).verifyChecksums().ok,
-        2 => Gen2SaveEditor.load(bytes, game.version).verifyChecksums().ok,
-        3 => Gen3SaveEditor.load(bytes).verifyChecksums().ok,
-        4 => Gen4SaveEditor.load(bytes, game.version).verifyChecksums().ok,
-        5 => Gen5SaveEditor.load(bytes, game.version).verifyChecksums().ok,
-        _ => false,
-      };
+      switch (game.generation) {
+        case 1:
+          final e = Gen1SaveEditor.load(bytes);
+          if (!e.verifyChecksums().ok) return -1;
+          return e.caughtCount;
+        case 2:
+          final e = Gen2SaveEditor.load(bytes, game.version);
+          if (!e.verifyChecksums().ok) return -1;
+          return e.ownedCount;
+        case 3:
+          final e = Gen3SaveEditor.load(bytes);
+          if (!e.verifyChecksums().ok) return -1;
+          return e.caughtCount;
+        case 4:
+          final e = Gen4SaveEditor.load(bytes, game.version);
+          if (!e.verifyChecksums().ok) return -1;
+          return e.partyCount * 1000 + e.caughtDex(game.version).length;
+        case 5:
+          final e = Gen5SaveEditor.load(bytes, game.version);
+          if (!e.verifyChecksums().ok) return -1;
+          return e.partyCount * 1000 + e.caughtCount();
+        default:
+          return -1;
+      }
     } catch (_) {
-      return false;
+      return -1;
     }
   }
 
-  /// Restores the newest backup (`.sav.bak-<ts>`) that passes checksums for
-  /// this game's generation, skipping corrupt ones. Works for Gens 1–5.
+  /// Restores the backup (`.sav.bak-<ts>`) that best preserves your progress:
+  /// among the checksum-valid backups, the one with the most party + Pokédex
+  /// content (newest wins ties). This avoids restoring a blank "new game".
   Future<String> restoreBackup(Game game) async {
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
-    final baks = _backupsFor(file);
+    final baks = _backupsFor(file); // newest-first
     if (baks.isEmpty) return 'No backup found to restore.';
+    File? best;
+    var bestScore = -1;
     for (final bak in baks) {
       try {
         final bytes = Uint8List.fromList(await bak.readAsBytes());
-        if (!_saveChecksumsOk(bytes, game)) continue;
-        await file.writeAsBytes(bytes, flush: true);
-        return 'Restored ${bak.uri.pathSegments.last}. Reload it in your '
-            'emulator.';
+        final score = _saveContentScore(bytes, game);
+        // Strictly greater keeps the NEWEST among equal-score backups (list is
+        // newest-first, so the first to reach a score wins the tie).
+        if (score > bestScore) {
+          bestScore = score;
+          best = bak;
+        }
       } catch (_) {
         continue;
       }
     }
-    return 'No valid backup found to restore.';
+    if (best == null || bestScore < 0) {
+      return 'No valid backup found to restore.';
+    }
+    await file.writeAsBytes(await best.readAsBytes(), flush: true);
+    return 'Restored ${best.uri.pathSegments.last} (best-progress backup). '
+        'Reopen the game in your emulator.';
   }
 
   Future<void> _backupThenWrite(
