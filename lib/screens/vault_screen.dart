@@ -5,6 +5,7 @@ import '../data/games_data.dart';
 import '../models/game.dart';
 import '../state/app_state.dart';
 import 'dual_box_screen.dart';
+import 'game_screen.dart';
 
 String _sprite(int dex, bool shiny) =>
     'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'
@@ -224,6 +225,16 @@ class _VaultScreenState extends State<VaultScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Edit Pokémon'),
+              subtitle:
+                  const Text('Shiny, IVs/EVs, moves, nature, species…'),
+              onTap: () {
+                Navigator.pop(context);
+                _editMon(context, state, i);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.send_to_mobile),
               title: const Text('Copy to a game'),
               subtitle: const Text('Clone into a Gen 3 game (box or party)'),
@@ -261,6 +272,17 @@ class _VaultScreenState extends State<VaultScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _editMon(BuildContext context, AppState state, int i) async {
+    final pm = await state.vaultMonForEditor(i);
+    if (pm == null || !context.mounted) return;
+    final ed = await pushGen3MonEditor(context, mon: pm);
+    if (ed == null || !context.mounted) return;
+    final msg = await state.editVaultMon(i, ed);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 4)));
   }
 
   /// Pick an installed Gen 3 game, then open the side-by-side box view so the

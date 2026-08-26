@@ -1171,6 +1171,75 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// An editor-ready snapshot of Vault mon [index] (level derived from EXP).
+  Future<Gen3PartyMon?> vaultMonForEditor(int index) async {
+    if (index < 0 || index >= vault.length) return null;
+    final m = Pk3.decode(vault[index].block);
+    final lvl = await gen3LevelForExp(m.nationalDex, m.exp);
+    final pm = Gen3PartyMon(
+      slot: 0,
+      boxSlot: null,
+      dex: m.nationalDex,
+      level: lvl,
+      shiny: m.isShiny,
+      nature: m.nature,
+      ivs: m.ivs,
+      evs: m.evs,
+      moves: m.moves,
+      nickname: m.nickname,
+      otName: m.otName,
+      friendship: m.friendship,
+      exp: m.exp,
+      pid: m.pid,
+      otid: m.otid,
+      ball: m.ball,
+      metLevel: m.metLevel,
+      metLocation: m.metLocation,
+      otGender: m.otGender,
+      language: m.language,
+      markings: m.markings,
+      pokerus: m.pokerus,
+      contest: m.contest,
+      heldItem: m.heldItem,
+    );
+    pm.name = vault[index].name;
+    return pm;
+  }
+
+  /// Applies an editor result to Vault mon [index] in place. No game/save is
+  /// touched — the 80-byte block is re-encoded (self-checksumming) and the
+  /// cached display fields refreshed.
+  Future<String> editVaultMon(int index, PartyEdit ed) async {
+    if (index < 0 || index >= vault.length) return 'No such Pokémon.';
+    final old = vault[index];
+    final pk = Pk3.decode(old.block);
+    await _applyGen3MonEdit(pk, ed, null, null);
+    final block = Uint8List.fromList(pk.encode());
+    final dex = pk.nationalDex;
+    var name = old.name;
+    var level = old.level;
+    try {
+      for (final s in await _pokedex.loadIndex()) {
+        if (s.id == dex) {
+          name = s.name;
+          break;
+        }
+      }
+      level = gen3LevelFromExp(await _pokedex.growthRate(dex), pk.exp);
+    } catch (_) {/* offline: keep old name/level */}
+    vault[index] = VaultMon(
+      block: block,
+      dex: dex,
+      name: name,
+      level: level,
+      shiny: pk.isShiny,
+      origin: old.origin,
+    );
+    await _saveVault();
+    notifyListeners();
+    return 'Saved changes to $name.';
+  }
+
   /// Copies (clones) Vault mon [index] into [game]'s PC box (or party).
   Future<String> copyVaultToGame(Game game, int index,
       {bool party = false}) async {
@@ -1928,7 +1997,7 @@ class AppState extends ChangeNotifier {
   /// Legal-by-construction: a species change re-derives EXP, stats, moves and
   /// the default nickname; all PokeAPI lookups use National dex.
   Future<void> _applyGen3MonEdit(
-      Pk3 m, PartyEdit ed, Game game, Gen3SaveEditor e) async {
+      Pk3 m, PartyEdit ed, Game? game, Gen3SaveEditor? e) async {
       // All PokeAPI lookups use the National dex; on a species change [dex] is
       // the NEW species so stats/moves/growth are derived for what it becomes.
       final speciesChanged = ed.species != null && ed.species != m.nationalDex;
@@ -1998,7 +2067,9 @@ class AppState extends ChangeNotifier {
           ]);
         } catch (_) {/* offline: stats stay as-is, IV/EV still applied */}
       }
-      if (speciesChanged) e.markCaught(game.version, dex);
+      if (speciesChanged && game != null && e != null) {
+        e.markCaught(game.version, dex);
+      }
   }
 
   /// Writes selected fields of a parsed save into a game's progress. Caught

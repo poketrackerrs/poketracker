@@ -1369,6 +1369,19 @@ class _BagEditorState extends State<_BagEditor> {
 }
 
 /// Per-Pokémon editor: shiny + IVs + EVs, kept legal (IV 0–31, EV 0–255 / 510).
+/// Opens the full Gen 3 Pokémon editor for [mon] and returns the resulting
+/// [PartyEdit] (null if cancelled). Public so other screens — e.g. the Vault —
+/// can reuse the exact same editor UI.
+Future<PartyEdit?> pushGen3MonEditor(BuildContext context,
+    {required Gen3PartyMon mon, PartyEdit? initial, int generation = 3}) {
+  return Navigator.of(context).push<PartyEdit>(
+    MaterialPageRoute(
+      builder: (_) =>
+          _MonEditor(mon: mon, initial: initial, generation: generation),
+    ),
+  );
+}
+
 class _MonEditor extends StatefulWidget {
   final Gen3PartyMon mon;
   final PartyEdit? initial;

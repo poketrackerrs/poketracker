@@ -1,6 +1,6 @@
 {
-  "version": "1.0.75",
-  "notes": "New Vault tab (bottom bar): a game-independent home for your Pokémon. Pull Pokémon in from any Gen 3 game — PC boxes AND party — with the side-by-side marquee-select view, sort the whole Vault by National Dex, duplicate or delete, and multi-select to clone into another game's box or party. Each Pokémon now shows which game it came from. Copies into a game still back the save up first and verify checksums.",
+  "version": "1.0.76",
+  "notes": "In-Vault editor: tap a Pokémon in the Vault → Edit to change it right there — shininess (with legal, PID-correlated IVs), IVs/EVs, moves, nature, level, species, nickname, OT and more — no game or save file needed. Edits re-encode the stored Pokémon (self-checksumming), so cloning it into a game stays legal and backup-first.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
