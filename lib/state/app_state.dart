@@ -857,11 +857,212 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Reads all Gen 4 PC box slots for the editor (reuses the Gen3PartyMon UI
+  /// model; global slot index in `boxSlot`, level derived from exp).
+  Future<List<Gen3PartyMon>?> readGen4Boxes(Game game) async {
+    if (game.generation != 4) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen4SaveEditor.load(
+          Uint8List.fromList(await file.readAsBytes()), game.version);
+      if (!e.verifyChecksums().ok) return null;
+      final t = e.trainer();
+      final out = <Gen3PartyMon>[];
+      final total = Gen4SaveEditor.boxCount * Gen4SaveEditor.perBox;
+      for (var g = 0; g < total; g++) {
+        final m = Pkx.decode(e.boxSlot(g));
+        if (m.isEmpty) continue;
+        var level = 0;
+        try {
+          level = gen3LevelFromExp(await _pokedex.growthRate(m.species), m.exp);
+        } catch (_) {}
+        out.add(Gen3PartyMon(
+          slot: g % Gen4SaveEditor.perBox,
+          boxSlot: g,
+          dex: m.species,
+          level: level,
+          shiny: m.isShiny(t.tid, t.sid),
+          nature: m.nature,
+          ivs: m.ivs,
+          evs: m.evs,
+          moves: m.moves,
+          nickname: gen4DecodeText(m.nicknameRaw, 0, 11),
+          otName: t.name,
+          friendship: m.friendship,
+          exp: m.exp,
+          pid: m.pid,
+          otid: (t.tid & 0xFFFF) | ((t.sid & 0xFFFF) << 16),
+          ball: m.ballId,
+          metLevel: m.metLevel,
+          metLocation: m.metLocation,
+          otGender: m.otGender,
+          language: m.language,
+          markings: m.markings,
+          contest: m.contest,
+          heldItem: m.heldItem,
+          ability: m.ability,
+        ));
+      }
+      try {
+        final byId = {for (final s in await _pokedex.loadIndex()) s.id: s.name};
+        for (final m in out) {
+          m.name = byId[m.dex];
+        }
+      } catch (_) {}
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _resolveNames(List<Gen3PartyMon> out) async {
+    try {
+      final byId = {for (final s in await _pokedex.loadIndex()) s.id: s.name};
+      for (final m in out) {
+        m.name = byId[m.dex];
+      }
+    } catch (_) {}
+  }
+
+  /// Reads all Gen 1 PC box slots (12 boxes × 20) for the box browser.
+  Future<List<Gen3PartyMon>?> readGen1Boxes(Game game) async {
+    if (game.generation != 1) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen1SaveEditor.load(Uint8List.fromList(await file.readAsBytes()));
+      if (!e.verifyChecksums().ok) return null;
+      final out = <Gen3PartyMon>[];
+      for (var box = 0; box < Gen1SaveEditor.boxCount; box++) {
+        final count = e.boxMonCount(box).clamp(0, Gen1SaveEditor.boxCapacity);
+        for (var slot = 0; slot < count; slot++) {
+          final m = e.boxMon(box, slot);
+          out.add(Gen3PartyMon(
+            slot: slot,
+            boxSlot: box * Gen1SaveEditor.boxCapacity + slot,
+            dex: m.nationalDex,
+            level: m.level,
+            shiny: false, // no shininess in Gen 1
+            nature: 0,
+            ivs: const [0, 0, 0, 0, 0, 0],
+            evs: const [0, 0, 0, 0, 0, 0],
+            moves: m.moves,
+          ));
+        }
+      }
+      await _resolveNames(out);
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reads all Gen 2 PC box slots (14 boxes × 20) for the box browser.
+  Future<List<Gen3PartyMon>?> readGen2Boxes(Game game) async {
+    if (game.generation != 2) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen2SaveEditor.load(
+          Uint8List.fromList(await file.readAsBytes()), game.version);
+      if (!e.verifyChecksums().ok) return null;
+      final out = <Gen3PartyMon>[];
+      for (var box = 0; box < Gen2SaveEditor.boxCount; box++) {
+        final count = e.boxMonCount(box).clamp(0, Gen2SaveEditor.perBox);
+        for (var slot = 0; slot < count; slot++) {
+          final m = e.boxMon(box, slot);
+          out.add(Gen3PartyMon(
+            slot: slot,
+            boxSlot: box * Gen2SaveEditor.perBox + slot,
+            dex: m.species,
+            level: m.level,
+            shiny: m.isShiny,
+            nature: 0,
+            ivs: const [0, 0, 0, 0, 0, 0],
+            evs: const [0, 0, 0, 0, 0, 0],
+            moves: m.moves,
+            nickname: m.nickname,
+            heldItem: m.heldItem,
+          ));
+        }
+      }
+      await _resolveNames(out);
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reads all Gen 5 PC box slots (24 boxes × 30) for the box browser.
+  Future<List<Gen3PartyMon>?> readGen5Boxes(Game game) async {
+    if (game.generation != 5) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen5SaveEditor.load(
+          Uint8List.fromList(await file.readAsBytes()), game.version);
+      if (!e.verifyChecksums().ok) return null;
+      final t = e.trainer();
+      final out = <Gen3PartyMon>[];
+      final total = Gen5SaveEditor.boxCount * Gen5SaveEditor.perBox;
+      for (var g = 0; g < total; g++) {
+        final m = Pk5.decode(e.boxSlotGlobal(g));
+        if (m.isEmpty) continue;
+        var level = 0;
+        try {
+          level = gen3LevelFromExp(await _pokedex.growthRate(m.species), m.exp);
+        } catch (_) {}
+        out.add(Gen3PartyMon(
+          slot: g % Gen5SaveEditor.perBox,
+          boxSlot: g,
+          dex: m.species,
+          level: level,
+          shiny: m.isShiny(t.tid, t.sid),
+          nature: m.nature,
+          ivs: m.ivs,
+          evs: m.evs,
+          moves: m.moves,
+          nickname: m.nickname,
+          otName: t.name,
+          friendship: m.friendship,
+          exp: m.exp,
+          pid: m.pid,
+          otid: (t.tid & 0xFFFF) | ((t.sid & 0xFFFF) << 16),
+          ball: m.ballId,
+          metLevel: m.metLevel,
+          metLocation: m.metLocation,
+          otGender: m.otGender,
+          language: m.language,
+          contest: m.contest,
+          heldItem: m.heldItem,
+          ability: m.ability,
+        ));
+      }
+      await _resolveNames(out);
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Reads all PC box mons for any supported generation (for the box browser).
+  Future<List<Gen3PartyMon>?> readBoxesForGame(Game game) async => switch (
+      game.generation) {
+        1 => readGen1Boxes(game),
+        2 => readGen2Boxes(game),
+        3 => readGen3Boxes(game),
+        4 => readGen4Boxes(game),
+        5 => readGen5Boxes(game),
+        _ => Future.value(null),
+      };
+
   /// Applies Gen 4 edits and writes back (backup + checksum guard).
   Future<String> writeGen4Save(Game game,
       {int? money,
       Gen4Trainer? trainer,
       Map<int, PartyEdit> partyEdits = const {},
+      Map<int, PartyEdit> boxEdits = const {},
       Map<Gen4Pocket, List<({int id, int qty})>>? bag,
       List<Uint8List> boxInjects = const []}) async {
     if (game.generation != 4) return 'Gen 4 editing only.';
@@ -905,6 +1106,12 @@ class AppState extends ChangeNotifier {
       if (m.isEmpty) continue;
       await _applyGen4MonEdit(m, entry.value, t.tid, t.sid);
       e.writePartyBlock(entry.key, m.encode());
+    }
+    for (final entry in boxEdits.entries) {
+      final m = Pkx.decode(e.boxSlot(entry.key));
+      if (m.isEmpty) continue;
+      await _applyGen4MonEdit(m, entry.value, t.tid, t.sid);
+      e.writeBoxSlot(entry.key, m.encode());
     }
     // Drop each injected mon into the first empty PC box slot (18 boxes × 30).
     var injected = 0;

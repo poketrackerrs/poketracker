@@ -53,6 +53,18 @@ class GameScreen extends StatelessWidget {
                 icon: const Icon(Icons.tune),
                 onPressed: () => _showSaveEditor(context, game),
               ),
+            // Gens 1/2/5 have no full save editor yet, but can still view PC
+            // boxes (read-only) — Gen 3/4 reach boxes through the editor.
+            if (game.generation == 1 ||
+                game.generation == 2 ||
+                game.generation == 5)
+              IconButton(
+                tooltip: 'View PC boxes',
+                icon: const Icon(Icons.inventory_2_outlined),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => _BoxBrowser(game: game, edits: const {}),
+                )),
+              ),
             IconButton(
               tooltip: 'Sync from save file',
               icon: const Icon(Icons.sync),
@@ -451,6 +463,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                   )
                 : null,
             partyEdits: _partyEdits,
+            boxEdits: _boxEdits,
             bag: _gen4BagEdits.isEmpty ? null : _gen4BagEdits,
             boxInjects: _boxInjects,
           );
@@ -919,6 +932,23 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                     if (_gen4)
                       ListTile(
                         contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.inventory_2_outlined),
+                        title: const Text('PC Boxes'),
+                        subtitle: Text(_boxEdits.isEmpty
+                            ? 'Browse & edit stored Pokémon'
+                            : '${_boxEdits.length} edited'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => _BoxBrowser(
+                                game: widget.game, edits: _boxEdits),
+                          ));
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                    if (_gen4)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.backpack_outlined),
                         title: const Text('Bag'),
                         subtitle: Text(_gen4BagEdits.isEmpty
@@ -999,8 +1029,22 @@ class _BoxBrowser extends StatefulWidget {
 
 class _BoxBrowserState extends State<_BoxBrowser> {
   List<Gen3PartyMon>? _mons; // occupied slots only, boxSlot = global index
-  int _box = 0; // selected box 0..13
+  int _box = 0; // selected box 0..N
   bool _loading = true;
+
+  // PC layout + capabilities per generation.
+  int get _perBox => switch (widget.game.generation) { 1 || 2 => 20, _ => 30 };
+  int get _boxCount => switch (widget.game.generation) {
+        1 => 12,
+        2 => 14,
+        4 => 18,
+        5 => 24,
+        _ => 14, // Gen 3
+      };
+  bool get _isGen3 => widget.game.generation == 3;
+  // Editing existing box mons writes back only where that path exists.
+  bool get _canEdit =>
+      widget.game.generation == 3 || widget.game.generation == 4;
 
   @override
   void initState() {
@@ -1009,13 +1053,13 @@ class _BoxBrowserState extends State<_BoxBrowser> {
   }
 
   Future<void> _load() async {
-    final mons = await context.read<AppState>().readGen3Boxes(widget.game);
+    final mons = await context.read<AppState>().readBoxesForGame(widget.game);
     if (!mounted) return;
     setState(() {
       _mons = mons ?? [];
       _loading = false;
       // Land on the first box that actually has Pokémon.
-      if (_mons!.isNotEmpty) _box = _mons!.first.boxSlot! ~/ 30;
+      if (_mons!.isNotEmpty) _box = _mons!.first.boxSlot! ~/ _perBox;
     });
   }
 
@@ -1083,17 +1127,24 @@ class _BoxBrowserState extends State<_BoxBrowser> {
   Future<void> _edit(Gen3PartyMon m) async {
     final state = context.read<AppState>();
     // Boxed mons store no level byte — derive it from EXP for the editor.
-    final lvl = await state.gen3LevelForExp(m.dex, m.exp);
+    final lvl = m.exp > 0 ? await state.gen3LevelForExp(m.dex, m.exp) : m.level;
     if (!mounted) return;
     final result = await Navigator.of(context).push<PartyEdit>(
       MaterialPageRoute(
           builder: (_) => _MonEditor(
               mon: m.copyWith(level: lvl),
               initial: widget.edits[m.boxSlot],
+              generation: widget.game.generation,
               startReadOnly: true)),
     );
     if (result != null && mounted) {
-      setState(() => widget.edits[m.boxSlot!] = result);
+      if (_canEdit) {
+        setState(() => widget.edits[m.boxSlot!] = result);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Editing boxed Pokémon isn\'t saved for Gen ${widget.game.generation} yet — view only.')));
+      }
     }
   }
 
@@ -1102,41 +1153,47 @@ class _BoxBrowserState extends State<_BoxBrowser> {
     final mons = _mons ?? const <Gen3PartyMon>[];
     final counts = <int, int>{};
     for (final m in mons) {
-      final b = m.boxSlot! ~/ 30;
+      final b = m.boxSlot! ~/ _perBox;
       counts[b] = (counts[b] ?? 0) + 1;
     }
-    final inBox = mons.where((m) => m.boxSlot! ~/ 30 == _box).toList()
+    final inBox = mons.where((m) => m.boxSlot! ~/ _perBox == _box).toList()
       ..sort((a, b) => a.boxSlot!.compareTo(b.boxSlot!));
     return Scaffold(
       appBar: AppBar(
         title: const Text('PC Boxes'),
         bottom: mons.isEmpty
             ? null
-            : const PreferredSize(
-                preferredSize: Size.fromHeight(20),
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(20),
                 child: Padding(
-                  padding: EdgeInsets.only(bottom: 4),
-                  child: Text('Tap to edit  ·  long-press to save to Vault',
-                      style: TextStyle(fontSize: 11, color: Colors.white70)),
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                      _canEdit
+                          ? 'Tap to edit  ·  long-press to save to Vault'
+                          : 'Tap to view',
+                      style: const TextStyle(
+                          fontSize: 11, color: Colors.white70)),
                 ),
               ),
         actions: [
-          IconButton(
-            tooltip: 'Boxes ⟷ Vault (side by side)',
-            icon: const Icon(Icons.swap_horiz),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => DualBoxScreen(game: widget.game))),
-          ),
-          IconButton(
-            tooltip: 'Make all shiny (skips events)',
-            icon: const Icon(Icons.auto_awesome),
-            onPressed: _loading || mons.isEmpty ? null : _makeAllShiny,
-          ),
-          IconButton(
-            tooltip: 'Organize by Dex',
-            icon: const Icon(Icons.sort),
-            onPressed: _loading || mons.isEmpty ? null : _sortByDex,
-          ),
+          if (_isGen3) ...[
+            IconButton(
+              tooltip: 'Boxes ⟷ Vault (side by side)',
+              icon: const Icon(Icons.swap_horiz),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => DualBoxScreen(game: widget.game))),
+            ),
+            IconButton(
+              tooltip: 'Make all shiny (skips events)',
+              icon: const Icon(Icons.auto_awesome),
+              onPressed: _loading || mons.isEmpty ? null : _makeAllShiny,
+            ),
+            IconButton(
+              tooltip: 'Organize by Dex',
+              icon: const Icon(Icons.sort),
+              onPressed: _loading || mons.isEmpty ? null : _sortByDex,
+            ),
+          ],
         ],
       ),
       body: _loading
@@ -1152,7 +1209,7 @@ class _BoxBrowserState extends State<_BoxBrowser> {
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         children: [
-                          for (var b = 0; b < Gen3SaveEditor.pcBoxCount; b++)
+                          for (var b = 0; b < _boxCount; b++)
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 3, vertical: 6),
@@ -1185,17 +1242,20 @@ class _BoxBrowserState extends State<_BoxBrowser> {
   Widget _boxRow(Gen3PartyMon m) {
     final ed = widget.edits[m.boxSlot];
     final shiny = ed?.shiny ?? m.shiny;
+    // Gen 1/2 have no natures; show the level instead.
+    final hasNature = widget.game.generation >= 3;
     return ListTile(
       dense: true,
       leading: Icon(shiny ? Icons.star : Icons.star_border,
           color: shiny ? Colors.amber : Colors.grey, size: 18),
-      title: Text('${m.name ?? '#${m.dex}'}  ·  ${m.natureName}'),
-      subtitle: Text('Slot ${(m.boxSlot! % 30) + 1}'
+      title: Text('${m.name ?? '#${m.dex}'}'
+          '${hasNature ? '  ·  ${m.natureName}' : (m.level > 0 ? '  ·  Lv ${m.level}' : '')}'),
+      subtitle: Text('Slot ${(m.boxSlot! % _perBox) + 1}'
           '${ed != null ? '  ·  edited' : ''}',
           style: const TextStyle(fontSize: 11)),
       trailing: const Icon(Icons.chevron_right, size: 18),
       onTap: () => _edit(m),
-      onLongPress: () => _toVault(m),
+      onLongPress: _isGen3 ? () => _toVault(m) : null,
     );
   }
 
