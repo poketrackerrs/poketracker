@@ -872,7 +872,14 @@ class AppState extends ChangeNotifier {
       final total = Gen4SaveEditor.boxCount * Gen4SaveEditor.perBox;
       for (var g = 0; g < total; g++) {
         final m = Pkx.decode(e.boxSlot(g));
-        if (m.isEmpty) continue;
+        // Only real mons: skip empty AND stale/uninitialised slots (invalid
+        // species or bad checksum) so garbage never shows as a "bad egg".
+        if (m.isEmpty ||
+            m.species < 1 ||
+            m.species > 493 ||
+            m.storedChecksum != m.computeChecksum()) {
+          continue;
+        }
         out.add(Gen3PartyMon(
           slot: g % Gen4SaveEditor.perBox,
           boxSlot: g,
@@ -1004,7 +1011,13 @@ class AppState extends ChangeNotifier {
       final total = Gen5SaveEditor.boxCount * Gen5SaveEditor.perBox;
       for (var g = 0; g < total; g++) {
         final m = Pk5.decode(e.boxSlotGlobal(g));
-        if (m.isEmpty) continue;
+        // Only real mons — skip empty + stale/uninitialised slots.
+        if (m.isEmpty ||
+            m.species < 1 ||
+            m.species > 649 ||
+            m.storedChecksum != m.computeChecksum()) {
+          continue;
+        }
         out.add(Gen3PartyMon(
           slot: g % Gen5SaveEditor.perBox,
           boxSlot: g,
