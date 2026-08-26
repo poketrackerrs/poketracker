@@ -28,6 +28,12 @@ import '../services/gen3_live_ram.dart';
 import '../services/gen4_save_editor.dart';
 import '../services/gen4_pkx.dart';
 import '../services/gen4_text.dart';
+import '../services/gen1_save_editor.dart';
+import '../services/gen2_save_editor.dart';
+import '../services/gen5_save_editor.dart';
+import '../services/pk1.dart';
+import '../services/pk2.dart';
+import '../services/pk5.dart';
 import '../services/pk3.dart';
 import '../services/pokedex_service.dart';
 import '../services/lemuroid_sync.dart';
@@ -1671,7 +1677,18 @@ class AppState extends ChangeNotifier {
   /// correlated PID+IVs, level-appropriate moves, the player as OT) and injects
   /// it into the first free PC box slot. Backs up + checksum-guards the write.
   Future<String> addLegalMonToBox(Game game, int dex, {int level = 5}) async {
-    if (game.generation != 3) return 'Adding to the box is Gen 3-only for now.';
+    switch (game.generation) {
+      case 3:
+        break; // Gen 3 body below.
+      case 4:
+      case 5:
+        return _addToBoxGen45(game, dex, level);
+      case 1:
+      case 2:
+        return _addToBoxGen12(game, dex, level);
+      default:
+        return 'Adding to the box isn\'t supported for ${game.title} yet.';
+    }
     // Never below the species' minimum legal level (evolution requirement).
     level = level.clamp(await minAddLevel(game, dex), 100);
     final trainer = await readGen3Trainer(game);
@@ -1765,6 +1782,275 @@ class AppState extends ChangeNotifier {
         ? '#$dex'
         : name[0].toUpperCase() + name.substring(1).replaceAll('-', ' ');
     return 'Added $pretty (Lv $level) to the PC box.';
+  }
+
+  static String _prettyDex(String name, int dex) => name.isEmpty
+      ? '#$dex'
+      : name[0].toUpperCase() + name.substring(1).replaceAll('-', ' ');
+
+  Future<String> _speciesName(int dex) async {
+    for (final s in await _pokedex.loadIndex()) {
+      if (s.id == dex) return s.name;
+    }
+    return '';
+  }
+
+  // Gen 1 in-record type ids (Gen 1 stores types in the mon; Gen 2 derives them).
+  static const Map<String, int> _gen1TypeId = {
+    'normal': 0x00, 'fighting': 0x01, 'flying': 0x02, 'poison': 0x03,
+    'ground': 0x04, 'rock': 0x05, 'bug': 0x07, 'ghost': 0x08, 'fire': 0x14,
+    'water': 0x15, 'grass': 0x16, 'electric': 0x17, 'psychic': 0x18,
+    'ice': 0x19, 'dragon': 0x1A,
+  };
+
+  /// Non-perfect but legal DVs (0–15), deterministic per species/level — never
+  /// a flat 15/15/15/15 (reads as hacked). Order: [Atk, Def, Spe, Spc].
+  List<int> _dvsFor(int dex, int level) => [
+        (dex * 7 + level) % 16,
+        (dex * 13 + level * 3) % 16,
+        (dex * 11 + level * 5) % 16,
+        (dex * 5 + level * 2) % 16,
+      ];
+
+  /// Add a legal Gen 1 / Gen 2 mon to a PC box (built from scratch, you as OT).
+  Future<String> _addToBoxGen12(Game game, int dex, int level) async {
+    final gen = game.generation;
+    level = level.clamp(await minAddLevel(game, dex), 100);
+    final file = await _findSaveFile(game.id);
+    if (file == null) {
+      return 'No save found — play and save in-game once first.';
+    }
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    final rate = await _pokedex.growthRate(dex);
+    var moves = await legalLevelUpMoves(dex, gen, level);
+    if (moves.isEmpty) {
+      moves = [for (final m in (await gen3Learnset(dex, gen: gen)).take(4)) m.id];
+    }
+    final pp = [for (final m in moves) await _pokedex.movePP(m)];
+    final dvs = _dvsFor(dex, level);
+    final name = await _speciesName(dex);
+    final nick = name.isEmpty ? 'POKEMON' : name.toUpperCase();
+
+    try {
+      if (gen == 1) {
+        final e = Gen1SaveEditor.load(raw);
+        if (!e.verifyChecksums().ok) {
+          return 'Save checksums look wrong — refusing to edit it.';
+        }
+        // Gen 1 stores types + catch rate in the record.
+        var t1 = 0, t2 = 0, catchRate = 45, baseHp = 45;
+        try {
+          final d = await _pokedex.fetchDetail(dex);
+          final types = d.typesForGeneration(1);
+          t1 = _gen1TypeId[types.isNotEmpty ? types.first : ''] ?? 0;
+          t2 = _gen1TypeId[types.length > 1 ? types[1] : (types.isNotEmpty ? types.first : '')] ?? t1;
+          catchRate = d.captureRate == 0 ? 45 : d.captureRate;
+          baseHp = d.stats['hp'] ?? 45;
+        } catch (_) {/* offline: defaults */}
+        final hpDv = gen1HpDv(dvs[0], dvs[1], dvs[2], dvs[3]);
+        final pk = Pk1.create(
+          nationalSpecies: dex,
+          level: level,
+          totalExp: gen1Exp(rate, level),
+          moves: moves,
+          pp: pp,
+          dvs: dvs,
+          otId: e.trainerId & 0xFFFF,
+          type1: t1,
+          type2: t2,
+          catchRate: catchRate,
+          nickname: nick,
+          otName: e.trainerName,
+          currentHp: gen1HpStat(baseHp, hpDv, 0, level),
+        );
+        final placed = e.addBoxMon(pk.encode(), otName: e.trainerName, nickname: nick);
+        if (placed == null) return 'All PC boxes are full — nothing added.';
+        e.markCaught(dex);
+        if (!e.verifyChecksums().ok) {
+          return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+        }
+        final stamp = DateTime.now().millisecondsSinceEpoch;
+        await File('${file.path}.bak-$stamp').writeAsBytes(raw, flush: true);
+        await file.writeAsBytes(e.toBytes(), flush: true);
+      } else {
+        final e = Gen2SaveEditor.load(raw, game.version);
+        if (!e.verifyChecksums().ok) {
+          return 'Save checksums look wrong — refusing to edit it.';
+        }
+        final pk = Pk2.create(
+          species: dex,
+          otId: e.trainerId & 0xFFFF,
+          level: level,
+          totalExp: gen2Exp(rate, level),
+          moves: moves,
+          pp: pp,
+          dvs: dvs,
+          nickname: nick,
+          otName: e.trainerName,
+          caughtIsCrystal: game.version == 'crystal',
+          levelCaught: level,
+        );
+        final placed = e.addBoxMon(pk.encode(), otName: e.trainerName, nickname: nick);
+        if (placed == null) return 'All PC boxes are full — nothing added.';
+        e.markCaught(dex);
+        if (!e.verifyChecksums().ok) {
+          return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+        }
+        final stamp = DateTime.now().millisecondsSinceEpoch;
+        await File('${file.path}.bak-$stamp').writeAsBytes(raw, flush: true);
+        await file.writeAsBytes(e.toBytes(), flush: true);
+      }
+    } catch (err) {
+      return 'Not a readable Gen $gen save.';
+    }
+    return 'Added ${_prettyDex(name, dex)} (Lv $level) to the PC box.';
+  }
+
+  /// Add a legal Gen 4 / Gen 5 mon to a PC box. Method-1 correlated non-perfect
+  /// IVs, you as the OT; Gen 5 stores nature independently.
+  Future<String> _addToBoxGen45(Game game, int dex, int level) async {
+    final gen = game.generation;
+    level = level.clamp(await minAddLevel(game, dex), 100);
+    int tid = 0, sid = 0, otGender = 0;
+    String otName = '';
+    if (gen == 4) {
+      final t = await readGen4Trainer(game);
+      if (t == null) return 'No save found — play and save in-game once first.';
+      tid = t.tid & 0xFFFF;
+      sid = t.sid & 0xFFFF;
+      otGender = t.gender;
+      otName = t.name;
+    } else {
+      final t = await readGen5Trainer(game);
+      if (t == null) return 'No save found — play and save in-game once first.';
+      tid = t.tid & 0xFFFF;
+      sid = t.sid & 0xFFFF;
+      otName = t.name;
+    }
+    final rate = await _pokedex.growthRate(dex);
+    var moves = await legalLevelUpMoves(dex, gen, level);
+    if (moves.isEmpty) {
+      moves = [for (final m in (await gen3Learnset(dex, gen: gen)).take(4)) m.id];
+    }
+    final pp = [for (final m in moves) await _pokedex.movePP(m)];
+    var genderRate = -1;
+    try {
+      genderRate = (await _pokedex.fetchDetail(dex)).genderRate;
+    } catch (_) {}
+    final nature = (dex * 31 + level * 7) % 25;
+    final legal = gen3Method1Find(
+        tid: tid, sid: sid, nature: nature, shiny: false, genderRate: genderRate);
+    final ivs = legal?.ivs ??
+        [for (var k = 0; k < 6; k++) (dex * 7 + k * 13 + level) % 32];
+    var pid = legal?.pid ??
+        (() {
+          var p = (dex * 0x41C64E6D + level * 0x3039 + 0x60730000) & 0xFFFFFFFF;
+          return (p - (p % 25) + nature) & 0xFFFFFFFF;
+        })();
+    var ability = 0;
+    try {
+      final abs = await pokedexAbilities(dex);
+      final normal = [for (final a in abs) if (!a.hidden) a];
+      if (normal.isNotEmpty) ability = normal[(pid & 1) % normal.length].id;
+    } catch (_) {}
+    final gender = genderRate < 0 ? 2 : gen3GenderOf(pid, genderRate);
+    final name = await _speciesName(dex);
+    final nick = name.isEmpty ? 'POKEMON' : name.toUpperCase();
+    final mv4 = [for (var i = 0; i < 4; i++) i < moves.length ? moves[i] : 0];
+    final pp4 = [for (var i = 0; i < 4; i++) i < pp.length ? pp[i] : 0];
+
+    if (gen == 4) {
+      final pk = Pkx.create(
+        species: dex,
+        pid: pid,
+        tid: tid,
+        sid: sid,
+        exp: gen3Exp(rate, level),
+        moves: mv4,
+        pp: pp4,
+        ivs: ivs,
+        ability: ability,
+        nickname: nick,
+        otName: otName,
+        ball: 4,
+        metLocation: 2000, // generic; met-location tables are Gen 3-only for now
+        metLevel: level,
+        otGender: otGender,
+        gender: gender,
+        originGame: _gen4Origin(game.version),
+        fateful: false,
+      );
+      final res = await writeGen4Save(game, boxInjects: [pk.encode()]);
+      if (!res.startsWith('Saved')) return res;
+      return 'Added ${_prettyDex(name, dex)} (Lv $level) to the PC box.';
+    }
+    // Gen 5.
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save found — play and save in-game once first.';
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    try {
+      final e = Gen5SaveEditor.load(raw, game.version);
+      if (!e.verifyChecksums().ok) {
+        return 'Save checksums look wrong — refusing to edit it.';
+      }
+      final pk = Pk5.create(
+        species: dex,
+        pid: pid,
+        tid: tid,
+        sid: sid,
+        exp: gen3Exp(rate, level),
+        moves: mv4,
+        pp: pp4,
+        ivs: ivs,
+        ability: ability,
+        nature: nature,
+        nickname: nick,
+        otName: otName,
+        ball: 4,
+        metLocation: 40, // generic Unova met location
+        metLevel: level,
+        otGender: otGender,
+        gender: gender,
+        originGame: _gen5Origin(game.version),
+        fateful: false,
+      );
+      if (e.addBoxMon(pk.encode()) < 0) {
+        return 'All PC boxes are full — nothing added.';
+      }
+      if (!e.verifyChecksums().ok) {
+        return 'Edit produced bad checksums — aborted, your save was NOT changed.';
+      }
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      await File('${file.path}.bak-$stamp').writeAsBytes(raw, flush: true);
+      await file.writeAsBytes(e.toBytes(), flush: true);
+    } catch (err) {
+      return 'Not a readable Gen 5 save.';
+    }
+    return 'Added ${_prettyDex(name, dex)} (Lv $level) to the PC box.';
+  }
+
+  /// Gen 5 game-of-origin value for a version id.
+  static int _gen5Origin(String version) => switch (version) {
+        'black' => 20,
+        'white' => 21,
+        'black2' => 22,
+        'white2' => 23,
+        _ => 21,
+      };
+
+  /// Reads the Gen 5 trainer card (name/ID) for the editor / injector.
+  Future<Gen5Trainer?> readGen5Trainer(Game game) async {
+    if (game.generation != 5) return null;
+    final file = await _findSaveFile(game.id);
+    if (file == null) return null;
+    try {
+      final e = Gen5SaveEditor.load(
+          Uint8List.fromList(await file.readAsBytes()), game.version);
+      if (!e.verifyChecksums().ok) return null;
+      return e.trainer();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Uint8List> buildEventMon(Game game, Gen3Event ev,

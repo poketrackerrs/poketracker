@@ -3773,8 +3773,10 @@ class _DexTabState extends State<_DexTab> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Add a legal copy to the PC box (Gen 3 base species only).
-          if (widget.game.generation == 3 && !r.isForm)
+          // Add a legal copy to the PC box (base species; Gens 1–5).
+          if (widget.game.generation >= 1 &&
+              widget.game.generation <= 5 &&
+              !r.isForm)
             IconButton(
               tooltip: 'Add a legal one to your PC box',
               icon: const Icon(Icons.add_box_outlined),
