@@ -2714,10 +2714,11 @@ class AppState extends ChangeNotifier {
   /// backup itself has valid checksums). Undoes a bad edit.
   Future<String> restoreGen3Backup(Game game) => restoreBackup(game);
 
-  /// A rough "how much progress is in this save" score (party + Pokédex), used
-  /// to pick the RIGHT backup to restore — so we recover your team, not a blank
-  /// "new game" save that happens to be newer and checksum-valid. -1 = invalid.
-  int _saveContentScore(Uint8List bytes, Game game) {
+  /// A rough "how much progress is in this save" score (party + badges +
+  /// Pokédex). Used both to pick the RIGHT backup to restore, and to stop the
+  /// emulator persist from overwriting a fresher on-disk save with stale SRAM.
+  /// -1 = invalid/unreadable.
+  int saveContentScore(Uint8List bytes, Game game) {
     try {
       switch (game.generation) {
         case 1:
@@ -2735,11 +2736,13 @@ class AppState extends ChangeNotifier {
         case 4:
           final e = Gen4SaveEditor.load(bytes, game.version);
           if (!e.verifyChecksums().ok) return -1;
-          return e.partyCount * 1000 + e.caughtDex(game.version).length;
+          return e.partyCount * 1000 +
+              e.badgeCount(game.version) * 100 +
+              e.caughtDex(game.version).length;
         case 5:
           final e = Gen5SaveEditor.load(bytes, game.version);
           if (!e.verifyChecksums().ok) return -1;
-          return e.partyCount * 1000 + e.caughtCount();
+          return e.partyCount * 1000 + e.badgeCount() * 100 + e.caughtCount();
         default:
           return -1;
       }
@@ -2761,7 +2764,7 @@ class AppState extends ChangeNotifier {
     for (final bak in baks) {
       try {
         final bytes = Uint8List.fromList(await bak.readAsBytes());
-        final score = _saveContentScore(bytes, game);
+        final score = saveContentScore(bytes, game);
         // Strictly greater keeps the NEWEST among equal-score backups (list is
         // newest-first, so the first to reach a score wins the tie).
         if (score > bestScore) {

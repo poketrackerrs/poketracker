@@ -56,9 +56,12 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   BoxFit get _fit => const [BoxFit.fill, BoxFit.contain, BoxFit.cover][_fitMode];
   String get _fitName => const ['Fill', 'Fit', 'Zoom'][_fitMode];
 
+  late final AppState _app; // captured for use in dispose (no context there)
+
   @override
   void initState() {
     super.initState();
+    _app = context.read<AppState>();
     WidgetsBinding.instance.addObserver(this);
     if (_isMobile) {
       // Landscape (both ways, so it rotates with the phone) + immersive.
@@ -281,6 +284,20 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     // Only touch the .sav once the in-game save actually changed from what we
     // loaded — never overwrite a good save with an unchanged/fresh SRAM.
     if (_hadSaveAtBoot && sig == _loadedSaveSig) return;
+    // Never DOWNGRADE: if the file on disk already holds MORE progress than the
+    // SRAM buffer (e.g. the DS core wrote a fresher save directly), don't clobber
+    // it with a stale buffer read. This keeps the tracker's save current.
+    try {
+      final f = File(path);
+      if (f.existsSync()) {
+        final disk = await f.readAsBytes();
+        final newScore =
+            _app.saveContentScore(Uint8List.fromList(data), widget.game);
+        final diskScore =
+            _app.saveContentScore(Uint8List.fromList(disk), widget.game);
+        if (newScore >= 0 && diskScore > newScore) return;
+      }
+    } catch (_) {}
     try {
       // Back up the original save once, the first time the game writes a new one.
       if (_hadSaveAtBoot && !_sessionBackupDone) {
@@ -537,7 +554,18 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         if (d != null &&
             d.isNotEmpty &&
             (!_hadSaveAtBoot || _sigOf(d) != _loadedSaveSig)) {
-          File(path).writeAsBytesSync(d);
+          // Don't downgrade a fresher on-disk save (see _persistSave).
+          var ok = true;
+          final f = File(path);
+          if (f.existsSync()) {
+            final disk = f.readAsBytesSync();
+            final newScore =
+                _app.saveContentScore(Uint8List.fromList(d), widget.game);
+            final diskScore =
+                _app.saveContentScore(Uint8List.fromList(disk), widget.game);
+            if (newScore >= 0 && diskScore > newScore) ok = false;
+          }
+          if (ok) File(path).writeAsBytesSync(d);
         }
       }
     } catch (_) {}
