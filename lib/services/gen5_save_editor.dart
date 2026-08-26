@@ -142,6 +142,90 @@ class Gen5SaveEditor {
     return (ok: bad.isEmpty, mismatches: bad);
   }
 
+  // ------------------------------------------------- read-only auto-tracker
+  // Gen 5 max National-dex species (Legal.MaxSpeciesID_5). Genesect = 649.
+  static const int maxSpecies = 649;
+
+  // Zukan5 block-relative layout (BitSeenSize 0x54; header u32 magic + u32
+  // packed/national-dex flags): caught region 0 @ 0x08, then 4 seen regions.
+  static const int _dexCaughtRel = 0x08; // Region 0: Caught/owned flags
+  static const int _dexSeenRel = 0x5C; // Region 1 (Seen Male/Genderless)
+  static const int _bitRegion = 0x54; // 84 bytes per region
+
+  /// Absolute offset of the Pokédex "caught/owned" bitfield (species N → bit
+  /// N-1). BW 0x21608, B2W2 0x21408.
+  int get dexCaughtOffset => pokedexOffset + _dexCaughtRel;
+
+  /// Absolute offset of the first "seen" region (Male/Genderless).
+  /// BW 0x2165C, B2W2 0x2145C. Four regions of 0x54 follow (see spec).
+  int get dexSeenOffset => pokedexOffset + _dexSeenRel;
+
+  bool _flag(int ofs, int bit) => (bytes[ofs + (bit >> 3)] >> (bit & 7)) & 1 == 1;
+
+  /// Number of distinct species (1..649) flagged CAUGHT/owned.
+  int caughtCount() {
+    var n = 0;
+    for (var sp = 1; sp <= maxSpecies; sp++) {
+      if (_flag(dexCaughtOffset, sp - 1)) n++;
+    }
+    return n;
+  }
+
+  /// Number of distinct species SEEN in any of the 4 seen regions.
+  int seenCount() {
+    var n = 0;
+    for (var sp = 1; sp <= maxSpecies; sp++) {
+      final bit = sp - 1;
+      for (var r = 0; r < 4; r++) {
+        if (_flag(dexSeenOffset + r * _bitRegion, bit)) {
+          n++;
+          break;
+        }
+      }
+    }
+    return n;
+  }
+
+  /// True if species [sp] (1..649) is flagged caught/owned.
+  bool isCaught(int sp) =>
+      sp >= 1 && sp <= maxSpecies && _flag(dexCaughtOffset, sp - 1);
+
+  // ---- Gym badges (Misc5, block 52 @ 0x21200 BW / 0x21100 B2W2) ----
+  int get miscBlockOffset => _blocks[52].offset;
+
+  /// Absolute offset of the badge byte (Misc5.Badges = Data[0x4]).
+  /// BW 0x21204, B2W2 0x21104. Bit i (0..7) = badge (i+1).
+  int get badgesOffset => miscBlockOffset + 0x4;
+
+  int get badgeByte => bytes[badgesOffset];
+
+  /// Number of gym badges obtained (popcount of the badge byte, bits 0..7).
+  int badgeCount() {
+    var b = badgeByte, n = 0;
+    while (b != 0) {
+      n += b & 1;
+      b >>= 1;
+    }
+    return n;
+  }
+
+  /// Money (Misc5.Money = u32 @ Misc block base). BW 0x21200, B2W2 0x21100.
+  int get money => _u32BytesAt(miscBlockOffset);
+  int _u32BytesAt(int o) =>
+      bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16) | (bytes[o + 3] << 24);
+
+  /// Team read: decode each non-empty party slot to (species, level).
+  List<({int species, int level})> team() {
+    final out = <({int species, int level})>[];
+    for (var i = 0; i < partyCount; i++) {
+      final mon = Pk5.decode(partySlot(i));
+      if (!mon.isEmpty) {
+        out.add((species: mon.species, level: mon.partyLevel));
+      }
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------------- trainer
   Gen5Trainer trainer() => Gen5Trainer(
         name: gen5DecodeText(bytes, otNameOfs, 8),
@@ -219,8 +303,10 @@ class Gen5SaveEditor {
   // ----------------------------------------------------------------- party
   int get partyCount => bytes[partyCountOfs].clamp(0, 6);
 
+  int partyDataOfsFor(int i) => partyDataOfs + i * partySlotSize;
+
   Uint8List partySlot(int i) {
-    final o = partyDataOfs + i * partySlotSize;
+    final o = partyDataOfsFor(i);
     return Uint8List.fromList(bytes.sublist(o, o + partySlotSize));
   }
 

@@ -699,6 +699,52 @@ class AppState extends ChangeNotifier {
         }
       } catch (_) {/* keep the flat parse */}
     }
+    // Gen 4: the flat parser stubs everything — read team/money/caught/badges
+    // via the save editor (offsets verified against PKHeX Zukan4/SAV4).
+    if (game.generation == 4) {
+      try {
+        final e = Gen4SaveEditor.load(Uint8List.fromList(bytes), game.version);
+        if (e.verifyChecksums().ok) {
+          final party = await readGen4Party(game) ?? const <Gen3PartyMon>[];
+          data = data.copyWith(
+            money: e.trainer().money,
+            badgeCount: e.badgeCount(game.version),
+            caughtDex: e.caughtDex(game.version),
+            team: [
+              for (final m in party)
+                SaveTeamMon(
+                    dexId: m.dex,
+                    level: m.level,
+                    nickname: m.nickname,
+                    name: m.name),
+            ],
+            notes: const [],
+          );
+        }
+      } catch (_) {/* keep the flat parse */}
+    }
+    // Gen 5: same — team/money/caught/badges via Gen5SaveEditor.
+    if (game.generation == 5) {
+      try {
+        final e = Gen5SaveEditor.load(Uint8List.fromList(bytes), game.version);
+        if (e.verifyChecksums().ok) {
+          final caught = <int>{
+            for (var n = 1; n <= 649; n++)
+              if (e.isCaught(n)) n
+          };
+          data = data.copyWith(
+            money: e.money,
+            badgeCount: e.badgeCount(),
+            caughtDex: caught,
+            team: [
+              for (final m in e.team())
+                SaveTeamMon(dexId: m.species, level: m.level),
+            ],
+            notes: const [],
+          );
+        }
+      } catch (_) {/* keep the flat parse */}
+    }
     if (data.team.any((m) => m.dexId != null && m.name == null)) {
       try {
         final index = await _pokedex.loadIndex();

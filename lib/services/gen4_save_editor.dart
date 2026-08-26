@@ -277,6 +277,44 @@ class Gen4SaveEditor {
     }
   }
 
+  // ---- Pokédex caught + gym badges (general block) -----------------------
+  // Verified against PKHeX Zukan4 / SAV4. (caughtBase, badgeByte, badge2Byte)
+  // relative to the general-block base; caughtBase = PokeDex + 4.
+  static const Map<String, (int, int, int)> _dexBadge = {
+    'platinum': (0x132C, 0x82, -1),
+    'diamond': (0x12E0, 0x7E, -1),
+    'pearl': (0x12E0, 0x7E, -1),
+    'heartgold': (0x12BC, 0x7E, 0x83),
+    'soulsilver': (0x12BC, 0x7E, 0x83),
+  };
+
+  /// The set of owned (caught) National-dex species (1..493), LSB-first.
+  Set<int> caughtDex(String version) {
+    final d = _dexBadge[version] ?? _dexBadge['platinum']!;
+    final base = generalOfs + d.$1;
+    final out = <int>{};
+    for (var n = 0; n < 493; n++) {
+      if ((bytes[base + (n >> 3)] >> (n & 7)) & 1 == 1) out.add(n + 1);
+    }
+    return out;
+  }
+
+  /// Gym badge count (DPPt 0..8, HGSS 0..16).
+  int badgeCount(String version) {
+    final d = _dexBadge[version] ?? _dexBadge['platinum']!;
+    var c = _popcount8(bytes[generalOfs + d.$2]);
+    if (d.$3 >= 0) c += _popcount8(bytes[generalOfs + d.$3]);
+    return c;
+  }
+
+  static int _popcount8(int b) {
+    var c = 0;
+    for (var i = 0; i < 8; i++) {
+      if ((b >> i) & 1 == 1) c++;
+    }
+    return c;
+  }
+
   Uint8List toBytes() => bytes;
 }
 

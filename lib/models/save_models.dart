@@ -68,12 +68,14 @@ class SaveData {
     List<String>? notes,
     Set<String>? flagAchievements,
     bool? gameClear,
+    Set<int>? caughtDex,
+    int? seenCount,
   }) =>
       SaveData(
         generation: generation,
         versionId: versionId,
-        caughtDex: caughtDex,
-        seenCount: seenCount,
+        caughtDex: caughtDex ?? this.caughtDex,
+        seenCount: seenCount ?? this.seenCount,
         badgeCount: badgeCount ?? this.badgeCount,
         team: team ?? this.team,
         trainerName: trainerName,
