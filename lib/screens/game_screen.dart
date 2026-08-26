@@ -491,7 +491,8 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                   mon: m,
                   initial: _partyEdits[m.slot],
                   strictLegal: true,
-                  generation: widget.game.generation)),
+                  generation: widget.game.generation,
+                  startReadOnly: true)),
     );
     if (result != null && mounted) {
       setState(() => _partyEdits[m.slot] = result);
@@ -1006,7 +1007,9 @@ class _BoxBrowserState extends State<_BoxBrowser> {
     final result = await Navigator.of(context).push<PartyEdit>(
       MaterialPageRoute(
           builder: (_) => _MonEditor(
-              mon: m.copyWith(level: lvl), initial: widget.edits[m.boxSlot])),
+              mon: m.copyWith(level: lvl),
+              initial: widget.edits[m.boxSlot],
+              startReadOnly: true)),
     );
     if (result != null && mounted) {
       setState(() => widget.edits[m.boxSlot!] = result);
@@ -1387,11 +1390,17 @@ class _BagEditorState extends State<_BagEditor> {
 /// [PartyEdit] (null if cancelled). Public so other screens — e.g. the Vault —
 /// can reuse the exact same editor UI.
 Future<PartyEdit?> pushGen3MonEditor(BuildContext context,
-    {required Gen3PartyMon mon, PartyEdit? initial, int generation = 3}) {
+    {required Gen3PartyMon mon,
+    PartyEdit? initial,
+    int generation = 3,
+    bool startReadOnly = true}) {
   return Navigator.of(context).push<PartyEdit>(
     MaterialPageRoute(
-      builder: (_) =>
-          _MonEditor(mon: mon, initial: initial, generation: generation),
+      builder: (_) => _MonEditor(
+          mon: mon,
+          initial: initial,
+          generation: generation,
+          startReadOnly: startReadOnly),
     ),
   );
 }
@@ -1405,11 +1414,14 @@ class _MonEditor extends StatefulWidget {
   final bool strictLegal;
   // The game's generation — selects the legal move pool (Gen 3 vs Gen 4 learnset).
   final int generation;
+  // Open read-only (a "view"); the user can switch to editing with a button.
+  final bool startReadOnly;
   const _MonEditor(
       {required this.mon,
       this.initial,
       this.strictLegal = true,
-      this.generation = 3});
+      this.generation = 3,
+      this.startReadOnly = false});
   @override
   State<_MonEditor> createState() => _MonEditorState();
 }
@@ -1430,6 +1442,7 @@ class _MonEditorState extends State<_MonEditor> {
   int _legalSeed = 0;
   int? _wantAbility; // target ability slot for the strict-legal PID regen
   bool _rolling = false;
+  late bool _readOnly = widget.startReadOnly; // "view" mode until Edit is tapped
   late List<int> _moves;
   late int _speciesDex; // National dex; may change in the editor
   late int _friendship;
@@ -2223,9 +2236,13 @@ class _MonEditorState extends State<_MonEditor> {
         children: [
           _header(context),
           Expanded(
+            // In view mode, AbsorbPointer makes every field inert (look-only).
+            child: AbsorbPointer(
+              absorbing: _readOnly,
+              child:
             // Tap anywhere in the form to dismiss the (number-pad) keyboard,
             // which has no return key of its own on iOS.
-            child: GestureDetector(
+             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => FocusScope.of(context).unfocus(),
               child: SingleChildScrollView(
@@ -2494,6 +2511,7 @@ class _MonEditorState extends State<_MonEditor> {
                 ),
               ),
             ),
+            ),
           ),
           // A Done bar sits directly above the number pad (which has no return
           // key) so the keyboard can always be dismissed.
@@ -2515,9 +2533,35 @@ class _MonEditorState extends State<_MonEditor> {
             ),
         ],
       ),
-      bottomNavigationBar: _saveBar(context, over),
+      bottomNavigationBar:
+          _readOnly ? _viewBar(context) : _saveBar(context, over),
     );
   }
+
+  // Bottom bar in view mode: Close, plus Edit to switch into the editor.
+  Widget _viewBar(BuildContext context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => setState(() => _readOnly = false),
+                  icon: const Icon(Icons.edit),
+                  label: const Text('Edit'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 
   PartyEdit _buildEdit() => PartyEdit(
         shiny: _shiny,
