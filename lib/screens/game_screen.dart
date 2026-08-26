@@ -12,6 +12,7 @@ import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../data/gen3_events.dart';
 import '../data/gen3_items.dart';
+import '../data/shiny_locks.dart';
 import '../data/type_colors.dart';
 import '../services/gen3_save_editor.dart';
 import '../services/gen4_save_editor.dart';
@@ -1202,8 +1203,20 @@ class _BagEditorState extends State<_BagEditor> {
     _commit();
   }
 
+  // Which bag pocket a Gen 3 item id belongs to (so the picker only offers
+  // items valid for the pocket you're adding to).
+  Gen3Pocket _pocketOfId(int id) {
+    if (id >= 1 && id <= 12) return Gen3Pocket.balls;
+    if (id >= 133 && id <= 175) return Gen3Pocket.berries;
+    if (id >= 289 && id <= 346) return Gen3Pocket.tmHm;
+    if (id >= 259 && id <= 288) return Gen3Pocket.keyItems;
+    return Gen3Pocket.items; // general items (medicine, held items, etc.)
+  }
+
   Future<void> _addItem() async {
-    final all = gen3ItemPicker();
+    // Only items that belong to the pocket currently open.
+    final all =
+        gen3ItemPicker().where((e) => _pocketOfId(e.id) == _pocket).toList();
     final picked = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
@@ -3308,6 +3321,8 @@ class _DexTabState extends State<_DexTab> {
                     _TypeChip(type: t),
                     const SizedBox(width: 4),
                   ],
+                  if (isShinyLocked(widget.game.versionGroup, r.baseDex))
+                    const _ShinyLockChip(),
                 ],
               );
             },
@@ -3382,6 +3397,37 @@ class _TypeChip extends StatelessWidget {
               fontSize: 9,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.3)),
+    );
+  }
+}
+
+/// Marks a species that can't be shiny in this game.
+class _ShinyLockChip extends StatelessWidget {
+  const _ShinyLockChip();
+
+  @override
+  Widget build(BuildContext context) {
+    const c = Color(0xFFB23B36);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.withValues(alpha: 0.5)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.lock, size: 10, color: c),
+          SizedBox(width: 3),
+          Text('SHINY LOCKED',
+              style: TextStyle(
+                  color: c,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3)),
+        ],
+      ),
     );
   }
 }
@@ -3877,6 +3923,23 @@ class _ShinyTabState extends State<_ShinyTab> {
                         Text(hunt.method,
                             style: TextStyle(
                                 fontSize: 12, color: scheme.onSurfaceVariant)),
+                        if (id != null &&
+                            isShinyLocked(widget.game.versionGroup, id)) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.lock,
+                                  size: 13, color: Color(0xFFB23B36)),
+                              SizedBox(width: 4),
+                              Text('Shiny-locked in this game',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFB23B36))),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
