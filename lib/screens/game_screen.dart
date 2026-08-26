@@ -11,6 +11,7 @@ import '../models/progress.dart';
 import '../models/save_models.dart';
 import '../services/pokedex_service.dart';
 import '../data/gen3_events.dart';
+import '../data/gen4_events.dart';
 import '../data/gen3_items.dart';
 import '../data/gen3_metloc.dart';
 import '../data/shiny_locks.dart';
@@ -448,6 +449,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                   )
                 : null,
             partyEdits: _partyEdits,
+            boxInjects: _boxInjects,
           );
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -635,6 +637,7 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
   }
 
   Future<void> _addEvent() async {
+    if (_gen4) return _addGen4Event();
     final ev = await showModalBottomSheet<Gen3Event>(
       context: context,
       builder: (_) => SafeArea(
@@ -669,6 +672,60 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
     setState(() {
       (toParty ? _partyInjects : _boxInjects).add(block);
       _injectLabels.add('${ev.label} → ${toParty ? 'party' : 'PC box'}');
+      _busy = false;
+    });
+  }
+
+  /// Gen 4 event picker — only the distributions this cartridge could receive.
+  /// Built mons go to a PC box (Gen 4 party injection isn't supported yet).
+  Future<void> _addGen4Event() async {
+    final events = gen4EventsFor(widget.game.version);
+    final ev = await showModalBottomSheet<Gen4Event>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text('Add an event Pokémon',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            if (events.isEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Text('No catalogued events for this game yet.',
+                    style: TextStyle(fontSize: 12)),
+              ),
+            for (final e in events)
+              ListTile(
+                leading: Icon(Icons.auto_awesome,
+                    color: e.shiny ? Colors.pinkAccent : Colors.amber),
+                title: Text('${e.label}  ·  Lv${e.level}'
+                    '${e.shiny ? '  ✨' : ''}'),
+                subtitle: Text(
+                    '${e.ownTrainer ? 'Your OT' : 'OT ${e.otName}'}  ·  ${e.note}',
+                    style: const TextStyle(fontSize: 11)),
+                onTap: () => Navigator.pop(context, e),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (ev == null || !mounted) return;
+    setState(() => _busy = true);
+    final block = await context.read<AppState>().buildGen4EventMon(widget.game, ev);
+    if (!mounted) return;
+    if (block == null) {
+      setState(() => _busy = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Couldn\'t build that event — no readable save?')));
+      return;
+    }
+    setState(() {
+      _boxInjects.add(block);
+      _injectLabels.add('${ev.label} → PC box');
       _busy = false;
     });
   }
@@ -855,17 +912,21 @@ class _SaveEditorDialogState extends State<_SaveEditorDialog> {
                           if (mounted) setState(() {});
                         },
                       ),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.auto_awesome,
-                            color: Colors.amber),
-                        title: const Text('Event Pokémon'),
-                        subtitle: Text(_injectLabels.isEmpty
-                            ? 'Add Mew, Celebi, Jirachi, Deoxys…'
-                            : _injectLabels.join(', ')),
-                        trailing: const Icon(Icons.add),
-                        onTap: _busy ? null : _addEvent,
-                      ),
+                    ],
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading:
+                          const Icon(Icons.auto_awesome, color: Colors.amber),
+                      title: const Text('Event Pokémon'),
+                      subtitle: Text(_injectLabels.isEmpty
+                          ? (_gen4
+                              ? 'Add Arceus, Darkrai, shiny beasts…'
+                              : 'Add Mew, Celebi, Jirachi, Deoxys…')
+                          : _injectLabels.join(', ')),
+                      trailing: const Icon(Icons.add),
+                      onTap: _busy ? null : _addEvent,
+                    ),
+                    if (!_gen4) ...[
                       const Divider(),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
