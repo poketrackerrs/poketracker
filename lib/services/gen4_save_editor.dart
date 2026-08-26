@@ -195,6 +195,17 @@ class Gen4SaveEditor {
     return Uint8List.fromList(bytes.sublist(o, o + boxSlotSize));
   }
 
+  /// Zero every PC box slot (18×30) and fix the storage checksum once. Empty
+  /// slots are trivially valid, so this is a safe way to wipe corrupt boxes.
+  void clearAllBoxes() {
+    final zero = Uint8List(boxSlotSize);
+    for (var g = 0; g < boxCount * perBox; g++) {
+      final o = storageOfs + g * boxSlotSize;
+      bytes.setRange(o, o + boxSlotSize, zero);
+    }
+    fixStorage();
+  }
+
   void writeBoxSlot(int globalIndex, Uint8List block) {
     final o = storageOfs + globalIndex * boxSlotSize;
     bytes.setRange(o, o + block.length.clamp(0, boxSlotSize), block);

@@ -282,6 +282,19 @@ class Gen5SaveEditor {
     _fixBlockAndFooter(_boxBlockIndex(box));
   }
 
+  /// Zero every PC box slot (24×30) and re-checksum all blocks. Empty slots are
+  /// trivially valid, so this safely wipes corrupt boxes.
+  void clearAllBoxes() {
+    final zero = Uint8List(boxSlotSize);
+    for (var box = 0; box < boxCount; box++) {
+      for (var slot = 0; slot < perBox; slot++) {
+        final o = boxSlotOffset(box, slot);
+        bytes.setRange(o, o + boxSlotSize, zero);
+      }
+    }
+    fixAllChecksums();
+  }
+
   /// Insert an (encrypted 136-byte) mon into the first empty box slot, scanning
   /// boxes 0..23 in order. Returns the global slot index used, or -1 if full.
   int addBoxMon(Uint8List block) {

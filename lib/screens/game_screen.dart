@@ -1157,6 +1157,40 @@ class _BoxBrowserState extends State<_BoxBrowser> {
         SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
   }
 
+  Future<void> _clearBoxes() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.warning_amber, color: Colors.red, size: 36),
+        title: const Text('Clear ALL PC boxes?'),
+        content: const Text(
+            'This permanently deletes EVERY Pokémon in ALL of your PC boxes '
+            '(your party is not touched). Use this to wipe corrupt or '
+            'egg-filled boxes.\n\nA backup of the current save is written first, '
+            'so you can still Restore it. This cannot be undone in-game — reload '
+            'the save in your emulator afterwards.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Clear all boxes')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final msg = await context.read<AppState>().clearBoxes(widget.game);
+    if (!mounted) return;
+    widget.edits.clear(); // slot edits are no longer valid
+    setState(() => _loading = true);
+    await _load();
+    messenger.showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
+  }
+
   Future<void> _edit(Gen3PartyMon m) async {
     final state = context.read<AppState>();
     // Boxed mons store no level byte — derive it from EXP for the editor.
@@ -1227,6 +1261,13 @@ class _BoxBrowserState extends State<_BoxBrowser> {
               onPressed: _loading || mons.isEmpty ? null : _sortByDex,
             ),
           ],
+          // Clear all boxes — recovery for corrupt/egg-filled boxes (Gens 3-5).
+          if (widget.game.generation >= 3 && widget.game.generation <= 5)
+            IconButton(
+              tooltip: 'Clear ALL PC boxes',
+              icon: const Icon(Icons.delete_forever),
+              onPressed: _loading ? null : _clearBoxes,
+            ),
         ],
       ),
       body: _loading

@@ -2739,6 +2739,66 @@ class AppState extends ChangeNotifier {
     return 'No valid backup found to restore.';
   }
 
+  Future<void> _backupThenWrite(
+      File file, Uint8List original, Uint8List updated) async {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    await File('${file.path}.bak-$stamp').writeAsBytes(original, flush: true);
+    await file.writeAsBytes(updated, flush: true);
+  }
+
+  /// Wipes EVERY PC box (all slots → empty) for Gens 3/4/5, after a backup and
+  /// a checksum guard. Empty boxes are trivially valid, so this is a safe way
+  /// to clear corrupt boxes (e.g. bad-egg rows). Party is untouched.
+  Future<String> clearBoxes(Game game) async {
+    final file = await _findSaveFile(game.id);
+    if (file == null) return 'No save file found for ${game.title}.';
+    final raw = Uint8List.fromList(await file.readAsBytes());
+    try {
+      switch (game.generation) {
+        case 3:
+          final e = Gen3SaveEditor.load(raw);
+          if (!e.verifyChecksums().ok) {
+            return 'Save checksums look wrong — refusing to edit it.';
+          }
+          final empty = Uint8List(80);
+          final total = Gen3SaveEditor.pcBoxCount * Gen3SaveEditor.pcPerBox;
+          for (var g = 0; g < total; g++) {
+            e.writeBoxSlot(g, empty);
+          }
+          if (!e.verifyChecksums().ok) {
+            return 'Edit produced bad checksums — aborted, save NOT changed.';
+          }
+          await _backupThenWrite(file, raw, e.toBytes());
+        case 4:
+          final e = Gen4SaveEditor.load(raw, game.version);
+          if (!e.verifyChecksums().ok) {
+            return 'Save checksums look wrong — refusing to edit it.';
+          }
+          e.clearAllBoxes();
+          if (!e.verifyChecksums().ok) {
+            return 'Edit produced bad checksums — aborted, save NOT changed.';
+          }
+          await _backupThenWrite(file, raw, e.toBytes());
+        case 5:
+          final e = Gen5SaveEditor.load(raw, game.version);
+          if (!e.verifyChecksums().ok) {
+            return 'Save checksums look wrong — refusing to edit it.';
+          }
+          e.clearAllBoxes();
+          if (!e.verifyChecksums().ok) {
+            return 'Edit produced bad checksums — aborted, save NOT changed.';
+          }
+          await _backupThenWrite(file, raw, e.toBytes());
+        default:
+          return 'Clearing boxes isn\'t supported for ${game.title} yet.';
+      }
+    } catch (_) {
+      return 'Not a readable Gen ${game.generation} save.';
+    }
+    return 'All PC boxes cleared. A backup was written first — reload the save '
+        'in your emulator.';
+  }
+
   /// Applies one PartyEdit to a decoded PK3 in place (shared by party + box).
   /// Legal-by-construction: a species change re-derives EXP, stats, moves and
   /// the default nickname; all PokeAPI lookups use National dex.
