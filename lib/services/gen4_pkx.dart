@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'gen4_text.dart';
+
 /// A single Gen 4 (Diamond/Pearl/Platinum, HeartGold/SoulSilver) Pokémon —
 /// "PKX"/PK4. Box form is 136 bytes; party form is 236 bytes (the extra 100
 /// hold the derived battle stats).
@@ -99,6 +101,76 @@ class Pkx {
     if (length == 236) _crypt(out, 0x88, 236 - 0x88, pid);
 
     return Pkx._(out, length);
+  }
+
+  /// Build a legal PK4 from scratch (canonical decrypted form). Callers set the
+  /// distribution's real fields; [encode] then shuffles + encrypts + checksums.
+  /// Defaults to a 136-byte box block (what the PC stores); pass [party] for the
+  /// 236-byte form and call [recomputeStats] afterwards.
+  ///
+  /// [gender] is 0 male / 1 female / 2 genderless; [originGame] is the Gen 4
+  /// game-of-origin value (Diamond 10, Pearl 11, Platinum 12, HeartGold 7,
+  /// SoulSilver 8) — pass the receiving game so the mon reads as native there.
+  factory Pkx.create({
+    required int species,
+    required int pid,
+    required int tid,
+    required int sid,
+    required int exp,
+    required List<int> moves,
+    required List<int> pp,
+    required List<int> ivs,
+    required int ability,
+    required String nickname,
+    required String otName,
+    int heldItem = 0,
+    int ball = 4,
+    int metLocation = 0,
+    int metLevel = 0,
+    int otGender = 0,
+    int gender = 0,
+    int language = 2, // English
+    int friendship = 70,
+    int originGame = 10,
+    int form = 0,
+    bool fateful = true,
+    bool nicknamed = false,
+    int metYear = 8, // 2008
+    int metMonth = 1,
+    int metDay = 1,
+    bool party = false,
+  }) {
+    final len = party ? 236 : 136;
+    final d = Uint8List(len);
+    final m = Pkx._(d, len);
+    m.setPid(pid);
+    m.setSpecies(species);
+    m.setHeldItem(heldItem);
+    _sU16(d, 0x0C, tid & 0xFFFF); // TID
+    _sU16(d, 0x0E, sid & 0xFFFF); // SID
+    m.setExp(exp);
+    m.setFriendship(friendship);
+    m.setAbility(ability);
+    d[0x17] = language & 0xFF;
+    m.setMoves(moves);
+    for (var i = 0; i < 4 && i < pp.length; i++) {
+      m.setPP(i, pp[i]);
+    }
+    m.setIVs(ivs);
+    m.setNicknamed(nicknamed);
+    // 0x40: fateful (bit0), gender (bits1-2), alt-form (bits3-7).
+    d[0x40] = (fateful ? 1 : 0) | ((gender & 3) << 1) | ((form & 0x1F) << 3);
+    gen4EncodeText(d, 0x48, 11, nickname);
+    d[0x5F] = originGame & 0xFF; // hometown / game of origin
+    gen4EncodeText(d, 0x68, 8, otName);
+    d[0x7B] = metYear & 0xFF; // met date (year-2000, month, day)
+    d[0x7C] = metMonth & 0xFF;
+    d[0x7D] = metDay & 0xFF;
+    m.setMetLocation(metLocation);
+    m.setBall(ball);
+    m.setMetLevel(metLevel);
+    m.setOtGender(otGender);
+    return m;
   }
 
   bool get isParty => length == 236;
