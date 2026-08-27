@@ -56,12 +56,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   BoxFit get _fit => const [BoxFit.fill, BoxFit.contain, BoxFit.cover][_fitMode];
   String get _fitName => const ['Fill', 'Fit', 'Zoom'][_fitMode];
 
-  late final AppState _app; // captured for use in dispose (no context there)
-
   @override
   void initState() {
     super.initState();
-    _app = context.read<AppState>();
     WidgetsBinding.instance.addObserver(this);
     if (_isMobile) {
       // Landscape (both ways, so it rotates with the phone) + immersive.
@@ -107,6 +104,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
           // save with a fresh/blank one).
           _loadedSaveSig = _sigOf(loaded);
           _hadSaveAtBoot = true;
+          // Baseline: any later change to the .sav mtime means the DS core wrote
+          // it directly, so we shouldn't clobber it with a lagging buffer.
+          _recordAppSaveMtime(_savPath!);
         } catch (_) {}
       }
       _setupAudioStream(emu.sampleRate);
@@ -263,6 +263,28 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   int _loadedSaveSig = 0; // signature of the .sav loaded at boot
   bool _hadSaveAtBoot = false;
   bool _sessionBackupDone = false;
+  // The .sav's modified-time right after WE last wrote it. If the on-disk file
+  // is newer than this, the DS core wrote a fresher save itself — so we must
+  // NOT overwrite it with our (possibly lagging) SRAM buffer.
+  DateTime? _lastAppSaveMtime;
+
+  /// True if the .sav on disk was written by something other than us since our
+  /// last write (i.e. the DS core saved directly) — don't clobber it.
+  bool _diskSaveIsFresher(String path) {
+    try {
+      final f = File(path);
+      if (!f.existsSync() || _lastAppSaveMtime == null) return false;
+      return f.statSync().modified.isAfter(_lastAppSaveMtime!);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _recordAppSaveMtime(String path) {
+    try {
+      _lastAppSaveMtime = File(path).statSync().modified;
+    } catch (_) {}
+  }
 
   // Cheap change signature over the save bytes (sampled) — lets us skip the
   // live achievement sync when the in-game save hasn't actually changed.
@@ -284,20 +306,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     // Only touch the .sav once the in-game save actually changed from what we
     // loaded — never overwrite a good save with an unchanged/fresh SRAM.
     if (_hadSaveAtBoot && sig == _loadedSaveSig) return;
-    // Never DOWNGRADE: if the file on disk already holds MORE progress than the
-    // SRAM buffer (e.g. the DS core wrote a fresher save directly), don't clobber
-    // it with a stale buffer read. This keeps the tracker's save current.
-    try {
-      final f = File(path);
-      if (f.existsSync()) {
-        final disk = await f.readAsBytes();
-        final newScore =
-            _app.saveContentScore(Uint8List.fromList(data), widget.game);
-        final diskScore =
-            _app.saveContentScore(Uint8List.fromList(disk), widget.game);
-        if (newScore >= 0 && diskScore > newScore) return;
-      }
-    } catch (_) {}
+    // If the DS core wrote a fresher save directly since our last write, don't
+    // clobber it with our (possibly lagging) SRAM buffer.
+    if (_diskSaveIsFresher(path)) return;
     try {
       // Back up the original save once, the first time the game writes a new one.
       if (_hadSaveAtBoot && !_sessionBackupDone) {
@@ -310,6 +321,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         _sessionBackupDone = true;
       }
       await File(path).writeAsBytes(data, flush: true);
+      _recordAppSaveMtime(path);
     } catch (_) {}
     // Live achievements: the committed save changed, so re-sync + toast.
     if (sig != _lastSaveSig) {
@@ -553,19 +565,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         final d = emu.readSaveRam();
         if (d != null &&
             d.isNotEmpty &&
-            (!_hadSaveAtBoot || _sigOf(d) != _loadedSaveSig)) {
-          // Don't downgrade a fresher on-disk save (see _persistSave).
-          var ok = true;
-          final f = File(path);
-          if (f.existsSync()) {
-            final disk = f.readAsBytesSync();
-            final newScore =
-                _app.saveContentScore(Uint8List.fromList(d), widget.game);
-            final diskScore =
-                _app.saveContentScore(Uint8List.fromList(disk), widget.game);
-            if (newScore >= 0 && diskScore > newScore) ok = false;
-          }
-          if (ok) File(path).writeAsBytesSync(d);
+            (!_hadSaveAtBoot || _sigOf(d) != _loadedSaveSig) &&
+            !_diskSaveIsFresher(path)) {
+          File(path).writeAsBytesSync(d);
         }
       }
     } catch (_) {}
