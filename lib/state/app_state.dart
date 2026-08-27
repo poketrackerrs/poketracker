@@ -1129,6 +1129,9 @@ class AppState extends ChangeNotifier {
         }
         if (slot >= totalSlots) break; // boxes full
         e.writeBoxSlot(slot, block);
+        // Register the injected species in the Pokédex (caught + seen), so it
+        // shows up in the in-game dex like a normally-caught mon.
+        e.markCaughtSeen(game.version, Pkx.decode(block).species);
         slot++;
         injected++;
       }

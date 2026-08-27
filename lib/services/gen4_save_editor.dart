@@ -313,6 +313,19 @@ class Gen4SaveEditor {
     return out;
   }
 
+  /// Marks a species caught + seen in the Pokédex (so an injected mon shows up
+  /// in the dex). Sets Zukan4 region 0 (caught) and region 1 (seen) bits.
+  void markCaughtSeen(String version, int nationalDex) {
+    if (nationalDex < 1 || nationalDex > 493) return;
+    final d = _dexBadge[version] ?? _dexBadge['platinum']!;
+    final caughtBase = generalOfs + d.$1;
+    final seenBase = caughtBase + 0x40; // region 1 (seen, +SIZE_REGION)
+    final idx = nationalDex - 1;
+    bytes[caughtBase + (idx >> 3)] |= 1 << (idx & 7);
+    bytes[seenBase + (idx >> 3)] |= 1 << (idx & 7);
+    fixGeneral();
+  }
+
   /// Gym badge count (DPPt 0..8, HGSS 0..16).
   int badgeCount(String version) {
     final d = _dexBadge[version] ?? _dexBadge['platinum']!;
