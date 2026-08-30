@@ -2,6 +2,7 @@
 // keyboard key and one gamepad token. Bindings are the 10 GBA buttons plus
 // emulator actions (fast-forward). Persisted in shared_preferences.
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
 import 'package:gamepads/gamepads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -69,20 +70,42 @@ class ControlsConfig {
           'select': LogicalKeyboardKey.backspace.keyId,
           kFastForwardId: LogicalKeyboardKey.tab.keyId,
         },
-        gamepad: {
-          'a': 'a',
-          'b': 'b',
-          'l': 'leftshoulder',
-          'r': 'rightshoulder',
-          'start': 'start',
-          'select': 'back',
-          'up': 'dpadup',
-          'down': 'dpaddown',
-          'left': 'dpadleft',
-          'right': 'dpadright',
-          kFastForwardId: 'righttrigger+',
-        },
+        // iOS reports controller input through Apple's GameController framework
+        // with different key names (buttonA, buttonMenu, "dpad - xAxis" analog…)
+        // than SDL-style desktop/Android names — so it needs its own defaults.
+        gamepad: Platform.isIOS ? _iosGamepadDefaults : _sdlGamepadDefaults,
       );
+
+  // Desktop / Android (SDL-style) gamepad tokens.
+  static const Map<String, String> _sdlGamepadDefaults = {
+    'a': 'a',
+    'b': 'b',
+    'l': 'leftshoulder',
+    'r': 'rightshoulder',
+    'start': 'start',
+    'select': 'back',
+    'up': 'dpadup',
+    'down': 'dpaddown',
+    'left': 'dpadleft',
+    'right': 'dpadright',
+    kFastForwardId: 'righttrigger+',
+  };
+
+  // iOS (GameController framework) gamepad tokens. The D-pad is analog, so its
+  // directions are axis tokens; buttonMenu/Options are Start/Select.
+  static const Map<String, String> _iosGamepadDefaults = {
+    'a': 'buttona',
+    'b': 'buttonb',
+    'l': 'leftshoulder',
+    'r': 'rightshoulder',
+    'start': 'buttonmenu',
+    'select': 'buttonoptions',
+    'up': 'dpad - yaxis+',
+    'down': 'dpad - yaxis-',
+    'left': 'dpad - xaxis-',
+    'right': 'dpad - xaxis+',
+    kFastForwardId: 'righttrigger+',
+  };
 
   static Future<ControlsConfig> load() async {
     final defaults = ControlsConfig.defaults();
