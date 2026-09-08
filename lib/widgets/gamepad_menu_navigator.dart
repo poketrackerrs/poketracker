@@ -76,7 +76,15 @@ class _GamepadMenuNavigatorState extends State<GamepadMenuNavigator> {
   }
 
   void _handleAnalog(String key, double value) {
-    if (key.contains('trigger')) return; // triggers aren't navigation
+    if (key.contains('trigger')) {
+      // Analog triggers cycle the bottom-nav tabs (edge-detected: fire once per
+      // pull). Rest at 0, pull toward 1.
+      final pressed = value > _thresh ? 1 : 0;
+      if ((_axis[key] ?? 0) == pressed) return;
+      _axis[key] = pressed;
+      if (pressed == 1) _cycleTab(key.contains('left') ? -1 : 1);
+      return;
+    }
     final sign = value > _thresh ? 1 : (value < -_thresh ? -1 : 0);
     if ((_axis[key] ?? 0) == sign) return; // no edge
     _axis[key] = sign;
@@ -107,12 +115,19 @@ class _GamepadMenuNavigatorState extends State<GamepadMenuNavigator> {
       _startRepeat(dir);
       return;
     }
-    if (key == 'a' || key == 'buttona') {
+    // Shoulder bumpers cycle the bottom-nav tabs (previous / next).
+    if (key == 'leftshoulder') {
+      _cycleTab(-1);
+    } else if (key == 'rightshoulder') {
+      _cycleTab(1);
+    } else if (key == 'a' || key == 'buttona') {
       _activate();
     } else if (key == 'b' || key == 'buttonb') {
       _back();
     }
   }
+
+  void _cycleTab(int delta) => gCycleTab?.call(delta);
 
   /// Maps an analog axis + sign to a direction. Only the vertical convention
   /// differs by vocabulary: Apple's `… - yAxis` is +up/−down; SDL `lefty` is
@@ -147,12 +162,21 @@ class _GamepadMenuNavigatorState extends State<GamepadMenuNavigator> {
     // Show focus rings once a controller is in use, even on a touch device.
     FocusManager.instance.highlightStrategy =
         FocusHighlightStrategy.alwaysTraditional;
+    if (!mounted) return;
+    final scope = FocusScope.of(context);
     final primary = FocusManager.instance.primaryFocus;
-    final td = _traversal[dir]!;
-    if (primary != null) {
-      primary.focusInDirection(td);
-    } else if (mounted) {
-      FocusScope.of(context).focusInDirection(td);
+    final back = dir == _NavDir.up || dir == _NavDir.left;
+    // Nothing focused yet (primary is just a scope) — grab the first control so
+    // the very first press lands somewhere.
+    if (primary == null || primary is FocusScopeNode) {
+      back ? scope.previousFocus() : scope.nextFocus();
+      return;
+    }
+    // Try geometric traversal; if it dead-ends (edge of a row/list), fall back
+    // to linear order so you can still get to the next control (e.g. from the
+    // last shelf down into the bottom nav).
+    if (!primary.focusInDirection(_traversal[dir]!)) {
+      back ? scope.previousFocus() : scope.nextFocus();
     }
   }
 

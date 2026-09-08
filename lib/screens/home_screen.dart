@@ -6,6 +6,8 @@ import '../state/app_state.dart';
 import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
 import '../widgets/cartridge_nav.dart';
+import '../widgets/focusable_tap.dart';
+import '../services/menu_nav_state.dart';
 import 'achievements_screen.dart';
 import 'events_screen.dart';
 import 'game_screen.dart';
@@ -25,6 +27,28 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Let the controller's shoulder buttons / triggers cycle these tabs.
+    gCycleTab = _cycleTab;
+  }
+
+  @override
+  void dispose() {
+    if (gCycleTab == _cycleTab) gCycleTab = null;
+    super.dispose();
+  }
+
+  void _cycleTab(int delta) {
+    if (!mounted) return;
+    // Only cycle when the home screen is the visible route (not behind a
+    // pushed detail/emulator screen).
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    final n = _titles.length;
+    setState(() => _index = ((_index + delta) % n + n) % n);
+  }
 
   static const _titles = ['PokeTracker', 'Pokedex', 'Vault', 'Settings'];
   static const _icons = [
@@ -69,13 +93,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      // IndexedStack keeps every tab alive, so wrap the hidden ones in
+      // ExcludeFocus — otherwise controller focus could jump to an off-screen
+      // tab's controls.
       body: IndexedStack(
         index: _index,
-        children: const [
-          _GamesTab(),
-          PokedexListScreen(),
-          VaultScreen(),
-          SettingsScreen(),
+        children: [
+          ExcludeFocus(excluding: _index != 0, child: const _GamesTab()),
+          ExcludeFocus(excluding: _index != 1, child: const PokedexListScreen()),
+          ExcludeFocus(excluding: _index != 2, child: const VaultScreen()),
+          ExcludeFocus(excluding: _index != 3, child: const SettingsScreen()),
         ],
       ),
       bottomNavigationBar: CartridgeNavBar(
@@ -184,7 +211,8 @@ class _GenShelf extends StatelessWidget {
                         for (final g in games)
                           Padding(
                             padding: const EdgeInsets.only(right: 14, bottom: 36),
-                            child: GestureDetector(
+                            child: FocusableTap(
+                              borderRadius: BorderRadius.circular(6),
                               onTap: () => Navigator.of(context).push(
                                   MaterialPageRoute(
                                       builder: (_) => GameScreen(game: g))),

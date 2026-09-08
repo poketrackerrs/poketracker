@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'focusable_tap.dart';
 
 /// Bottom navigation styled as cartridges in slots (the "launch box" shell):
 /// the active tab is seated + lit amber, the others sit popped up in gray.
@@ -61,9 +62,9 @@ class _CartTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = active ? const Color(0xFF37220A) : const Color(0xFFC6BBA7);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    return FocusableTap(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 104),
