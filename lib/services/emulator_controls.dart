@@ -26,6 +26,9 @@ const List<BindDef> kBindings = [
   BindDef('right', 'D-pad Right', retroRight),
   BindDef('a', 'A', retroA),
   BindDef('b', 'B', retroB),
+  // X and Y are DS-only (the GBA has no X/Y); harmless/inert on GBA.
+  BindDef('x', 'X', retroX),
+  BindDef('y', 'Y', retroY),
   BindDef('l', 'L', retroL),
   BindDef('r', 'R', retroR),
   BindDef('start', 'Start', retroStart),
@@ -64,6 +67,8 @@ class ControlsConfig {
           'right': LogicalKeyboardKey.arrowRight.keyId,
           'a': LogicalKeyboardKey.keyX.keyId,
           'b': LogicalKeyboardKey.keyZ.keyId,
+          'x': LogicalKeyboardKey.keyD.keyId,
+          'y': LogicalKeyboardKey.keyC.keyId,
           'l': LogicalKeyboardKey.keyA.keyId,
           'r': LogicalKeyboardKey.keyS.keyId,
           'start': LogicalKeyboardKey.enter.keyId,
@@ -80,6 +85,8 @@ class ControlsConfig {
   static const Map<String, String> _sdlGamepadDefaults = {
     'a': 'a',
     'b': 'b',
+    'x': 'x',
+    'y': 'y',
     'l': 'leftshoulder',
     'r': 'rightshoulder',
     'start': 'start',
@@ -96,6 +103,8 @@ class ControlsConfig {
   static const Map<String, String> _iosGamepadDefaults = {
     'a': 'buttona',
     'b': 'buttonb',
+    'x': 'buttonx',
+    'y': 'buttony',
     'l': 'leftshoulder',
     'r': 'rightshoulder',
     'start': 'buttonmenu',
