@@ -261,6 +261,22 @@ class _EmulatorScreenState extends State<EmulatorScreen>
             } catch (_) {}
           }
         }
+        // Cast the same PCM to any connected displays (real speed only —
+        // fast-forward audio would just be sped-up noise).
+        final cast = _cast;
+        if (!_turbo && cast != null && cast.viewers > 0) {
+          var total = 0;
+          for (final ch in gAudioChunks) {
+            total += ch.length;
+          }
+          final all = Uint8List(total);
+          var o = 0;
+          for (final ch in gAudioChunks) {
+            all.setRange(o, o + ch.length, ch);
+            o += ch.length;
+          }
+          cast.sendAudio(all, emu.sampleRate.round());
+        }
         gAudioChunks.clear();
       }
       if (gFrameReady && !_decoding) {

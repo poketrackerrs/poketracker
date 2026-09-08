@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/games_data.dart';
 import '../models/game.dart';
 import '../state/app_state.dart';
+import '../services/game_cast.dart';
 import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
 import '../widgets/cartridge_nav.dart';
@@ -10,6 +14,7 @@ import '../widgets/focusable_tap.dart';
 import '../services/menu_nav_state.dart';
 import 'achievements_screen.dart';
 import 'events_screen.dart';
+import 'game_cast_display_screen.dart';
 import 'game_screen.dart';
 import 'updates_screen.dart';
 import 'pokedex_list_screen.dart';
@@ -28,17 +33,71 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
 
+  // Desktop auto-detect for incoming casts, so the user never opens Settings:
+  // poll the LAN, and when a device starts casting, pop an "accept" dialog.
+  Timer? _castTimer;
+  bool _castPromptOpen = false;
+  final Set<String> _castDismissed = {};
+
   @override
   void initState() {
     super.initState();
     // Let the controller's shoulder buttons / triggers cycle these tabs.
     gCycleTab = _cycleTab;
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      _castTimer =
+          Timer.periodic(const Duration(seconds: 6), (_) => _pollForCast());
+    }
   }
 
   @override
   void dispose() {
     if (gCycleTab == _cycleTab) gCycleTab = null;
+    _castTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _pollForCast() async {
+    if (!mounted || _castPromptOpen) return;
+    // Only when the home screen is the visible route (not already in the
+    // display screen or some other pushed page).
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    final hosts = await discoverGameCastHosts();
+    if (!mounted || _castPromptOpen) return;
+    final ip = hosts.firstWhere((h) => !_castDismissed.contains(h),
+        orElse: () => '');
+    if (ip.isEmpty) return;
+    _castPromptOpen = true;
+    final accept = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.cast),
+        title: const Text('A game is casting'),
+        content: Text('$ip is casting a game on your Wi-Fi. '
+            'Display it on this screen?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Display'),
+          ),
+        ],
+      ),
+    );
+    _castPromptOpen = false;
+    if (!mounted) return;
+    if (accept == true) {
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) =>
+            GameCastDisplayScreen(initialAddress: ip, autoConnect: true),
+      ));
+    } else {
+      // Don't nag about this host again this session.
+      _castDismissed.add(ip);
+    }
   }
 
   void _cycleTab(int delta) {
