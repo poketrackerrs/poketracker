@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'state/app_state.dart';
 import 'screens/home_screen.dart';
+import 'widgets/gamepad_menu_navigator.dart';
 
 void main() {
   runApp(
@@ -15,15 +16,22 @@ void main() {
 class PokeTrackerApp extends StatelessWidget {
   const PokeTrackerApp({super.key});
 
+  static final GlobalKey<NavigatorState> _navKey =
+      GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     final accent = context.watch<AppState>().accent;
     return MaterialApp(
       title: 'PokeTracker',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navKey,
       theme: _buildTheme(accent, Brightness.light),
       darkTheme: _buildTheme(accent, Brightness.dark),
       themeMode: context.watch<AppState>().themeMode,
+      // Wrap the whole navigator so a game controller can drive the menus.
+      builder: (context, child) =>
+          GamepadMenuNavigator(navKey: _navKey, child: child!),
       home: const HomeScreen(),
     );
   }

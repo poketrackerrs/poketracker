@@ -12,6 +12,7 @@ import '../state/app_state.dart';
 import '../services/gba_emulator.dart';
 import '../services/emulator_controls.dart';
 import '../services/emulator_prefs.dart';
+import '../services/menu_nav_state.dart';
 import 'controls_settings_screen.dart';
 
 /// The built-in GBA player. Runs the mGBA core, renders frames, plays audio,
@@ -66,6 +67,8 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Hand the controller to the game: stop the menu-nav bridge stealing input.
+    gGamepadMenuNavPaused.value = true;
     if (_isMobile) {
       // Landscape (both ways, so it rotates with the phone) + immersive.
       _fullscreen = true;
@@ -598,6 +601,8 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     }
     _image?.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    // Return the controller to menu navigation.
+    gGamepadMenuNavPaused.value = false;
     super.dispose();
   }
 
