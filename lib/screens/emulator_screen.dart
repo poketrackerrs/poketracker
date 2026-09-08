@@ -14,6 +14,7 @@ import '../services/emulator_controls.dart';
 import '../services/emulator_prefs.dart';
 import '../services/menu_nav_state.dart';
 import '../services/cheat_service.dart';
+import '../services/game_cast.dart';
 import 'controls_settings_screen.dart';
 import 'cheats_sheet.dart';
 
@@ -54,6 +55,10 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   int _fitMode = 1; // 0 = Fill, 1 = Fit (default), 2 = Zoom
   String _status = 'starting…';
   String? _savPath;
+
+  // Cast-to-another-device (game on the PC, controls on the phone).
+  GameCastHost? _cast;
+  int _castSkip = 0;
 
   static const int _defaultFf = 6;
 
@@ -260,6 +265,17 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         _decoding = true;
         final w = gFrameW, h = gFrameH;
         final buf = Uint8List.fromList(gRgba!.sublist(0, w * h * 4));
+        // Cast to a connected display (~30fps): send the DS top screen only,
+        // or the whole GBA frame. No-op when nobody's watching.
+        final cast = _cast;
+        if (cast != null && cast.viewers > 0 && (_castSkip++ & 1) == 0) {
+          if (_isDs) {
+            final topH = h ~/ 2;
+            cast.sendFrame(Uint8List.sublistView(buf, 0, w * topH * 4), w, topH);
+          } else {
+            cast.sendFrame(buf, w, h);
+          }
+        }
         ui.decodeImageFromPixels(buf, w, h, ui.PixelFormat.rgba8888, (img) {
           _decoding = false;
           if (!mounted) {
@@ -485,6 +501,43 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     );
   }
 
+  /// Toggles casting this game's screen to another PokeTracker on the LAN.
+  Future<void> _toggleCast() async {
+    final messenger = ScaffoldMessenger.of(context);
+    var cast = _cast;
+    if (cast != null && cast.running) {
+      await cast.stop();
+      if (mounted) setState(() {});
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Stopped casting')));
+      return;
+    }
+    cast ??= _cast = GameCastHost();
+    final ip = await cast.start();
+    if (!mounted) return;
+    setState(() {});
+    if (ip == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Could not start casting — check the Wi-Fi network.')));
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.cast),
+        title: const Text('Casting to your PC'),
+        content: Text(
+            'On your PC, open PokeTracker → Settings → "Display a game from '
+            'another device", then connect to:\n\n$ip:${cast!.port}\n\n'
+            'Keep this game open; controls stay on your phone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
   void _applyVolume() {
     final p = _prefs;
     if (p == null || !_soloudReady) return;
@@ -623,6 +676,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
     _image?.dispose();
+    _cast?.stop();
     WidgetsBinding.instance.removeObserver(this);
     // Return the controller to menu navigation.
     gGamepadMenuNavPaused.value = false;
@@ -1035,6 +1089,16 @@ class _EmulatorScreenState extends State<EmulatorScreen>
                           color: Colors.white,
                           tooltip: 'Cheats',
                           onPressed: _openCheats,
+                        ),
+                        IconButton(
+                          icon: Icon(_cast?.running == true
+                              ? Icons.cast_connected
+                              : Icons.cast),
+                          color: _cast?.running == true
+                              ? Colors.amberAccent
+                              : Colors.white,
+                          tooltip: 'Cast to PC',
+                          onPressed: _toggleCast,
                         ),
                         IconButton(
                           icon: const Icon(Icons.expand_less),

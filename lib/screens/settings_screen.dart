@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import 'developer_screen.dart';
 import 'ds_bios_screen.dart';
 import 'save_transfer_screen.dart';
+import 'game_cast_display_screen.dart';
 import 'updates_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -86,6 +87,16 @@ class SettingsScreen extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const SaveTransferScreen()),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.cast),
+          title: const Text('Display a game from another device'),
+          subtitle: const Text(
+              'Show a game streamed from PokeTracker on your phone'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const GameCastDisplayScreen()),
           ),
         ),
 
