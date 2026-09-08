@@ -20,7 +20,13 @@ import 'controls_settings_screen.dart';
 class EmulatorScreen extends StatefulWidget {
   final Game game;
   final String romPath;
-  const EmulatorScreen({super.key, required this.game, required this.romPath});
+
+  /// Directory that holds this session's `.sav`. Defaults to the ROM's folder
+  /// (the "Main save" slot); a named save slot passes its own folder here so
+  /// the core reads and writes that slot's save instead.
+  final String? saveDir;
+  const EmulatorScreen(
+      {super.key, required this.game, required this.romPath, this.saveDir});
 
   @override
   State<EmulatorScreen> createState() => _EmulatorScreenState();
@@ -81,19 +87,22 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       final (dll, sys) = await GbaEmulator.provision(coreBase);
       final emu = GbaEmulator(dll);
       emu.init(sys);
-      // Point the core's SAVE directory at the game folder so the DS core reads
-      // and writes the SAME .sav the editor/tracker use (its filename matches
-      // the ROM basename). MUST be before loadRom. Keeps BIOS in the sys dir.
-      setEmuSaveDir(File(widget.romPath).parent.path);
+      // Point the core's SAVE directory at the active slot's folder so the DS
+      // core reads and writes the SAME .sav the editor/tracker use (its
+      // filename matches the ROM basename). MUST be before loadRom. Keeps BIOS
+      // in the sys dir. Defaults to the ROM folder (the "Main save" slot).
+      final saveDir = widget.saveDir ?? File(widget.romPath).parent.path;
+      setEmuSaveDir(saveDir);
       final ok = emu.loadRom(widget.romPath);
       if (!ok) {
         if (mounted) setState(() => _status = 'The core could not load this ROM.');
         return;
       }
       _emu = emu;
-      final dot = widget.romPath.lastIndexOf('.');
-      _savPath =
-          '${dot > 0 ? widget.romPath.substring(0, dot) : widget.romPath}.sav';
+      final romName = widget.romPath.split(RegExp(r'[\\/]')).last;
+      final dot = romName.lastIndexOf('.');
+      final romBase = dot > 0 ? romName.substring(0, dot) : romName;
+      _savPath = '$saveDir${Platform.pathSeparator}$romBase.sav';
       final sav = File(_savPath!);
       if (sav.existsSync()) {
         try {

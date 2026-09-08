@@ -17,8 +17,11 @@ Future<void> launchGame(BuildContext context, Game game) async {
   final builtInRom =
       state.canPlayBuiltIn(game) ? state.builtInRomPath(game) : null;
   if (builtInRom != null) {
+    // Play the currently-selected save slot (default = alongside the ROM).
+    final saveDir = await state.activeSaveDirPath(game.id, create: true);
     await navigator.push(MaterialPageRoute(
-        builder: (_) => EmulatorScreen(game: game, romPath: builtInRom)));
+        builder: (_) =>
+            EmulatorScreen(game: game, romPath: builtInRom, saveDir: saveDir)));
     // Auto-sync progress from the save the emulator just wrote, so badges,
     // Pokédex and achievements track straight from the play session.
     final summary = await state.autoSyncAfterPlay(game);

@@ -16,6 +16,7 @@ import '../models/achievement.dart';
 import '../models/game.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
+import '../models/save_slot.dart';
 import '../models/vault_mon.dart';
 import '../services/storage_service.dart';
 import '../services/emulator_bios.dart';
@@ -625,21 +626,194 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Finds a game's save file: a user-set path, else a save alongside the ROM.
-  Future<File?> _findSaveFile(String gameId) async {
-    final manual = await savePath(gameId);
-    if (manual != null && manual.isNotEmpty && File(manual).existsSync()) {
-      return File(manual);
-    }
+  // ---- Save slots (multiple saves per game) ---------------------------
+  //
+  // The default slot ('default') is the save that lives directly alongside the
+  // ROM — the legacy location, so existing saves keep working with zero
+  // migration. Named slots are `saves/<id>/` subfolders under the game folder,
+  // each holding its own `<rom>.sav`. Exactly one slot is "active" per game;
+  // the built-in player and the save editor/tracker all operate on the active
+  // slot's save.
+
+  /// The directory holding a slot's save file. Default slot = the ROM's folder.
+  String _slotDir(String romPath, String slotId) {
+    final parent = File(romPath).parent.path;
+    if (slotId == SaveSlot.defaultId) return parent;
+    return '$parent${Platform.pathSeparator}saves${Platform.pathSeparator}$slotId';
+  }
+
+  /// A game's ROM basename without extension (e.g. "Platinum" from ".../Platinum.nds").
+  String? _romBaseName(String gameId) {
     final rom = _installed[gameId];
     if (rom == null) return null;
-    final dir = File(rom).parent;
+    final name = rom.split(RegExp(r'[\\/]')).last;
+    final dot = name.lastIndexOf('.');
+    return dot == -1 ? name : name.substring(0, dot);
+  }
+
+  /// The user-defined (non-default) slots for a game: [{id, name}, …].
+  Future<List<Map<String, String>>> _namedSlotDefs(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('slots:$gameId');
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      return (jsonDecode(raw) as List)
+          .cast<Map>()
+          .map((m) => {'id': '${m['id']}', 'name': '${m['name']}'})
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _writeNamedSlotDefs(
+      String gameId, List<Map<String, String>> defs) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('slots:$gameId', jsonEncode(defs));
+  }
+
+  /// The active slot id for a game ('default' when unset or when the stored
+  /// slot no longer exists).
+  Future<String> activeSlotId(String gameId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString('activeslot:$gameId');
+    if (id == null || id == SaveSlot.defaultId) return SaveSlot.defaultId;
+    final defs = await _namedSlotDefs(gameId);
+    if (!defs.any((d) => d['id'] == id)) return SaveSlot.defaultId;
+    return id;
+  }
+
+  /// Switches which save is live for a game (play/edit target).
+  Future<void> setActiveSlot(String gameId, String slotId) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (slotId == SaveSlot.defaultId) {
+      await prefs.remove('activeslot:$gameId');
+    } else {
+      await prefs.setString('activeslot:$gameId', slotId);
+    }
+    notifyListeners();
+  }
+
+  /// All slots for a game — default first, then named slots in creation order.
+  Future<List<SaveSlot>> saveSlots(String gameId) async {
+    final rom = _installed[gameId];
+    final parent = rom == null ? '' : File(rom).parent.path;
+    final slots = <SaveSlot>[
+      SaveSlot(
+          id: SaveSlot.defaultId,
+          name: 'Main save',
+          dirPath: parent,
+          isDefault: true),
+    ];
+    for (final d in await _namedSlotDefs(gameId)) {
+      slots.add(SaveSlot(
+        id: d['id']!,
+        name: d['name']!,
+        dirPath: rom == null ? '' : _slotDir(rom, d['id']!),
+        isDefault: false,
+      ));
+    }
+    return slots;
+  }
+
+  /// The directory holding the ACTIVE slot's save, creating a named slot's
+  /// folder when [create] is set. Null when the game isn't installed.
+  Future<String?> activeSaveDirPath(String gameId, {bool create = false}) async {
+    final rom = _installed[gameId];
+    if (rom == null) return null;
+    final id = await activeSlotId(gameId);
+    final dir = _slotDir(rom, id);
+    if (create && id != SaveSlot.defaultId) {
+      try {
+        Directory(dir).createSync(recursive: true);
+      } catch (_) {}
+    }
+    return dir;
+  }
+
+  /// Creates a new save slot. When [copyActive] is set, the active slot's
+  /// current save is copied in (a "duplicate this playthrough"); otherwise the
+  /// slot starts empty, so launching it boots a brand-new game.
+  Future<SaveSlot?> createSlot(String gameId, String name,
+      {bool copyActive = false}) async {
+    final rom = _installed[gameId];
+    if (rom == null) return null;
+    final id = 'slot-${DateTime.now().millisecondsSinceEpoch.toRadixString(36)}';
+    final dir = _slotDir(rom, id);
+    try {
+      Directory(dir).createSync(recursive: true);
+    } catch (_) {
+      return null;
+    }
+    if (copyActive) {
+      final src = await _findSaveFile(gameId);
+      final base = _romBaseName(gameId);
+      if (src != null && src.existsSync() && base != null) {
+        try {
+          src.copySync('$dir${Platform.pathSeparator}$base.sav');
+        } catch (_) {}
+      }
+    }
+    final defs = await _namedSlotDefs(gameId);
+    final label = name.trim().isEmpty ? 'Save ${defs.length + 2}' : name.trim();
+    defs.add({'id': id, 'name': label});
+    await _writeNamedSlotDefs(gameId, defs);
+    notifyListeners();
+    return SaveSlot(id: id, name: label, dirPath: dir, isDefault: false);
+  }
+
+  Future<void> renameSlot(String gameId, String slotId, String name) async {
+    if (slotId == SaveSlot.defaultId || name.trim().isEmpty) return;
+    final defs = await _namedSlotDefs(gameId);
+    for (final d in defs) {
+      if (d['id'] == slotId) d['name'] = name.trim();
+    }
+    await _writeNamedSlotDefs(gameId, defs);
+    notifyListeners();
+  }
+
+  /// Deletes a named slot and its save folder (the default slot can't be
+  /// deleted). If it was active, reverts to the default slot.
+  Future<void> deleteSlot(String gameId, String slotId) async {
+    if (slotId == SaveSlot.defaultId) return;
+    final rom = _installed[gameId];
+    if (rom != null) {
+      try {
+        final d = Directory(_slotDir(rom, slotId));
+        if (d.existsSync()) d.deleteSync(recursive: true);
+      } catch (_) {}
+    }
+    final defs = await _namedSlotDefs(gameId)
+      ..removeWhere((d) => d['id'] == slotId);
+    await _writeNamedSlotDefs(gameId, defs);
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('activeslot:$gameId') == slotId) {
+      await prefs.remove('activeslot:$gameId');
+    }
+    notifyListeners();
+  }
+
+  /// Finds the ACTIVE slot's save file. For the default slot this honors a
+  /// user-set save path, else a save alongside the ROM; for a named slot it
+  /// looks inside that slot's folder.
+  Future<File?> _findSaveFile(String gameId) async {
+    final rom = _installed[gameId];
+    if (rom == null) return null;
+    final slotId = await activeSlotId(gameId);
+    // A manually-set save path only overrides the default (alongside-ROM) slot.
+    if (slotId == SaveSlot.defaultId) {
+      final manual = await savePath(gameId);
+      if (manual != null && manual.isNotEmpty && File(manual).existsSync()) {
+        return File(manual);
+      }
+    }
+    final dirPath = _slotDir(rom, slotId);
+    final dir = Directory(dirPath);
     if (!dir.existsSync()) return null;
     const exts = ['.sav', '.srm', '.sav1', '.dsv', '.sa1', '.fla'];
-    final dot = rom.lastIndexOf('.');
-    final romBase = dot == -1 ? rom : rom.substring(0, dot);
+    final romBase = _romBaseName(gameId)!;
     for (final e in exts) {
-      final f = File('$romBase$e');
+      final f = File('$dirPath${Platform.pathSeparator}$romBase$e');
       if (f.existsSync()) return f;
     }
     for (final f in dir.listSync().whereType<File>()) {
@@ -2793,9 +2967,11 @@ class AppState extends ChangeNotifier {
   Future<String> eraseSaveForNewGame(Game game) async {
     final rom = _installed[game.id];
     if (rom == null) return 'No ROM found for ${game.title}.';
-    final dot = rom.lastIndexOf('.');
-    final romBase = dot == -1 ? rom : rom.substring(0, dot);
-    final romName = romBase.split(Platform.pathSeparator).last;
+    // Operate on the ACTIVE slot's folder (default slot = alongside the ROM).
+    final dirPath =
+        await activeSaveDirPath(game.id, create: true) ?? File(rom).parent.path;
+    final romName = _romBaseName(game.id)!;
+    final romBase = '$dirPath${Platform.pathSeparator}$romName';
     const exts = ['.sav', '.dsv', '.srm', '.sav1', '.sa1', '.fla', '.dst'];
     var deleted = 0;
 
@@ -2809,7 +2985,7 @@ class AppState extends ChangeNotifier {
       }
     } catch (_) {}
 
-    // 1. Save files next to the ROM (the tracked location).
+    // 1. Save files in the active slot's folder (the tracked location).
     for (final e in exts) {
       final f = File('$romBase$e');
       if (f.existsSync()) {
@@ -2819,19 +2995,24 @@ class AppState extends ChangeNotifier {
         } catch (_) {}
       }
     }
-    // 2. A manually-set save path, if any.
-    final manual = await savePath(game.id);
-    if (manual != null && manual.isNotEmpty && File(manual).existsSync()) {
-      try {
-        await File(manual).delete();
-        deleted++;
-      } catch (_) {}
+    // 2. A manually-set save path, if any (default slot only — a named slot
+    //    has its own save folder and must not touch the default save).
+    if (await activeSlotId(game.id) == SaveSlot.defaultId) {
+      final manual = await savePath(game.id);
+      if (manual != null && manual.isNotEmpty && File(manual).existsSync()) {
+        try {
+          await File(manual).delete();
+          deleted++;
+        } catch (_) {}
+      }
     }
-    // 3. The DS core's own save copy in <AppSupport>/cores.
+    // 3. The DS core's own legacy save copy in <AppSupport>/cores (default slot
+    //    only — named slots keep everything inside their own folder).
     try {
       final support = await getApplicationSupportDirectory();
       final coresDir = Directory('${support.path}/cores');
-      if (coresDir.existsSync()) {
+      if (await activeSlotId(game.id) == SaveSlot.defaultId &&
+          coresDir.existsSync()) {
         for (final f in coresDir.listSync().whereType<File>()) {
           final name = f.path.split(Platform.pathSeparator).last;
           if (name.startsWith(romName) &&

@@ -358,8 +358,11 @@ class _ConsoleShelfScreenState extends State<ConsoleShelfScreen> {
     }
     if (!mounted) return;
     if (builtInRom != null) {
+      // Play the currently-selected save slot (default = alongside the ROM).
+      final saveDir = await state.activeSaveDirPath(game.id, create: true);
       navigator.push(MaterialPageRoute(
-          builder: (_) => EmulatorScreen(game: game, romPath: builtInRom)));
+          builder: (_) =>
+              EmulatorScreen(game: game, romPath: builtInRom, saveDir: saveDir)));
       return;
     }
     void toEmulators() => navigator.push(

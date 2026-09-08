@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../models/game.dart';
 import '../models/pokedex_models.dart';
 import '../models/progress.dart';
 import '../models/save_models.dart';
+import '../models/save_slot.dart';
 import '../services/pokedex_service.dart';
 import '../data/gen3_events.dart';
 import '../data/gen4_events.dart';
@@ -47,6 +49,20 @@ class GameScreen extends StatelessWidget {
           foregroundColor: Colors.white,
           title: Text(game.title),
           actions: [
+            // Pick which save (slot) to play/edit — multiple saves per game.
+            if (state.isInstalled(game.id) &&
+                game.generation >= 1 &&
+                game.generation <= 5)
+              IconButton(
+                tooltip: 'Saves',
+                icon: const Icon(Icons.save_as_outlined),
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  showDragHandle: true,
+                  isScrollControlled: true,
+                  builder: (_) => _SaveSlotSheet(game: game),
+                ),
+              ),
             if (game.generation == 3 || game.generation == 4)
               IconButton(
                 tooltip: 'Edit save file',
@@ -222,6 +238,245 @@ class GameScreen extends StatelessWidget {
       );
     }
     return null;
+  }
+}
+
+/// Bottom sheet to manage a game's save slots: pick which save is live (played
+/// and edited), create a new empty save (fresh game) or duplicate the current
+/// one, and rename/delete named slots.
+class _SaveSlotSheet extends StatefulWidget {
+  final Game game;
+  const _SaveSlotSheet({required this.game});
+
+  @override
+  State<_SaveSlotSheet> createState() => _SaveSlotSheetState();
+}
+
+class _SaveSlotSheetState extends State<_SaveSlotSheet> {
+  List<SaveSlot> _slots = const [];
+  String _active = SaveSlot.defaultId;
+  final Set<String> _withSave = {};
+  bool _loading = true;
+
+  static const List<String> _saveExts = [
+    '.sav', '.srm', '.sav1', '.dsv', '.sa1', '.fla'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    final state = context.read<AppState>();
+    final slots = await state.saveSlots(widget.game.id);
+    final active = await state.activeSlotId(widget.game.id);
+    final withSave = <String>{};
+    for (final s in slots) {
+      if (_dirHasSave(s.dirPath)) withSave.add(s.id);
+    }
+    if (!mounted) return;
+    setState(() {
+      _slots = slots;
+      _active = active;
+      _withSave
+        ..clear()
+        ..addAll(withSave);
+      _loading = false;
+    });
+  }
+
+  bool _dirHasSave(String dirPath) {
+    if (dirPath.isEmpty) return false;
+    try {
+      final dir = Directory(dirPath);
+      if (!dir.existsSync()) return false;
+      for (final f in dir.listSync().whereType<File>()) {
+        final lower = f.path.toLowerCase();
+        if (_saveExts.any((e) => lower.endsWith(e))) return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<void> _pick(String id) async {
+    await context.read<AppState>().setActiveSlot(widget.game.id, id);
+    setState(() => _active = id);
+  }
+
+  Future<void> _newSave({required bool copy}) async {
+    final state = context.read<AppState>();
+    final name = await _promptName(
+        title: copy ? 'Duplicate current save' : 'New save',
+        hint: copy ? 'Copy of my run' : 'e.g. Nuzlocke');
+    if (name == null) return;
+    final slot =
+        await state.createSlot(widget.game.id, name, copyActive: copy);
+    if (slot != null) {
+      // Make the new slot the live one so Play/Edit target it immediately.
+      await state.setActiveSlot(widget.game.id, slot.id);
+    }
+    await _load();
+  }
+
+  Future<void> _rename(SaveSlot s) async {
+    final state = context.read<AppState>();
+    final name = await _promptName(title: 'Rename save', initial: s.name);
+    if (name == null) return;
+    await state.renameSlot(widget.game.id, s.id, name);
+    await _load();
+  }
+
+  Future<void> _delete(SaveSlot s) async {
+    final state = context.read<AppState>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.delete_forever, color: Colors.red, size: 32),
+        title: Text('Delete "${s.name}"?'),
+        content: Text(
+            'This permanently deletes this save and its folder. Your other '
+            'saves are untouched. This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await state.deleteSlot(widget.game.id, s.id);
+    await _load();
+  }
+
+  Future<String?> _promptName(
+      {required String title, String? hint, String? initial}) async {
+    final ctrl = TextEditingController(text: initial ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(hintText: hint, labelText: 'Name'),
+          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    if (result == null) return null;
+    return result.trim().isEmpty ? null : result.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Saves', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 2),
+                  Text('Pick which save to play and edit.',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.hintColor)),
+                ],
+              ),
+            ),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final s in _slots)
+                      RadioListTile<String>(
+                        value: s.id,
+                        groupValue: _active,
+                        onChanged: (v) => _pick(v!),
+                        title: Text(s.name),
+                        subtitle: Text(
+                          s.isDefault
+                              ? (_withSave.contains(s.id)
+                                  ? 'Alongside the ROM'
+                                  : 'Alongside the ROM · empty')
+                              : (_withSave.contains(s.id)
+                                  ? 'Has a save'
+                                  : 'Empty · starts a new game'),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        secondary: s.isDefault
+                            ? null
+                            : PopupMenuButton<String>(
+                                onSelected: (v) {
+                                  if (v == 'rename') _rename(s);
+                                  if (v == 'delete') _delete(s);
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                      value: 'rename', child: Text('Rename')),
+                                  PopupMenuItem(
+                                      value: 'delete', child: Text('Delete')),
+                                ],
+                              ),
+                      ),
+                  ],
+                ),
+              ),
+            const Divider(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _loading ? null : () => _newSave(copy: false),
+                      icon: const Icon(Icons.add),
+                      label: const Text('New save'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _loading ? null : () => _newSave(copy: true),
+                      icon: const Icon(Icons.copy_all_outlined),
+                      label: const Text('Duplicate'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
