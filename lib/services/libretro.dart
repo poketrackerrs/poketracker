@@ -90,6 +90,12 @@ typedef InputStateCbNative = Int16 Function(
 // ---- core function signatures ----
 typedef _VoidNative = Void Function();
 typedef _VoidDart = void Function();
+typedef _CheatResetNative = Void Function();
+typedef _CheatResetDart = void Function();
+typedef _CheatSetNative = Void Function(
+    Uint32 index, Bool enabled, Pointer<Utf8> code);
+typedef _CheatSetDart = void Function(
+    int index, bool enabled, Pointer<Utf8> code);
 typedef _ApiVerNative = Uint32 Function();
 typedef _ApiVerDart = int Function();
 typedef _GetInfoNative = Void Function(Pointer<RetroSystemInfo>);
@@ -146,6 +152,10 @@ class LibretroCore {
       lib.lookupFunction<_VoidNative, _VoidDart>('retro_reset');
   late final _VoidDart retroUnloadGame =
       lib.lookupFunction<_VoidNative, _VoidDart>('retro_unload_game');
+  late final _CheatResetDart retroCheatReset =
+      lib.lookupFunction<_CheatResetNative, _CheatResetDart>('retro_cheat_reset');
+  late final _CheatSetDart retroCheatSet =
+      lib.lookupFunction<_CheatSetNative, _CheatSetDart>('retro_cheat_set');
   late final _MemDataDart retroGetMemoryData =
       lib.lookupFunction<_MemDataNative, _MemDataDart>('retro_get_memory_data');
   late final _MemSizeDart retroGetMemorySize =

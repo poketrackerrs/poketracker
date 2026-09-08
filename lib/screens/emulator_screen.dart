@@ -13,7 +13,9 @@ import '../services/gba_emulator.dart';
 import '../services/emulator_controls.dart';
 import '../services/emulator_prefs.dart';
 import '../services/menu_nav_state.dart';
+import '../services/cheat_service.dart';
 import 'controls_settings_screen.dart';
+import 'cheats_sheet.dart';
 
 /// The built-in GBA player. Runs the mGBA core, renders frames, plays audio,
 /// maps keyboard + gamepad input, and persists the battery save next to the ROM
@@ -121,6 +123,8 @@ class _EmulatorScreenState extends State<EmulatorScreen>
           _recordAppSaveMtime(_savPath!);
         } catch (_) {}
       }
+      // Apply any enabled cheat codes now that the ROM (and save) are loaded.
+      await _applyCheats();
       _setupAudioStream(emu.sampleRate);
       _padSub = Gamepads.events.listen(_onGamepad);
       if (mounted) setState(() => _status = 'running');
@@ -460,6 +464,25 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     if (c == null) return;
     Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ControlsSettingsScreen(config: c)));
+  }
+
+  /// Loads the game's enabled cheats and pushes them into the core.
+  Future<void> _applyCheats() async {
+    final emu = _emu;
+    if (emu == null) return;
+    try {
+      final codes = await CheatService.enabledCodes(widget.game.id);
+      emu.applyCheats(codes);
+    } catch (_) {}
+  }
+
+  void _openCheats() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => CheatsSheet(game: widget.game, onApply: _applyCheats),
+    );
   }
 
   void _applyVolume() {
@@ -1006,6 +1029,12 @@ class _EmulatorScreenState extends State<EmulatorScreen>
                           color: Colors.white,
                           tooltip: 'Controls',
                           onPressed: _openControls,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.bolt),
+                          color: Colors.white,
+                          tooltip: 'Cheats',
+                          onPressed: _openCheats,
                         ),
                         IconButton(
                           icon: const Icon(Icons.expand_less),

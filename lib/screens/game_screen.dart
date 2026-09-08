@@ -25,6 +25,7 @@ import '../services/pk3.dart';
 import '../state/app_state.dart';
 import 'achievements_screen.dart';
 import 'cartridge_viewer.dart';
+import 'cheats_sheet.dart';
 import 'dual_box_screen.dart';
 import '../widgets/completion_ring.dart';
 import '../widgets/game_box_art.dart';
@@ -61,6 +62,18 @@ class GameScreen extends StatelessWidget {
                   showDragHandle: true,
                   isScrollControlled: true,
                   builder: (_) => _SaveSlotSheet(game: game),
+                ),
+              ),
+            // Cheats (built-in player only) — toggle bundled codes or add your own.
+            if (state.canPlayBuiltIn(game))
+              IconButton(
+                tooltip: 'Cheats',
+                icon: const Icon(Icons.bolt),
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  showDragHandle: true,
+                  isScrollControlled: true,
+                  builder: (_) => CheatsSheet(game: game),
                 ),
               ),
             if (game.generation == 3 || game.generation == 4)

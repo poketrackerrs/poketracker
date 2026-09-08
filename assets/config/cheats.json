@@ -1,0 +1,15 @@
+{
+  "_comment": "Built-in cheat codes for the in-app player, keyed by game id. GBA codes (GameShark/Action Replay/CodeBreaker) run on mGBA; DS Action Replay codes run on melonDS. Community-sourced starter set — verify against your ROM revision; use the manual 'Add cheat' field for anything not here. Codes can be multi-line ('\\n' separated).",
+  "firered": [
+    {"name": "Walk through walls", "code": "509197D3 542975F4\n78DA95DF 44018CB4"},
+    {"name": "Rare Candy in PC (slot 1)", "code": "82003884 0044"}
+  ],
+  "leafgreen": [
+    {"name": "Walk through walls", "code": "509197D3 542975F4\n78DA95DF 44018CB4"},
+    {"name": "Rare Candy in PC (slot 1)", "code": "82003884 0044"}
+  ],
+  "emerald": [
+    {"name": "Walk through walls", "code": "7881A409 E2026E0C\n8E883EFF 92E9660D"},
+    {"name": "Rare Candy in PC (slot 1)", "code": "82005274 0044"}
+  ]
+}

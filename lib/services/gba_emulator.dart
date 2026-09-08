@@ -323,6 +323,40 @@ class GbaEmulator {
 
   void runFrame() => core.retroRun();
 
+  /// Applies a set of cheat codes (GameShark/Action Replay/CodeBreaker for GBA
+  /// via mGBA; Action Replay DS via melonDS). Each entry is the raw multi-line
+  /// code text; the core auto-detects the format. Clears any previously-set
+  /// cheats first, then registers each enabled one. Call after [loadRom].
+  ///
+  /// A single code may have several lines — they're joined with '+', the
+  /// libretro convention the cores split on.
+  void applyCheats(List<String> codes) {
+    if (!loaded) return;
+    try {
+      core.retroCheatReset();
+    } catch (_) {
+      return; // core doesn't expose cheats — nothing more to do
+    }
+    var index = 0;
+    for (final raw in codes) {
+      final joined = raw
+          .split(RegExp(r'[\r\n]+'))
+          .map((l) => l.trim())
+          .where((l) => l.isNotEmpty)
+          .join('+');
+      if (joined.isEmpty) continue;
+      final ptr = joined.toNativeUtf8();
+      try {
+        core.retroCheatSet(index, true, ptr);
+        index++;
+      } catch (_) {
+        // skip a code the core rejects
+      } finally {
+        malloc.free(ptr);
+      }
+    }
+  }
+
   /// Power-cycle the core (retro_reset). The battery save RAM persists across a
   /// reset, so calling this AFTER [writeSaveRam] makes the DS core boot from the
   /// just-loaded save (melonDS reads its flash at load, before writeSaveRam, so
