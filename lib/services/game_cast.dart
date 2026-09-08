@@ -21,10 +21,20 @@ class GameCastHost {
   final Set<WebSocket> _clients = {};
   String? _ip;
 
+  /// Fired whenever the connected-display count changes (a viewer connects or
+  /// disconnects), so the UI can react — e.g. collapse to the touch screen.
+  void Function()? onViewersChanged;
+
   bool get running => _server != null;
   int get viewers => _clients.length;
   String? get ip => _ip;
   int get port => kGameCastPort;
+
+  void _viewersChanged() {
+    try {
+      onViewersChanged?.call();
+    } catch (_) {}
+  }
 
   /// Starts the server; returns the LAN IP to show the user, or null on failure.
   Future<String?> start() async {
@@ -37,8 +47,14 @@ class GameCastHost {
           try {
             final ws = await WebSocketTransformer.upgrade(req);
             _clients.add(ws);
-            ws.listen((_) {}, onDone: () => _clients.remove(ws),
-                onError: (_) => _clients.remove(ws), cancelOnError: true);
+            _viewersChanged();
+            ws.listen((_) {}, onDone: () {
+              _clients.remove(ws);
+              _viewersChanged();
+            }, onError: (_) {
+              _clients.remove(ws);
+              _viewersChanged();
+            }, cancelOnError: true);
           } catch (_) {}
         } else {
           req.response.statusCode = HttpStatus.upgradeRequired;

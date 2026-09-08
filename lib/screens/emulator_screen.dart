@@ -67,6 +67,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
   bool get _isMobile => Platform.isAndroid || Platform.isIOS;
   bool get _isDs => widget.game.generation >= 4; // DS uses a dual-screen layout
+  // True while a display is actively watching the cast (top screen shown on the
+  // other device) — the phone then collapses to just its touch screen.
+  bool get _castingActive => (_cast?.viewers ?? 0) > 0;
   BoxFit get _fit => const [BoxFit.fill, BoxFit.contain, BoxFit.cover][_fitMode];
   String get _fitName => const ['Fill', 'Fit', 'Zoom'][_fitMode];
 
@@ -512,7 +515,12 @@ class _EmulatorScreenState extends State<EmulatorScreen>
           const SnackBar(content: Text('Stopped casting')));
       return;
     }
-    cast ??= _cast = GameCastHost();
+    cast ??= _cast = GameCastHost()
+      ..onViewersChanged = () {
+        // A display connected/disconnected — flip the DS layout (touch-only
+        // while a viewer watches the top screen on the other device).
+        if (mounted) setState(() {});
+      };
     final ip = await cast.start();
     if (!mounted) return;
     setState(() {});
@@ -862,6 +870,37 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     if (img == null) return _loadingView;
     final fw = img.width.toDouble();
     final half = img.height / 2; // top screen height == bottom screen height
+    // While casting, the top screen is playing on the other device — show only
+    // the touch screen here, enlarged to fill the area. Same touch mapping.
+    if (_castingActive) {
+      return LayoutBuilder(
+        builder: (ctx, c) {
+          final w = c.maxWidth, h = c.maxHeight;
+          final s = _minD(w / fw, h / half);
+          final sw = fw * s, sh = half * s;
+          final bot = Rect.fromLTWH((w - sw) / 2, (h - sh) / 2, sw, sh);
+          return Stack(
+            children: [
+              Positioned.fromRect(rect: bot.inflate(5), child: _bezel()),
+              Positioned.fill(
+                child: CustomPaint(painter: _DsPainter(img, null, bot)),
+              ),
+              Positioned.fromRect(
+                rect: bot,
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: (e) => _dsTouch(e.localPosition, bot.size),
+                  onPointerMove: (e) => _dsTouch(e.localPosition, bot.size),
+                  onPointerUp: (_) => _dsTouchUp(),
+                  onPointerCancel: (_) => _dsTouchUp(),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
     return LayoutBuilder(
       builder: (ctx, c) {
         final w = c.maxWidth, h = c.maxHeight;
@@ -1136,7 +1175,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
 /// source image into [top], the bottom half into [bot].
 class _DsPainter extends CustomPainter {
   final ui.Image image;
-  final Rect top;
+  final Rect? top; // null while casting — only the bottom screen is drawn
   final Rect bot;
   _DsPainter(this.image, this.top, this.bot);
 
@@ -1145,7 +1184,10 @@ class _DsPainter extends CustomPainter {
     final p = Paint()..filterQuality = FilterQuality.none;
     final w = image.width.toDouble();
     final half = image.height / 2;
-    canvas.drawImageRect(image, Rect.fromLTWH(0, 0, w, half), top, p);
+    final t = top;
+    if (t != null) {
+      canvas.drawImageRect(image, Rect.fromLTWH(0, 0, w, half), t, p);
+    }
     canvas.drawImageRect(image, Rect.fromLTWH(0, half, w, half), bot, p);
   }
 
