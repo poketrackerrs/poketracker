@@ -1,6 +1,6 @@
 {
-  "version": "1.0.105",
-  "notes": "Game casting upgrades (the display side): the streamed game now fills and resizes with the window, a new Sharp/Smooth upscaler toggle in the Streaming bar, and casts now carry AUDIO — played on the display device with a sound on/off button. No more digging into Settings: when a device starts casting on your Wi-Fi, this app pops up an 'A game is casting — Display it?' prompt, and there's a 'Find devices' scanner if you'd rather pick it manually. (Audio from a phone needs the phone's app updated to this version too.)",
+  "version": "1.0.106",
+  "notes": "Cast discovery fix: 'Find devices' and the auto-detect popup now use a longer probe window, so a phone that's actively casting on your Wi-Fi is reliably found instead of being missed. (If discovery ever comes up empty, you can still type the address the phone shows, e.g. 192.168.68.50, and connect.)",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

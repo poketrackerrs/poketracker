@@ -187,8 +187,12 @@ class GameCastClient {
 /// Scans the local /24 subnet(s) for devices listening on the cast port and
 /// returns their IPs. Host-independent — just a quick TCP probe — so it finds a
 /// phone that's casting right now without any extra advertise endpoint.
+///
+/// The timeout is generous on purpose: firing ~254 connects at once (most to
+/// dead hosts that sit until they time out) can delay the real host's handshake,
+/// so a too-short window silently misses a device that's plainly reachable.
 Future<List<String>> discoverGameCastHosts({
-  Duration timeout = const Duration(milliseconds: 350),
+  Duration timeout = const Duration(milliseconds: 900),
 }) async {
   final prefixes = <String>{}; // e.g. "192.168.68."
   final selfIps = <String>{};
