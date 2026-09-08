@@ -60,6 +60,11 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   GameCastHost? _cast;
   int _castSkip = 0;
 
+  // Hide the on-screen buttons while a hardware controller is connected (the
+  // toolbar/menu stays). Polled + set on the first gamepad event for snappiness.
+  bool _hasController = false;
+  Timer? _controllerTimer;
+
   static const int _defaultFf = 6;
 
   bool get _turbo => _turboHeld || _turboLatch;
@@ -135,6 +140,11 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       await _applyCheats();
       _setupAudioStream(emu.sampleRate);
       _padSub = Gamepads.events.listen(_onGamepad);
+      // Detect a connected controller (hide the on-screen buttons if so), and
+      // keep checking so plugging/unplugging one toggles the buttons live.
+      _refreshControllers();
+      _controllerTimer = Timer.periodic(
+          const Duration(seconds: 1), (_) => _refreshControllers());
       if (mounted) setState(() => _status = 'running');
       _startLoop();
       _saveTimer =
@@ -172,7 +182,22 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     } catch (_) {}
   }
 
+  /// Polls for a connected hardware controller and toggles [_hasController]
+  /// (which hides/shows the on-screen buttons). Works on iOS — gamepads_ios
+  /// backs `list()` with GameController connect/disconnect.
+  Future<void> _refreshControllers() async {
+    try {
+      final has = (await Gamepads.list()).isNotEmpty;
+      if (has != _hasController && mounted) {
+        setState(() => _hasController = has);
+      }
+    } catch (_) {}
+  }
+
   void _onGamepad(GamepadEvent e) {
+    // Any controller input means one's connected — hide the on-screen buttons
+    // immediately (don't wait for the next poll).
+    if (!_hasController && mounted) setState(() => _hasController = true);
     _controls?.applyGamepad(e, (bindId, on) {
       if (bindId == kFastForwardId) {
         if (on != _turboHeld) setState(() => _turboHeld = on);
@@ -664,6 +689,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     _saveTimer?.cancel();
     _toastTimer?.cancel();
     _liveRamTimer?.cancel();
+    _controllerTimer?.cancel();
     _toastEntry?.remove();
     _toastEntry = null;
     _padSub?.cancel();
@@ -998,7 +1024,8 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     if (_isDs) {
       // Portrait phone: reserve the bottom strip for the compact buttons; the
       // two screens use everything above it (more room when the bar is hidden).
-      if (_isMobile && portrait) {
+      // With a hardware controller the buttons are gone, so use the full area.
+      if (_isMobile && portrait && !_hasController) {
         // Reserve a bit more than the control panel's height (280) so there's a
         // clear device-body gap between the screens and the controls.
         return Positioned(
@@ -1006,7 +1033,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       }
       return Positioned.fill(child: _dsScreens());
     }
-    if (portrait) {
+    if (portrait && !_hasController) {
       return Positioned(
         top: topInset,
         left: 0,
@@ -1077,7 +1104,9 @@ class _EmulatorScreenState extends State<EmulatorScreen>
                   ),
                 ),
               ),
-            if (_isMobile) _touchControls(portrait),
+            // On-screen buttons — hidden while a hardware controller is
+            // connected (the toolbar/menu below stays regardless).
+            if (_isMobile && !_hasController) _touchControls(portrait),
             if (_barVisible)
               Align(
                 alignment: Alignment.topCenter,
