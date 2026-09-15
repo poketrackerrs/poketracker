@@ -47,6 +47,34 @@ int gPointerDown = 0;
 // kept as persistent native strings. e.g. melonDS's touch cursor -> 'disabled'.
 final Map<String, Pointer<Utf8>> gVarOverrides = {};
 
+// Motion input the core reads through the sensor interface. Accelerometer in
+// m/s^2, gyroscope in rad/s (Android/RetroArch convention). Fed from the phone's
+// sensors (or a desktop key fallback); read by _getSensorInput below. Used by
+// GBA gyro/tilt games such as WarioWare: Twisted!.
+double gAccelX = 0, gAccelY = 0, gAccelZ = 0;
+double gGyroX = 0, gGyroY = 0, gGyroZ = 0;
+
+bool _setSensorState(int port, int action, int rate) => true; // always ready
+
+double _getSensorInput(int port, int id) {
+  switch (id) {
+    case 0:
+      return gAccelX;
+    case 1:
+      return gAccelY;
+    case 2:
+      return gAccelZ;
+    case 3:
+      return gGyroX;
+    case 4:
+      return gGyroY;
+    case 5:
+      return gGyroZ;
+    default:
+      return 0.0; // illuminance / unknown
+  }
+}
+
 /// Sets (or clears, when [value] is null) a core-option override, freeing any
 /// previously-allocated native string for that key.
 void _setVar(String key, String? value) {
@@ -113,6 +141,14 @@ bool _env(int cmd, Pointer<Void> data) {
         return true;
       }
       return false;
+    case envGetSensorInterface:
+      if (data == nullptr) return false;
+      final s = data.cast<RetroSensorInterface>();
+      s.ref.setState =
+          Pointer.fromFunction<SensorSetStateNative>(_setSensorState, false);
+      s.ref.getInput =
+          Pointer.fromFunction<SensorGetInputNative>(_getSensorInput, 0.0);
+      return true;
     default:
       return false;
   }

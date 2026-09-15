@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:gamepads/gamepads.dart';
 import 'package:provider/provider.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/game.dart';
 import '../state/app_state.dart';
@@ -44,6 +45,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
   Timer? _timer;
   Timer? _saveTimer;
   StreamSubscription<GamepadEvent>? _padSub;
+  StreamSubscription? _accelSub, _gyroSub; // motion controls (gyro/tilt games)
   ui.Image? _image;
   AudioSource? _pcmStream;
   bool _soloudReady = false;
@@ -139,6 +141,7 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       // Apply any enabled cheat codes now that the ROM (and save) are loaded.
       await _applyCheats();
       _setupAudioStream(emu.sampleRate);
+      _setupMotion();
       _padSub = Gamepads.events.listen(_onGamepad);
       // Detect a connected controller (hide the on-screen buttons if so), and
       // keep checking so plugging/unplugging one toggles the buttons live.
@@ -165,6 +168,26 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       await SoLoud.instance.init();
       _soloudReady = true;
     } catch (_) {}
+  }
+
+  // Feed the phone's motion sensors into the core (GBA gyro/tilt games like
+  // WarioWare: Twisted!). Mobile + GBA-family only; DS games don't use it, and
+  // desktop has no sensor. Values pass straight through in the core's expected
+  // units (accelerometer m/s^2, gyroscope rad/s).
+  void _setupMotion() {
+    if (!_isMobile || _isDs) return;
+    try {
+      _accelSub = accelerometerEventStream().listen((e) {
+        gAccelX = e.x;
+        gAccelY = e.y;
+        gAccelZ = e.z;
+      });
+      _gyroSub = gyroscopeEventStream().listen((e) {
+        gGyroX = e.x;
+        gGyroY = e.y;
+        gGyroZ = e.z;
+      });
+    } catch (_) {/* device without these sensors */}
   }
 
   Future<void> _setupAudioStream(double rate) async {
@@ -693,6 +716,10 @@ class _EmulatorScreenState extends State<EmulatorScreen>
     _toastEntry?.remove();
     _toastEntry = null;
     _padSub?.cancel();
+    _accelSub?.cancel();
+    _gyroSub?.cancel();
+    gAccelX = gAccelY = gAccelZ = 0;
+    gGyroX = gGyroY = gGyroZ = 0;
     // best-effort synchronous save on teardown — but ONLY if the in-game save
     // actually changed since boot. Otherwise closing the game would clobber an
     // externally-edited .sav (e.g. Clear Boxes / Restore) with stale SRAM.

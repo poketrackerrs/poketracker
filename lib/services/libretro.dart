@@ -17,6 +17,10 @@ const int envSetCoreOptions = 53;
 const int envSetCoreOptionsIntl = 54;
 const int envSetCoreOptionsV2 = 67;
 const int envSetCoreOptionsV2Intl = 68;
+// RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE (21 | RETRO_ENVIRONMENT_EXPERIMENTAL).
+// The core passes a RetroSensorInterface to fill with our accelerometer/gyro
+// callbacks — used by GBA motion games (e.g. WarioWare: Twisted!).
+const int envGetSensorInterface = 21 | 0x10000;
 
 // pixel formats
 const int pf0RGB1555 = 0;
@@ -75,6 +79,20 @@ final class RetroGameInfo extends Struct {
 final class RetroVariable extends Struct {
   external Pointer<Utf8> key;
   external Pointer<Utf8> value;
+}
+
+// ---- sensor interface (motion controls) ----
+// bool set_sensor_state(unsigned port, enum retro_sensor_action, unsigned rate)
+typedef SensorSetStateNative = Bool Function(
+    Uint32 port, Uint32 action, Uint32 rate);
+// float get_sensor_input(unsigned port, unsigned id)
+typedef SensorGetInputNative = Float Function(Uint32 port, Uint32 id);
+
+/// retro_sensor_interface — we fill both callbacks so the core can read the
+/// device's accelerometer/gyroscope.
+final class RetroSensorInterface extends Struct {
+  external Pointer<NativeFunction<SensorSetStateNative>> setState;
+  external Pointer<NativeFunction<SensorGetInputNative>> getInput;
 }
 
 // ---- callback native signatures ----
