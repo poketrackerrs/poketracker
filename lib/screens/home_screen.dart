@@ -14,7 +14,9 @@ import '../widgets/focusable_tap.dart';
 import '../services/menu_nav_state.dart';
 import 'achievements_screen.dart';
 import 'events_screen.dart';
+import 'custom_games_screen.dart';
 import 'game_cast_display_screen.dart';
+import 'game_launch.dart';
 import 'game_screen.dart';
 import 'updates_screen.dart';
 import 'pokedex_list_screen.dart';
@@ -190,7 +192,131 @@ class _GamesTab extends StatelessWidget {
         _OverallCard(),
         _LibraryBar(),
         for (final gen in gens) _GenShelf(gen: gen, games: byGen[gen]!),
+        if (state.customGames.isNotEmpty)
+          _CustomShelf(games: state.customGames),
       ],
+    );
+  }
+}
+
+/// Your own ROMs + ROM hacks on their own shelf. Tapping a box plays it (no
+/// tracker detail — customs aren't dex-tracked); the ＋ tile opens the manager.
+class _CustomShelf extends StatelessWidget {
+  final List<Game> games;
+  const _CustomShelf({required this.games});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    void manage() => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const CustomGamesScreen()));
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 2),
+            child: Row(
+              children: [
+                Text('MY GAMES & ROM HACKS',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        letterSpacing: 1.5,
+                        color: scheme.onSurface)),
+                const Spacer(),
+                TextButton(onPressed: manage, child: const Text('Manage')),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 200,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 16,
+                  child: Container(
+                    height: 22,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF8A6440),
+                          Color(0xFF5A3A22),
+                          Color(0xFF3E2818)
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(3),
+                      boxShadow: const [
+                        BoxShadow(
+                            color: Color(0x66000000),
+                            blurRadius: 12,
+                            offset: Offset(0, 8)),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (final g in games)
+                          Padding(
+                            padding:
+                                const EdgeInsets.only(right: 14, bottom: 36),
+                            child: FocusableTap(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => launchGame(context, g),
+                              child: GameBoxArt(game: g, height: 150),
+                            ),
+                          ),
+                        // ＋ Add / manage tile
+                        Padding(
+                          padding: const EdgeInsets.only(right: 14, bottom: 36),
+                          child: FocusableTap(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: manage,
+                            child: Container(
+                              width: 100,
+                              height: 150,
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                    color: scheme.outline, width: 1.5),
+                                borderRadius: BorderRadius.circular(6),
+                                color: scheme.surfaceContainerHighest
+                                    .withValues(alpha: 0.3),
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add,
+                                      size: 34, color: scheme.onSurfaceVariant),
+                                  const SizedBox(height: 6),
+                                  Text('Add',
+                                      style: TextStyle(
+                                          color: scheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

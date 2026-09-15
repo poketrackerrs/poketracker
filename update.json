@@ -1,6 +1,6 @@
 {
-  "version": "1.0.108",
-  "notes": "Motion controls (gyro/tilt): the built-in GBA player now feeds your phone's gyroscope and accelerometer into the emulator, so cartridge-motion games like WarioWare: Twisted! (and tilt games like Yoshi Topsy-Turvy / Kirby Tilt 'n' Tumble) respond to physically rotating/tilting the phone. Android + iOS; desktop has no motion sensor.",
+  "version": "1.0.109",
+  "notes": "Your custom games + ROM hacks now appear on the Games tab: a 'My games & ROM hacks' shelf shows up under your generations once you've added any (tap a box to play, or use the ＋/Manage tile to add and remove). Add them from Settings → 'My games & ROM hacks' or the shelf's ＋ tile.",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }
