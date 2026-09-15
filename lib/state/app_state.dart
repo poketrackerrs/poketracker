@@ -106,6 +106,7 @@ class AppState extends ChangeNotifier {
     _devMode = prefs.getBool('devmode') ?? false;
     _loadVaultFrom(prefs);
     await _loadLibrary();
+    await _loadCustomGames(prefs);
     _loaded = true;
     notifyListeners();
     // Best-effort, off the critical path: pull the DS BIOS from the user's
@@ -3431,6 +3432,101 @@ class AppState extends ChangeNotifier {
   Future<void> deleteGameFile(String gameId) async {
     await _library.deleteForGame(gameId);
     _installed[gameId] = null;
+    notifyListeners();
+  }
+
+  // ---- Custom games / ROM hacks ---------------------------------------------
+  // User-supplied ROMs (imported directly, or produced by the patcher). They
+  // live outside kGames — playable via the built-in emulator, but no dex/badge
+  // tracking yet (a hack's dex + save offsets differ from its base game).
+  static const String _customGamesKey = 'poketracker_custom_games_v1';
+  final List<Game> _customGames = [];
+  List<Game> get customGames => List.unmodifiable(_customGames);
+
+  Game _buildCustomGame(String id, String title, int generation) => Game(
+        id: id,
+        title: title,
+        generation: generation,
+        region: 'Custom',
+        releaseYear: 0,
+        category: GameCategory.mainline,
+        milestones: const [],
+        dexTotal: 0,
+        versionGroup: '',
+        version: '',
+      );
+
+  /// Maps a ROM extension to the generation the built-in player uses to pick a
+  /// core (1–3 → mGBA, 4 → melonDS).
+  int _genForExt(String ext) {
+    switch (ext.toLowerCase()) {
+      case 'gb':
+        return 1;
+      case 'gbc':
+        return 2;
+      case 'nds':
+      case 'srl':
+        return 4;
+      case 'gba':
+      default:
+        return 3;
+    }
+  }
+
+  Future<void> _loadCustomGames(SharedPreferences prefs) async {
+    final raw = prefs.getString(_customGamesKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      for (final e in (jsonDecode(raw) as List).cast<Map<String, dynamic>>()) {
+        final id = e['id'] as String;
+        _customGames.add(_buildCustomGame(
+            id, (e['title'] as String?) ?? id, (e['gen'] as int?) ?? 3));
+        // The ROM lives in Games/<id>/ — re-point _installed to it.
+        _installed[id] = (await _library.fileForGame(id))?.path;
+      }
+    } catch (_) {/* corrupt list: start empty */}
+    notifyListeners();
+  }
+
+  Future<void> _saveCustomGames() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        _customGamesKey,
+        jsonEncode([
+          for (final g in _customGames)
+            {'id': g.id, 'title': g.title, 'gen': g.generation}
+        ]));
+  }
+
+  /// Adds a user-supplied ROM (imported or patched) as a playable custom game.
+  /// [ext] (gb/gbc/gba/nds) sets the core + the stored filename.
+  Future<Game> addCustomGame({
+    required String title,
+    required String ext,
+    required Uint8List bytes,
+  }) async {
+    final id = 'custom_${DateTime.now().millisecondsSinceEpoch}';
+    final dir = await _library.gameDir(id);
+    final safe = title.replaceAll(RegExp(r'[^A-Za-z0-9 ._-]'), '_').trim();
+    final name = safe.isEmpty ? 'game' : safe;
+    final path = '${dir.path}${Platform.pathSeparator}$name.$ext';
+    await File(path).writeAsBytes(bytes, flush: true);
+    final game = _buildCustomGame(
+        id, title.trim().isEmpty ? name : title.trim(), _genForExt(ext));
+    _customGames.add(game);
+    _installed[id] = path;
+    await _saveCustomGames();
+    notifyListeners();
+    return game;
+  }
+
+  Future<void> removeCustomGame(String id) async {
+    _customGames.removeWhere((g) => g.id == id);
+    _installed.remove(id);
+    try {
+      await _library.deleteForGame(id);
+    } catch (_) {}
+    await _saveCustomGames();
     notifyListeners();
   }
 

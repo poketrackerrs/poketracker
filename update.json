@@ -1,6 +1,6 @@
 {
-  "version": "1.0.106",
-  "notes": "Cast discovery fix: 'Find devices' and the auto-detect popup now use a longer probe window, so a phone that's actively casting on your Wi-Fi is reliably found instead of being missed. (If discovery ever comes up empty, you can still type the address the phone shows, e.g. 192.168.68.50, and connect.)",
+  "version": "1.0.107",
+  "notes": "Your own games + ROM hacks: Settings → 'My games & ROM hacks' → Add. Import a ROM (.gb/.gbc/.gba/.nds) directly, or apply an IPS/UPS/BPS patch to a clean base ROM you supply — the patcher verifies the checksum and refuses a wrong base ROM instead of making a broken game. The result plays in the built-in emulator. (You supply your own ROMs/patches — no downloads. Dex/badge tracking for custom games comes later.)",
   "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
   "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
 }

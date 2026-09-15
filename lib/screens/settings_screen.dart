@@ -8,6 +8,7 @@ import 'developer_screen.dart';
 import 'ds_bios_screen.dart';
 import 'save_transfer_screen.dart';
 import 'game_cast_display_screen.dart';
+import 'custom_games_screen.dart';
 import 'updates_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -80,6 +81,16 @@ class SettingsScreen extends StatelessWidget {
         ),
 
         _header(context, 'Saves & tools'),
+        ListTile(
+          leading: const Icon(Icons.videogame_asset),
+          title: const Text('My games & ROM hacks'),
+          subtitle: const Text(
+              'Import your own ROMs, or patch a base ROM (IPS/UPS/BPS)'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CustomGamesScreen()),
+          ),
+        ),
         ListTile(
           leading: const Icon(Icons.wifi_tethering),
           title: const Text('Transfer saves (Wi-Fi)'),
