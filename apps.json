@@ -13,17 +13,17 @@
       "tintColor": "E33232",
       "category": "games",
       "screenshotURLs": [],
-      "version": "1.0.110",
+      "version": "1.0.111",
       "versionDate": "2026-10-01",
       "downloadURL": "https://github.com/poketrackerrs/poketracker/releases/download/ios/PokeTracker.ipa",
-      "size": 54834523,
+      "size": 54836419,
       "versions": [
         {
-          "version": "1.0.110",
+          "version": "1.0.111",
           "date": "2026-10-01",
-          "localizedDescription": "Switchable DS landscape screen layouts (Even / Top priority / Top focus) from the emulator top bar.",
+          "localizedDescription": "Intergenerational transfer: move a Gen 3 Pokémon from the Vault into a Gen 4 game via Pal Park. Plus switchable DS landscape layouts.",
           "downloadURL": "https://github.com/poketrackerrs/poketracker/releases/download/ios/PokeTracker.ipa",
-          "size": 54834523,
+          "size": 54836419,
           "minOSVersion": "13.0"
         }
       ]
