@@ -7,23 +7,23 @@
       "name": "PokeTracker",
       "bundleIdentifier": "com.baygroupusa.poketracker",
       "developerName": "Rafael Suarez",
-      "subtitle": "Pokemon tracker + built-in emulator",
-      "localizedDescription": "Track your Pokemon progress across the mainline games, with a built-in GB/GBC/GBA/DS player, save editor, cheats, and LAN game-casting.",
+      "subtitle": "Pokémon tracker + built-in emulator",
+      "localizedDescription": "Track your Pokémon progress across the mainline games, with a built-in GB/GBC/GBA/DS player, save editor, cheats, and LAN game-casting.",
       "iconURL": "https://raw.githubusercontent.com/poketrackerrs/poketracker/main/assets/icon/icon.png",
       "tintColor": "E33232",
       "category": "games",
       "screenshotURLs": [],
-      "version": "1.0.109",
-      "versionDate": "2026-09-28",
+      "version": "1.0.110",
+      "versionDate": "2026-10-01",
       "downloadURL": "https://github.com/poketrackerrs/poketracker/releases/download/ios/PokeTracker.ipa",
-      "size": 54834552,
+      "size": 54834523,
       "versions": [
         {
-          "version": "1.0.109",
-          "date": "2026-09-28",
-          "localizedDescription": "Latest build.",
+          "version": "1.0.110",
+          "date": "2026-10-01",
+          "localizedDescription": "Switchable DS landscape screen layouts (Even / Top priority / Top focus) from the emulator top bar.",
           "downloadURL": "https://github.com/poketrackerrs/poketracker/releases/download/ios/PokeTracker.ipa",
-          "size": 54834552,
+          "size": 54834523,
           "minOSVersion": "13.0"
         }
       ]
