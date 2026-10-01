@@ -974,9 +974,11 @@ class _EmulatorScreenState extends State<EmulatorScreen>
       builder: (ctx, c) {
         final w = c.maxWidth, h = c.maxHeight;
         final stacked = h >= w;
-        final gap = stacked ? 10.0 : 10.0;
+        const gap = 10.0;
         late Rect top, bot;
+        var overlapping = false; // touch screen sits as an inset over the top
         if (stacked) {
+          // Portrait: two equal screens stacked.
           final s = _minD(w / fw, (h - gap) / (half * 2));
           final sw = fw * s, sh = half * s;
           final left = (w - sw) / 2;
@@ -984,21 +986,63 @@ class _EmulatorScreenState extends State<EmulatorScreen>
           top = Rect.fromLTWH(left, ty, sw, sh);
           bot = Rect.fromLTWH(left, ty + sh + gap, sw, sh);
         } else {
-          final s = _minD((w - gap) / (fw * 2), h / half);
-          final sw = fw * s, sh = half * s;
-          final left = (w - (sw * 2 + gap)) / 2;
-          final ty = (h - sh) / 2;
-          top = Rect.fromLTWH(left, ty, sw, sh);
-          bot = Rect.fromLTWH(left + sw + gap, ty, sw, sh);
+          // Landscape: the selectable layouts.
+          switch (_prefs?.dsLayoutMode ?? DsLayout.even) {
+            case DsLayout.even:
+              final s = _minD((w - gap) / (fw * 2), h / half);
+              final sw = fw * s, sh = half * s;
+              final left = (w - (sw * 2 + gap)) / 2;
+              final ty = (h - sh) / 2;
+              top = Rect.fromLTWH(left, ty, sw, sh);
+              bot = Rect.fromLTWH(left + sw + gap, ty, sw, sh);
+            case DsLayout.topBig:
+              // Big top + a smaller touch screen beside it (bottom-aligned, so
+              // the touch screen is thumb-reachable at the bottom edge).
+              const r = 0.6; // touch screen scale relative to the top
+              final st = _minD(h / half, (w - gap) / (fw * (1 + r)));
+              final tw = fw * st, th = half * st;
+              final bw = tw * r, bh = th * r;
+              final left = (w - (tw + gap + bw)) / 2;
+              final topY = (h - th) / 2;
+              top = Rect.fromLTWH(left, topY, tw, th);
+              bot = Rect.fromLTWH(left + tw + gap, topY + (th - bh), bw, bh);
+            case DsLayout.topFocus:
+              // Top screen fills the area; touch screen is a small inset in the
+              // bottom-right corner, overlapping the top.
+              final st = _minD(w / fw, h / half);
+              final tw = fw * st, th = half * st;
+              final tx = (w - tw) / 2, ty = (h - th) / 2;
+              top = Rect.fromLTWH(tx, ty, tw, th);
+              final sb = st * 0.36;
+              final bw = fw * sb, bh = half * sb;
+              const pad = 12.0;
+              bot = Rect.fromLTWH(
+                  tx + tw - bw - pad, ty + th - bh - pad, bw, bh);
+              overlapping = true;
+          }
         }
         return Stack(
           children: [
             // Screen bezels — a dark rounded frame set into the device body.
             Positioned.fromRect(rect: top.inflate(5), child: _bezel()),
-            Positioned.fromRect(rect: bot.inflate(5), child: _bezel()),
+            if (!overlapping)
+              Positioned.fromRect(rect: bot.inflate(5), child: _bezel()),
             Positioned.fill(
               child: CustomPaint(painter: _DsPainter(img, top, bot)),
             ),
+            // A thin frame around the inset touch window so it reads as a window.
+            if (overlapping)
+              Positioned.fromRect(
+                rect: bot.inflate(1.5),
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(color: Colors.white60, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
             Positioned.fromRect(
               rect: bot,
               child: Listener(
@@ -1014,6 +1058,26 @@ class _EmulatorScreenState extends State<EmulatorScreen>
         );
       },
     );
+  }
+
+  /// Cycles the DS landscape layout (Even → Top priority → Top focus) and
+  /// persists it. Shown via a top-bar button on DS games.
+  void _cycleDsLayout() {
+    final p = _prefs;
+    if (p == null) return;
+    setState(() => p.dsLayout = (p.dsLayout + 1) % DsLayout.values.length);
+    p.save();
+    _showDsLayoutToast();
+  }
+
+  void _showDsLayoutToast() {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(SnackBar(
+      duration: const Duration(milliseconds: 1100),
+      behavior: SnackBarBehavior.floating,
+      content: Text('Screen layout: ${kDsLayoutNames[_prefs!.dsLayout]}'),
+    ));
   }
 
   // A screen bezel: near-black rounded frame with a faint inner edge, so each
@@ -1174,6 +1238,15 @@ class _EmulatorScreenState extends State<EmulatorScreen>
                             tooltip: 'Scale: $_fitName (V)',
                             onPressed: () =>
                                 setState(() => _fitMode = (_fitMode + 1) % 3),
+                          ),
+                        // DS-only: cycle the landscape screen layout.
+                        if (_isDs)
+                          IconButton(
+                            icon: const Icon(Icons.splitscreen),
+                            color: Colors.white,
+                            tooltip:
+                                'Screen layout: ${kDsLayoutNames[_prefs?.dsLayout ?? 0]}',
+                            onPressed: _cycleDsLayout,
                           ),
                         IconButton(
                           icon: Icon(_fullscreen
