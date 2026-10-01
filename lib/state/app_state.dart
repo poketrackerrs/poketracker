@@ -28,6 +28,7 @@ import '../services/gen3_save_editor.dart';
 import '../services/gen3_live_ram.dart';
 import '../services/gen4_save_editor.dart';
 import '../services/gen4_pkx.dart';
+import '../services/gen_transfer.dart';
 import '../services/gen4_text.dart';
 import '../services/gen1_save_editor.dart';
 import '../services/gen2_save_editor.dart';
@@ -1723,11 +1724,46 @@ class AppState extends ChangeNotifier {
     return 'Saved changes to $name.';
   }
 
-  /// Copies (clones) Vault mon [index] into [game]'s PC box (or party).
+  /// Can Vault mon [index] be withdrawn into [game]? Transfers only go UP a
+  /// generation (like the real Pal Park / Poké Transfer), never down.
+  bool canWithdrawToGame(Game game, int index) {
+    if (index < 0 || index >= vault.length) return false;
+    final src = vault[index].gen, tgt = game.generation;
+    if (tgt < src) return false; // can't move down a generation
+    if (src == tgt) return src == 3; // same-gen clone: Gen 3 for now
+    return src == 3 && tgt == 4; // cross-gen: Pal Park (Gen 3 → 4) for now
+  }
+
+  /// Copies (clones) Vault mon [index] into [game]'s PC box (or party),
+  /// converting between generations when needed (Pal Park for Gen 3 → 4).
   Future<String> copyVaultToGame(Game game, int index,
       {bool party = false}) async {
-    if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     if (index < 0 || index >= vault.length) return 'No such Vault Pokémon.';
+    final vm = vault[index];
+    final src = vm.gen, tgt = game.generation;
+    if (tgt < src) {
+      return "Can't move a Gen $src Pokémon down to Gen $tgt — transfers only go up.";
+    }
+
+    // Cross-gen: Gen 3 → Gen 4 via Pal Park (met location / level set, held
+    // item stripped; PID/IVs/nature/shiny kept). Injected into the PC box.
+    if (src == 3 && tgt == 4) {
+      try {
+        final pk4 = await palParkGen3ToGen4(vm.block, _pokedex);
+        final res = await writeGen4Save(game, boxInjects: [pk4]);
+        notifyListeners();
+        return 'Transferred ${vm.name} to ${game.title} via Pal Park '
+            '(Gen 3 → 4). $res';
+      } catch (e) {
+        return 'Transfer failed: $e';
+      }
+    }
+
+    if (!(src == 3 && tgt == 3)) {
+      return 'Transfer from Gen $src to Gen $tgt isn\'t supported yet.';
+    }
+
+    // Same-generation Gen 3 clone.
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
     final raw = Uint8List.fromList(await file.readAsBytes());
@@ -1740,7 +1776,7 @@ class AppState extends ChangeNotifier {
     if (!e.verifyChecksums().ok) {
       return 'Save checksums look wrong — refusing to edit it.';
     }
-    final block = Uint8List.fromList(vault[index].block);
+    final block = Uint8List.fromList(vm.block);
     final ok = party
         ? e.addPartyMon(game.version, block)
         : e.addBoxMon(block) >= 0;
@@ -1753,15 +1789,37 @@ class AppState extends ChangeNotifier {
     await File('${file.path}.bak-$stamp').writeAsBytes(raw, flush: true);
     await file.writeAsBytes(e.toBytes(), flush: true);
     notifyListeners();
-    return 'Copied ${vault[index].name} into ${game.title}'
+    return 'Copied ${vm.name} into ${game.title}'
         "${party ? "'s party" : "'s PC box"}. Backup saved.";
   }
 
   /// Copies (clones) several Vault mons into [game] in one write (single backup).
+  /// Converts between generations where needed (Pal Park for Gen 3 → 4).
   Future<String> copyVaultMultiToGame(Game game, List<int> indices,
       {bool party = false}) async {
-    if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     if (indices.isEmpty) return 'Nothing selected.';
+    final valid = indices.where((i) => i >= 0 && i < vault.length).toList();
+    if (valid.any((i) => vault[i].gen > game.generation)) {
+      return "Some selections are a later generation than ${game.title} — "
+          'transfers only go up.';
+    }
+
+    // Cross-gen batch: Gen 3 → Gen 4 via Pal Park, injected in one write.
+    if (game.generation == 4) {
+      final pk4s = <Uint8List>[];
+      for (final i in valid) {
+        if (vault[i].gen != 3) {
+          return 'Only Gen 3 → Gen 4 transfer is supported so far.';
+        }
+        pk4s.add(await palParkGen3ToGen4(vault[i].block, _pokedex));
+      }
+      final res = await writeGen4Save(game, boxInjects: pk4s);
+      notifyListeners();
+      return 'Transferred ${pk4s.length} to ${game.title} via Pal Park '
+          '(Gen 3 → 4). $res';
+    }
+
+    if (game.generation != 3) return 'Save editing is Gen 3-only for now.';
     final file = await _findSaveFile(game.id);
     if (file == null) return 'No save file found for ${game.title}.';
     final raw = Uint8List.fromList(await file.readAsBytes());

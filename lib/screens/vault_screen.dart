@@ -323,16 +323,18 @@ class _VaultScreenState extends State<VaultScreen> {
 
   Future<void> _copyTo(BuildContext context, List<int> indices) async {
     final state = context.read<AppState>();
-    final gen3 = [
+    // Gen 3 games (clone) plus Gen 4 games (Pal Park transfer, Gen 3 → 4).
+    final targets = [
       for (final g in kGames)
-        if (g.generation == 3 && state.isInstalled(g.id)) g
+        if ((g.generation == 3 || g.generation == 4) && state.isInstalled(g.id))
+          g
     ];
-    if (gen3.isEmpty) {
+    if (targets.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No installed Gen 3 games to copy into.')));
+          content: Text('No installed Gen 3 or Gen 4 games to transfer into.')));
       return;
     }
-    Game? game = gen3.length == 1 ? gen3.first : null;
+    Game? game = targets.length == 1 ? targets.first : null;
     var party = false;
     final go = await showDialog<bool>(
       context: context,
@@ -348,17 +350,23 @@ class _VaultScreenState extends State<VaultScreen> {
                 initialValue: game,
                 decoration: const InputDecoration(labelText: 'Game'),
                 items: [
-                  for (final g in gen3)
-                    DropdownMenuItem(value: g, child: Text(g.title)),
+                  for (final g in targets)
+                    DropdownMenuItem(
+                        value: g,
+                        child: Text(g.generation == 4
+                            ? '${g.title}  ·  Pal Park transfer'
+                            : g.title)),
                 ],
                 onChanged: (g) => setD(() => game = g),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Into party (else PC box)'),
-                value: party,
-                onChanged: (v) => setD(() => party = v),
-              ),
+              // Party option is Gen 3 only; Gen 4 transfers land in the PC box.
+              if (game?.generation == 3)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Into party (else PC box)'),
+                  value: party,
+                  onChanged: (v) => setD(() => party = v),
+                ),
             ],
           ),
           actions: [
