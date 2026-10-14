@@ -1,6 +1,6 @@
 {
   "version": "1.0.109",
   "notes": "Your custom games + ROM hacks now appear on the Games tab: a 'My games & ROM hacks' shelf shows up under your generations once you've added any (tap a box to play, or use the ＋/Manage tile to add and remove). Add them from Settings → 'My games & ROM hacks' or the shelf's ＋ tile.",
-  "windows_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker-Setup.exe",
-  "android_url": "https://github.com/poketrackerrs/poketracker/releases/latest/download/PokeTracker.apk"
+  "windows_url": "https://github.com/poketrackerrs/poketracker/releases/download/v1.0.109/PokeTracker-Setup.exe",
+  "android_url": "https://github.com/poketrackerrs/poketracker/releases/download/v1.0.109/PokeTracker.apk"
 }
